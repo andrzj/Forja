@@ -1,0 +1,77 @@
+from collections.abc import Iterator
+from pathlib import Path
+
+from forja.core.adapters.common import CONTRACT_VERSION
+from forja.core.adapters.executor import ExecutorAdapter
+from forja.core.adapters.language import (
+    Detection,
+    FileClass,
+    LanguageAdapter,
+    LanguageCapability,
+    valid_language,
+)
+
+
+class AdapterRejected(ValueError):
+    """The adapter cannot be registered; the message says why."""
+
+
+class AdapterRegistry:
+    """The adapters Forja knows. Built in only: nothing is loaded from the environment."""
+
+    def __init__(self) -> None:
+        self._languages: dict[str, LanguageAdapter] = {}
+        self._executors: dict[str, ExecutorAdapter] = {}
+
+    def register_language(self, adapter: LanguageAdapter) -> None:
+        if adapter.contract_version != CONTRACT_VERSION:
+            raise AdapterRejected(
+                f"language adapter {adapter.language!r} speaks contract "
+                f"{adapter.contract_version}; Forja speaks {CONTRACT_VERSION}"
+            )
+        if not valid_language(adapter.language):
+            raise AdapterRejected(f"{adapter.language!r} is not a supported language")
+        if adapter.language in self._languages:
+            raise AdapterRejected(f"a {adapter.language!r} adapter is already registered")
+        if not all(isinstance(c, LanguageCapability) for c in adapter.capabilities):
+            raise AdapterRejected("capabilities must be LanguageCapability values")
+        self._languages[adapter.language] = adapter
+
+    def register_executor(self, adapter: ExecutorAdapter) -> None:
+        if adapter.contract_version != CONTRACT_VERSION:
+            raise AdapterRejected(
+                f"executor adapter {adapter.name!r} speaks contract "
+                f"{adapter.contract_version}; Forja speaks {CONTRACT_VERSION}"
+            )
+        if not adapter.name or adapter.name in self._executors:
+            raise AdapterRejected(f"executor name {adapter.name!r} is empty or already registered")
+        self._executors[adapter.name] = adapter
+
+    def language(self, name: str) -> LanguageAdapter:
+        return self._languages[name]
+
+    def executor(self, name: str) -> ExecutorAdapter:
+        return self._executors[name]
+
+    def languages(self) -> Iterator[LanguageAdapter]:
+        return iter(self._languages.values())
+
+    def executors(self) -> Iterator[ExecutorAdapter]:
+        return iter(self._executors.values())
+
+    def detect_all(self, root: Path) -> list[tuple[LanguageAdapter, Detection]]:
+        """Every language found under ``root``, in registration order."""
+        found = []
+        for adapter in self._languages.values():
+            detection = adapter.detect(root)
+            if detection is not None:
+                found.append((adapter, detection))
+        return found
+
+    def classify(self, path: str) -> FileClass:
+        """The first adapter that claims the file decides; unclaimed files are ``OTHER``."""
+        for adapter in self._languages.values():
+            claimed = adapter.classify(path)
+            if claimed is not None:
+                return claimed
+        return FileClass.OTHER
