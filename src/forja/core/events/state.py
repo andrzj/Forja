@@ -56,6 +56,8 @@ class OpenOperation:
     target_id: str
     intent_seq: int
     process: ProcessIdentity | None = None
+    # What the intent said it was going to do; reconciling reads its inputs from here.
+    payload: dict[str, JsonValue] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ class RunState:
         self.last_hash = GENESIS_HASH
         self._targets: dict[tuple[Level, str], _Target] = {}
         self._open: dict[str, OpenOperation] = {}
-        self._closed: set[str] = set()
+        self._closed: dict[str, dict[str, JsonValue]] = {}
 
     def has_target(self, level: Level, target_id: str) -> bool:
         return (level, target_id) in self._targets
@@ -104,6 +106,11 @@ class RunState:
             for (lvl, target_id), target in self._targets.items()
             if lvl is level and target.parent_id == parent_id
         ]
+
+    def effect_of(self, operation_id: str) -> dict[str, JsonValue] | None:
+        """Payload of the effect that closed the operation, or ``None`` if it is not closed."""
+        closed = self._closed.get(operation_id)
+        return None if closed is None else dict(closed)
 
     @property
     def open_operations(self) -> Mapping[str, OpenOperation]:
@@ -144,11 +151,16 @@ class RunState:
                     move.target.entered[move.new_state.value] = payload
             case IntentEvent():
                 self._open[event.operation_id] = OpenOperation(
-                    event.operation, event.operation_id, event.level, event.target_id, event.seq
+                    event.operation,
+                    event.operation_id,
+                    event.level,
+                    event.target_id,
+                    event.seq,
+                    payload=dict(event.payload),
                 )
             case EffectEvent():
                 del self._open[event.operation_id]
-                self._closed.add(event.operation_id)
+                self._closed[event.operation_id] = dict(event.payload)
             case ProgressEvent():
                 if event.payload.get("kind") == PROCESS_STARTED and event.operation_id:
                     pid, token = event.payload.get("pid"), event.payload.get("creation_token")

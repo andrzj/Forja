@@ -17,6 +17,7 @@ packages = ["src/forja"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: end-to-end runs that start many processes; run them before every release"]
 
 [tool.ruff]
 line-length = 100

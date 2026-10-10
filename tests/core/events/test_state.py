@@ -249,3 +249,26 @@ def test_envelope_rules_run_id_sequence_and_chain() -> None:
     assert (state.last_seq, state.last_hash) == (1, event.hash)
     with pytest.raises(InvalidEvent, match="expected seq 2"):
         state.validate(event)
+
+
+def test_an_open_operation_remembers_what_its_intent_said(log: EventLog) -> None:
+    create_run(log)
+
+    log.append_intent(Level.EXECUTION, RUN, "push_run_branch", "op1", payload={"branch": "b"})
+
+    (open_operation,) = log.state.open_operations.values()
+    assert open_operation.payload == {"branch": "b"}
+    assert log.state.effect_of("op1") is None
+
+
+def test_the_effect_that_closed_an_operation_can_be_read_back(log: EventLog) -> None:
+    create_run(log)
+    log.append_intent(Level.EXECUTION, RUN, "push_run_branch", "op1")
+
+    log.append_effect(
+        Level.EXECUTION, RUN, "push_run_branch", "op1", payload={"reconciled": "redo"}
+    )
+
+    assert log.state.effect_of("op1") == {"reconciled": "redo"}
+    assert log.state.open_operations == {}
+    assert log.state.effect_of("never-used") is None

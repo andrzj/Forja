@@ -4,11 +4,11 @@ Nota de retomada. Escrita em 10/10/2026, depois de concluídos os contratos 1 a 
 
 ## Onde estamos
 
-O incremento 0 (fundação) está quase completo. Há 1.665 testes passando e 5 pulados, com `ruff` e `mypy --strict` limpos. Tudo foi executado apenas no Windows.
+O incremento 0 (fundação) está quase completo. Há 1.771 testes passando e 5 pulados, com `ruff` e `mypy --strict` limpos. Tudo foi executado apenas no Windows.
 
 **Falta para fechar o incremento 0:**
 
-1. Teste de retomada ponta a ponta: "a retomada chega ao mesmo estado após interrupção em cada fronteira de passo". Hoje só está provado por camada (log de eventos com falhas injetadas, reconciliadores, armazenamento).
+1. ~~Teste de retomada ponta a ponta~~ — feito, em `tests/e2e/` (ver "Retomada").
 2. Rodar `mutmut` para medir se os testes pegam mutações de verdade. Nunca foi executado.
 3. README e ADRs, em português do Brasil.
 4. Atualizar a especificação (lista na seção "Divergências da spec").
@@ -44,9 +44,19 @@ Convenções: código, comentários e docstrings em inglês; README e ADRs em po
 | `locking/` | Lock por repositório, mutex de git, remoção de `index.lock` órfão. |
 | `adapters/` | Interfaces de adaptador de linguagem e de executor, registro, `TemplateExecutorAdapter`. |
 | `redaction/` | Redação do pacote antes do envio, registro do que foi enviado. |
+| `resume.py` | Retomada: mata processo remanescente, reconcilia cada operação aberta e grava o efeito. |
 | `atomic.py`, `ids.py`, `paths.py`, `failures.py`, `version.py` | Utilitários. |
 
 Os testes ficam em `tests/core/`, espelhando os módulos. `tests/core/adapters/conformance.py` é a suíte reutilizável que todo adaptador real deve passar.
+
+## Retomada
+
+- `resume(log, reconcile)` fecha toda operação aberta com um `effect` cujo payload tem `reconciled` (`already_done`, `redo` ou `discard_attempt`) e `infra_failure`. `redo` fecha a operação antiga: quem repete usa um novo `operation_id`. `discard_attempt` leva a tentativa a `discarded` antes do efeito, e repetir a retomada é seguro.
+- O intent guarda os insumos da reconciliação no payload; `OpenOperation.payload` os devolve e `RunState.effect_of(id)` devolve o payload do efeito.
+- `tests/e2e/driver.py` é um roteiro de teste (não o orquestrador) que percorre as 10 operações da tabela com git, runner, manifesto e artefato reais. `test_resume.py` interrompe após cada linha do log (61 cortes) e rasga a linha em 32 fronteiras de operação; `test_resume_hard.py` mata o processo de verdade em 4 pontos e interrompe a própria retomada. Resultado esperado: igual à execução sem interrupção, exceto `call_agent_cli` interrompido, que dá uma tentativa descartada a mais e uma falha de infraestrutura.
+- Marcados `slow`; a suíte inteira leva cerca de 6 min. `TOTAL_LINES` e `TORN_CUTS` são conferidos contra uma execução de referência: se o roteiro crescer, o teste falha.
+- Nome de branch: `forja/<run>/<task>` impede que a branch da execução seja `forja/<run>` (conflito de ref). O roteiro usa `forja-run/<run>`; a spec precisa fixar o nome.
+- No roteiro, a evidência é um arquivo por chave de cache, não o `EvidenceStore`, e o gate é uma regra fixa. A integração com `GuardedGit` e `GatePipeline` fica para o incremento 1.
 
 ## Estados persistidos (português da spec → inglês do código)
 
