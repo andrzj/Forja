@@ -12,7 +12,9 @@ from forja.orchestrator.ports import TaskInfo
 
 SUPPRESSIONS = re.compile(
     r"noqa|fmt:\s*(?:off|on|skip)|yapf:\s*(?:disable|enable)|gitleaks:allow"
-    r"|lizard\s+forgive|#\s*lizard|generated\s+code|nosem",
+    r"|lizard\s+forgive|#\s*lizard|generated\s+code|nosem"
+    r"|pragma:\s*no\s*\w+|type:\s*ignore|(?:mypy|pyright):\s*(?:ignore|basic|off)"
+    r"|pylint:\s*(?:disable|skip)|nosec",
     re.IGNORECASE,
 )
 # Directories the tools write their caches to. The compiled files of Python are not here: the

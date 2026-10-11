@@ -1,0 +1,11 @@
+# Mutants the tests cannot tell from the original, each one approved by a person.
+#
+# A mutant belongs here only when it changes nothing observable (an equivalent mutant). A mutant
+# that survives because a test is missing gets the test, not an entry. Nothing in the source can
+# silence the gate: comments that do are rejected by the scope gate.
+#
+# [[suppress]]
+# file = "src/forja/example.py"
+# function = "Class.method"
+# change = "== -> !="       # as the engine prints it
+# reason = "why no observable behaviour differs"

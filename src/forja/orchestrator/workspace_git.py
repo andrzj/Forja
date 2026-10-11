@@ -387,7 +387,7 @@ class GitWorkspace:
         """Make ``path`` and git's record of it disappear, whatever state an interruption left."""
         if path.exists():
             # only read-only files (Windows) need the handler; Linux cannot tell it from none
-            shutil.rmtree(path, onexc=_make_writable_and_retry)  # pragma: no mutate
+            shutil.rmtree(path, onexc=_make_writable_and_retry)
         await self._git.lines("worktree", "prune")
 
 

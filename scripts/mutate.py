@@ -1,0 +1,218 @@
+"""The mutation gate, as one command whose answer is the exit code.
+
+    scripts/mutate.py              # the source files changed since HEAD (and new ones)
+    scripts/mutate.py --all        # every source file
+    scripts/mutate.py src/forja/checks/changes.py
+
+It runs the engine (unclebob/mutator) on each file with only the tests that exercise that file,
+found from a coverage run that records which test ran each line. A surviving mutant fails the run
+unless ``mutation-suppressions.toml`` names it, with a reason a person approved. Nothing in the
+source can switch the gate off: a comment that does is rejected by the scope gate.
+
+Exit: 0 every mutant was killed or suppressed; 2 the tests fail before any mutation; 3 a mutant
+survived. It needs a POSIX shell, so on Windows run it inside WSL.
+"""
+
+import argparse
+import ast
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import tomllib
+from collections import defaultdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SUPPRESSIONS = ROOT / "mutation-suppressions.toml"
+COVERAGE = ROOT / "target" / "coverage" / "python"
+OUTCOME = re.compile(
+    r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
+)
+FAST = {"FORJA_FAST": "1"}
+
+
+def run(*command: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    merged = {**os.environ, **(env or {})}
+    return subprocess.run(command, cwd=ROOT, env=merged, capture_output=True, text=True)
+
+
+def changed_sources() -> list[str]:
+    tracked = run("git", "diff", "--name-only", "HEAD", "--", "src").stdout.split()
+    fresh = run("git", "ls-files", "--others", "--exclude-standard", "--", "src").stdout.split()
+    return sorted(p for p in {*tracked, *fresh} if p.endswith(".py") and (ROOT / p).is_file())
+
+
+def all_sources() -> list[str]:
+    found = (p.relative_to(ROOT).as_posix() for p in (ROOT / "src").rglob("*.py"))
+    return sorted(p for p in found if not p.endswith("__init__.py"))
+
+
+def settings() -> dict[str, list[str]]:
+    """``[tool.forja.mutation]`` of pyproject.toml: tests that cannot run where the gate runs."""
+    document = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    found: dict[str, list[str]] = document.get("tool", {}).get("forja", {}).get("mutation", {})
+    return found
+
+
+def deselected() -> list[str]:
+    return [arg for name in settings().get("deselect", []) for arg in ("--deselect", name)]
+
+
+def record_coverage() -> dict[str, list[str]]:
+    """Which test files ran each source file, from one run of the fast tests."""
+    COVERAGE.mkdir(parents=True, exist_ok=True)
+    data, report = COVERAGE / ".coverage", COVERAGE / "contexts.json"
+    data.unlink(missing_ok=True)
+    tested = run(
+        sys.executable, "-m", "coverage", "run", f"--data-file={data}", "-m", "pytest", "-q",
+        "-p", "no:cacheprovider", "--no-header", "-n0", "-m", "not slow", *deselected(), "tests",
+        env=FAST,
+    )  # fmt: skip
+    if tested.returncode != 0:
+        print(tested.stdout[-3000:], file=sys.stderr)
+        raise SystemExit(2)
+    exported = run(
+        sys.executable, "-m", "coverage", "json", f"--data-file={data}", "--show-contexts",
+        "-o", str(report),
+    )  # fmt: skip
+    if exported.returncode != 0:
+        print(exported.stderr, file=sys.stderr)
+        raise SystemExit(2)
+    files = json.loads(report.read_text(encoding="utf-8"))["files"]
+    tests_of: dict[str, set[str]] = defaultdict(set)
+    for name, info in files.items():
+        for contexts in info.get("contexts", {}).values():
+            for context in contexts:
+                module = test_file(context)
+                if module:
+                    tests_of[Path(name).as_posix()].add(module)
+    return {name: ordered(name, tests) for name, tests in tests_of.items()}
+
+
+def ordered(source: str, tests: set[str]) -> list[str]:
+    """Tests named for the module first: they usually kill a mutant, so ``-x`` stops early."""
+    stem = Path(source).stem
+    return sorted(tests, key=lambda test: (stem not in Path(test).stem, test))
+
+
+def test_file(context: str) -> str | None:
+    """The test file of a coverage context (``tests.pkg.test_mod.Class.test_x``), if any."""
+    parts = [part for part in context.split("|")[0].split(".") if part]
+    while parts:
+        candidate = Path(*parts).with_suffix(".py")
+        if (ROOT / candidate).is_file():
+            return candidate.as_posix()
+        parts.pop()
+    return None
+
+
+def suppressions() -> list[dict[str, str]]:
+    if not SUPPRESSIONS.exists():
+        return []
+    entries: list[dict[str, str]] = tomllib.loads(SUPPRESSIONS.read_text(encoding="utf-8")).get(
+        "suppress", []
+    )
+    for entry in entries:
+        if not all(entry.get(key) for key in ("file", "function", "change", "reason")):
+            raise SystemExit(
+                f"{SUPPRESSIONS.name}: every entry needs file, function, change, reason"
+            )
+    return entries
+
+
+def function_at(source: Path, line: int) -> str:
+    """The qualified name of the innermost function that holds ``line``."""
+    best, span = "<module>", None
+
+    def visit(node: ast.AST, prefix: str) -> None:
+        nonlocal best, span
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                name = f"{prefix}{child.name}"
+                end = child.end_lineno or child.lineno
+                inside = child.lineno <= line <= end and not isinstance(child, ast.ClassDef)
+                if inside and (span is None or end - child.lineno <= span):
+                    best, span = name, end - child.lineno
+                visit(child, f"{name}.")
+            else:
+                visit(child, prefix)
+
+    visit(ast.parse(source.read_text(encoding="utf-8")), "")
+    return best
+
+
+def mutate(file: str, tests: list[str], engine: Path) -> tuple[int, list[str], list[str]]:
+    skipped = " ".join(f"--deselect {name}" for name in settings().get("deselect", []))
+    command = (
+        f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 {skipped} {' '.join(tests)}"
+    )
+    done = run(
+        str(engine), "--no-coverage", "--mutate-all", "--test-command", command, file, env=FAST,
+    )  # fmt: skip
+    survived, uncovered = [], []
+    for text in done.stdout.splitlines():
+        found = OUTCOME.match(text)
+        if found and found[1] == "SURVIVED":
+            survived.append(f"{found['file']}:{found['line']} {found['change']}")
+        elif found and found[1] == "UNCOVERED":
+            uncovered.append(f"{found['file']}:{found['line']} {found['change']}")
+    return done.returncode, survived, uncovered
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument("files", nargs="*")
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument(
+        "--engine",
+        default=os.environ.get("FORJA_MUTATOR", str(Path.home() / "mutator" / "mutator")),
+    )
+    args = parser.parse_args()
+    files = args.files or (all_sources() if args.all else changed_sources())
+    if not files:
+        print("no source file changed: nothing to mutate")
+        return 0
+    started = time.monotonic()
+    tests_of = record_coverage()
+    print(f"coverage by test: {time.monotonic() - started:.0f}s")
+    allowed = suppressions()
+    survivors = 0
+    for file in files:
+        tests = tests_of.get(file)
+        if not tests:
+            print(f"{file}: no test runs it, so no mutant can be judged")
+            survivors += 1
+            continue
+        started = time.monotonic()
+        code, survived, uncovered = mutate(file, tests, Path(args.engine))
+        print(f"{file}: {len(tests)} test file(s), {time.monotonic() - started:.0f}s")
+        if code == 2:
+            print(f"{file}: the tests fail before any mutation")
+            return 2
+        for entry in survived:
+            where, _, change = entry.partition(" ")
+            path, _, line = where.rpartition(":")
+            function = function_at(ROOT / path, int(line))
+            muted = any(
+                s["file"] == path and s["function"] == function and s["change"] == change
+                for s in allowed
+            )
+            if not muted:
+                print(f"SURVIVED {entry}  [{function}]")
+                survivors += 1
+        if uncovered:
+            print(f"{file}: {len(uncovered)} mutant(s) on lines no test runs")
+    print(
+        "mutation: "
+        + ("all mutants killed or suppressed" if not survivors else f"{survivors} survived")
+    )
+    return 3 if survivors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

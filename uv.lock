@@ -217,6 +217,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "coverage" },
     { name = "lizard" },
     { name = "mypy" },
     { name = "pytest" },
@@ -232,6 +233,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.7" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "coverage", specifier = ">=7.6" },
     { name = "lizard", specifier = ">=1.24.1" },
     { name = "mypy" },
     { name = "pytest" },

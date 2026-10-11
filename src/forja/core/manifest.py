@@ -51,8 +51,8 @@ class Manifest:
         ]
         # The rows are lists, so only the item separator is ever used, and ensure_ascii is the
         # default; both are spelled out so the canonical form is readable here.
-        payload = json.dumps(rows, separators=(",", ":"), ensure_ascii=True)  # pragma: no mutate
-        return hashlib.sha256(payload.encode("ascii")).hexdigest()  # pragma: no mutate
+        payload = json.dumps(rows, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(payload.encode("ascii")).hexdigest()
 
 
 @dataclass(frozen=True)

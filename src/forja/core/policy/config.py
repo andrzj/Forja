@@ -166,7 +166,7 @@ def load_policy(
             if required:
                 raise PolicyConfigError([f"{name}: {path} does not exist"])
             continue
-        text = path.read_text(encoding="utf-8")  # pragma: no mutate (UTF-8 is the Linux default)
+        text = path.read_text(encoding="utf-8")  # UTF-8 is the Linux default
         layers.append(parse_layer(f"{name} ({path})", text))
     return build_policy(registry, layers)
 
@@ -348,13 +348,13 @@ def _collect(layers: Sequence[Layer], section: str, key: str) -> tuple[str, ...]
     seen: dict[str, None] = {}
     for layer in layers:
         for value in layer.data.get(section, {}).get(key, []):
-            seen.setdefault(value.strip(), None)  # pragma: no mutate (None is the default)
+            seen.setdefault(value.strip(), None)  # None is the default
     return tuple(seen)
 
 
 def _check_pattern(value: str) -> None:
     # Only validity matters here, and case folding never changes whether a pattern compiles.
-    compile_pattern(value, case_insensitive=False)  # pragma: no mutate
+    compile_pattern(value, case_insensitive=False)
 
 
 def _check_branch(value: str) -> None:

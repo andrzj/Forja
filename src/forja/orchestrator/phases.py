@@ -54,7 +54,7 @@ class Orchestrator:
         self._journal = ctx.journal
         self._log = ctx.journal.log
         self._run_id = ctx.journal.run_id
-        self._baseline: Baseline | None = None  # pragma: no mutate
+        self._baseline: Baseline | None = None
 
     @property
     def _state(self) -> ExecutionState:
@@ -244,5 +244,5 @@ class Orchestrator:
         ctx = self._ctx
         facts = read_facts(self._log.path)
         text = render_summary(self._log.state, facts, ctx.config, ctx.workspace.run_branch, path)
-        atomic_write_bytes(path, text.encode("utf-8"))  # pragma: no mutate
+        atomic_write_bytes(path, text.encode("utf-8"))
         return path

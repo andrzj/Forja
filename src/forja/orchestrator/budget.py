@@ -39,7 +39,7 @@ def read_consumption(log_path: Path) -> Consumption:
     seconds = 0.0
     tokens = 0
     started: datetime | None = None
-    last: datetime | None = None  # pragma: no mutate (read only after the first event sets it)
+    last: datetime | None = None  # read only after the first event sets it
     for raw in [line for line in log_path.read_bytes().split(b"\n") if line]:
         try:
             event = parse_line(raw)

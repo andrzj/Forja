@@ -16,6 +16,7 @@ dev = [
     "mypy",
     "lizard>=1.24.1",
     "pytest-xdist>=3.8.0",
+    "coverage>=7.6",
 ]
 mutation = [
     "mutmut>=3.8.0",
@@ -23,6 +24,10 @@ mutation = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/forja"]
+
+[tool.coverage.run]
+source = ["src/forja"]
+dynamic_context = "test_function"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -42,6 +47,15 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+
+[tool.forja.mutation]
+# Tests that fail on Linux today (see docs/estado.md): the gate needs a green run to start from.
+deselect = [
+    "tests/core/gitguard/test_snapshot.py::test_a_fetch_that_moves_remote_tracking_refs_is_a_change",
+    "tests/core/locking/test_index_locks.py::test_the_real_process_list_includes_this_process_and_no_invented_names",
+    "tests/core/redaction/test_secrets.py::test_forjas_own_source_is_clean",
+    "tests/core/locking/test_repository.py::test_the_repository_id_is_short_stable_and_shared_by_every_worktree",
+]
 
 [tool.mutmut]
 source_paths = [
