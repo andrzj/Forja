@@ -55,7 +55,7 @@ def load_frozen_policy(registry: CheckRegistry, run_dir: Path) -> FrozenPolicy:
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise PolicyConfigError([f"frozen policy {path} cannot be read: {error}"]) from None
     policy = build_policy(registry, [layer])
-    forja_version = stored_version.split("+", 1)[0]
+    forja_version = stored_version.rsplit("+", 1)[0]
     if policy.version(forja_version) != stored_version:
         raise PolicyConfigError(
             [

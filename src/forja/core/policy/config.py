@@ -5,7 +5,6 @@ by default is decided in code (``CheckRegistry``). Every problem is collected, s
 reports everything to fix at once.
 """
 
-import copy
 import hashlib
 import math
 import re
@@ -167,7 +166,8 @@ def load_policy(
             if required:
                 raise PolicyConfigError([f"{name}: {path} does not exist"])
             continue
-        layers.append(parse_layer(f"{name} ({path})", path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")  # pragma: no mutate (UTF-8 is the Linux default)
+        layers.append(parse_layer(f"{name} ({path})", text))
     return build_policy(registry, layers)
 
 
@@ -348,12 +348,13 @@ def _collect(layers: Sequence[Layer], section: str, key: str) -> tuple[str, ...]
     seen: dict[str, None] = {}
     for layer in layers:
         for value in layer.data.get(section, {}).get(key, []):
-            seen.setdefault(value.strip(), None)
+            seen.setdefault(value.strip(), None)  # pragma: no mutate (None is the default)
     return tuple(seen)
 
 
 def _check_pattern(value: str) -> None:
-    compile_pattern(value, case_insensitive=False)
+    # Only validity matters here, and case folding never changes whether a pattern compiles.
+    compile_pattern(value, case_insensitive=False)  # pragma: no mutate
 
 
 def _check_branch(value: str) -> None:
@@ -485,7 +486,6 @@ def _merge(spec: CheckSpec, layers: Sequence[Layer], problems: list[str]) -> Eff
         raw = layer.data.get("checks", {}).get(spec.id)
         if raw is None:
             continue
-        raw = copy.deepcopy(raw)
         if "mode" in raw:
             mode = Mode(raw["mode"])
         if "on_inconclusive" in raw:
