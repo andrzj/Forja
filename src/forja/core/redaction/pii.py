@@ -5,7 +5,7 @@ so ordinary numbers such as versions, ids and timestamps are left alone.
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from forja.core.redaction.settings import PiiKind
@@ -60,19 +60,17 @@ def cnpj_valid(text: str) -> bool:
     return True
 
 
+def _luhn_terms(digits: str) -> Iterator[int]:
+    for index, char in enumerate(reversed(digits)):
+        value = int(char) * (2 if index % 2 else 1)
+        yield value - 9 if value > 9 else value
+
+
 def luhn_valid(text: str) -> bool:
     digits = _digits(text)
     if not 13 <= len(digits) <= 19 or len(set(digits)) == 1:
         return False
-    total = 0
-    for index, char in enumerate(reversed(digits)):
-        value = int(char)
-        if index % 2 == 1:
-            value *= 2
-            if value > 9:
-                value -= 9
-        total += value
-    return total % 10 == 0 and digits[0] in "23456"
+    return sum(_luhn_terms(digits)) % 10 == 0 and "2" <= digits[0] <= "6"
 
 
 def email_valid(text: str) -> bool:
@@ -102,10 +100,6 @@ class PiiDetector:
     valid: Callable[[str], bool]
 
 
-def _c(pattern: str) -> re.Pattern[str]:
-    return re.compile(pattern)
-
-
 # Lookarounds keep a match from starting or ending inside a longer run of digits or separators.
 _NOT_BEFORE = r"(?<![\d.\-/])"
 _NOT_AFTER = r"(?![\d])"
@@ -113,18 +107,18 @@ _NOT_AFTER = r"(?![\d])"
 DETECTORS: tuple[PiiDetector, ...] = (
     PiiDetector(
         PiiKind.CPF,
-        (_c(_NOT_BEFORE + r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}" + _NOT_AFTER),),
+        (re.compile(_NOT_BEFORE + r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}" + _NOT_AFTER),),
         cpf_valid,
     ),
     PiiDetector(
         PiiKind.CNPJ,
-        (_c(_NOT_BEFORE + r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}" + _NOT_AFTER),),
+        (re.compile(_NOT_BEFORE + r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}" + _NOT_AFTER),),
         cnpj_valid,
     ),
     PiiDetector(
         PiiKind.EMAIL,
         (
-            _c(
+            re.compile(
                 r"(?<![\w.+\-])[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}"
                 r"(?:\.[A-Za-z0-9\-]{1,63}){1,8}(?![\w@])"
             ),
@@ -135,19 +129,19 @@ DETECTORS: tuple[PiiDetector, ...] = (
         PiiKind.PHONE,
         (
             # +55 with or without separators
-            _c(r"(?<![\w+])\+55[\s.\-]?\(?\d{2}\)?[\s.\-]?9?\d{4}[\s.\-]?\d{4}(?!\d)"),
+            re.compile(r"(?<![\w+])\+55[\s.\-]?\(?\d{2}\)?[\s.\-]?9?\d{4}[\s.\-]?\d{4}(?!\d)"),
             # (DD) 9NNNN-NNNN, with the area code in parentheses
-            _c(r"(?<![\w])\(\d{2}\)\s?9?\d{4}[\s\-]?\d{4}(?!\d)"),
+            re.compile(r"(?<![\w])\(\d{2}\)\s?9?\d{4}[\s\-]?\d{4}(?!\d)"),
             # DD 9NNNN-NNNN, with a space or a dot after the area code
-            _c(r"(?<![\w.\-])\d{2}[\s.]9?\d{4}[\s.\-]\d{4}(?![\d\-])"),
+            re.compile(r"(?<![\w.\-])\d{2}[\s.]9?\d{4}[\s.\-]\d{4}(?![\d\-])"),
             # other countries, E.164
-            _c(r"(?<![\w+])\+(?!55)[1-9]\d{7,14}(?!\d)"),
+            re.compile(r"(?<![\w+])\+(?!55)[1-9]\d{7,14}(?!\d)"),
         ),
         phone_valid,
     ),
     PiiDetector(
         PiiKind.CARD,
-        (_c(r"(?<![\d\-])\d(?:[ \-]?\d){12,18}(?![\d\-])"),),
+        (re.compile(r"(?<![\d\-])\d(?:[ \-]?\d){12,18}(?![\d\-])"),),
         luhn_valid,
     ),
 )
