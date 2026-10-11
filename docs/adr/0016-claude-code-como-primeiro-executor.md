@@ -20,6 +20,11 @@ O incremento 1 precisava de um agente de verdade. O contrato de adaptador de exe
 - **Orçamento é de tokens** (`Budget.tokens`, padrão 2.000.000). O `Meter` lê o log. `enforce` só vale sem pessoa (CI): com terminal a Forja mostra o quanto passou e quem decide é o usuário. O tempo é só exibido. A espera de rede não tem limite de tempo (`max_network_probes` limita quando não há quem interrompa).
 - **Planejador sem modelo** (`ComplexityPlanner`): as funções mais complexas acima do limite do lizard, uma tarefa por função, dentro do orçamento de tarefas, arquivos e linhas.
 
+## Revisão de segurança do commit
+
+- **`.git` e arquivos sensíveis (corrigido).** O que volta da cópia é recusado se passar pelo diretório do git (qualquer grafia que o sistema aceite: caixa, ponto ou espaço no fim, nome curto `GIT~1`, aninhado) ou se criar ou alterar um arquivo sensível, mesmo declarado. Um `.git` plantado poderia redirecionar o git do worktree ou instalar hooks. Os arquivos sensíveis (`.env*`, `*.pem`, `secrets/**` etc.) também **não entram na cópia**: o agente não os lê, e eles voltam intactos (a limpeza do worktree os preserva e o resumo de reconciliação os conta).
+- **Ferramentas de arquivo (parcial).** O arquivo de configurações gerado nega `Read`, `Edit` e `Write` em `../**` e `~/**`. A CLI aceita o arquivo, mas o efeito só se confirma com o teste `live`. Um caminho absoluto fora desses dois não é coberto por regra nenhuma: o que mantém a CLI dentro da cópia é o nível de isolamento (1e). A CLI tem `--restricted`, que confina as ferramentas de arquivo ao diretório de trabalho, mas também ignora as configurações do usuário (gateway, modelo); decidir entre honrar essas configurações e confinar fica registrado como pergunta aberta para o 1e.
+
 ## Consequências
 
 - O mesmo `ExecutorAgentRunner` serve a qualquer CLI com um `ExecutorAdapter`; um adaptador novo só descreve a invocação e lê o fluxo.

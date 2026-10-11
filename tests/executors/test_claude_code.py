@@ -79,7 +79,9 @@ def test_only_the_users_settings_are_read_and_hooks_are_off(tmp_path: Path) -> N
         assert flag in argv
     assert "--bare" not in argv  # it would refuse the login the user already made
     setup = adapter.permission_setup(Producer.IMPLEMENTER, RolePermissions(True))
-    assert json.loads(setup.files["claude-settings.json"]) == {"disableAllHooks": True}
+    settings = json.loads(setup.files["claude-settings.json"])
+    assert settings["disableAllHooks"] is True
+    assert {"Read(../**)", "Edit(../**)", "Write(~/**)"} <= set(settings["permissions"]["deny"])
 
 
 def test_an_editing_role_can_read_and_edit_but_not_run_commands(tmp_path: Path) -> None:

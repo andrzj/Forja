@@ -43,7 +43,14 @@ from forja.core.idempotency import (
     reconcile_apply_diff,
     reconcile_prepare_workcopy,
 )
-from forja.core.manifest import build_manifest, diff_manifests, find_violations
+from forja.core.isolation import SensitivePaths
+from forja.core.manifest import (
+    Manifest,
+    ManifestEntry,
+    build_manifest,
+    diff_manifests,
+    find_violations,
+)
 from forja.core.process import EventSink, ProcessIdentity, ProcessRunner
 from forja.core.redaction import PackageItem, Redactor
 from forja.core.redaction.engine import ItemKind
@@ -72,6 +79,33 @@ every file you created, modified or removed (the list is checked against what re
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
 had to guess. Then answer with one short sentence.
 """
+
+
+def touches_git(path: str) -> bool:
+    """Whether a path goes through git's own directory, by any spelling the system would accept.
+
+    Windows ignores trailing dots and spaces and has short names (``GIT~1``), and the file system
+    may fold case, so each part is compared in a normal form.
+    """
+    for part in path.replace("\\", "/").split("/"):
+        plain = part.casefold().rstrip(" .")
+        if plain == ".git" or plain.startswith("git~"):
+            return True
+    return False
+
+
+def _wipe(directory: Path, keep: frozenset[str], prefix: str = "") -> None:
+    """Empty ``directory`` of everything but git's own entry and the paths in ``keep``."""
+    for entry in directory.iterdir():
+        relative = f"{prefix}{entry.name}"
+        if (not prefix and entry.name == ".git") or relative in keep:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            _wipe(entry, keep, f"{relative}/")
+            if not any(entry.iterdir()):
+                entry.rmdir()
+        else:
+            entry.unlink()
 
 
 def workcopy_of(ctx: AttemptContext) -> Path:
@@ -192,6 +226,7 @@ class ExecutorAgentRunner:
         log: EventLog,
         *,
         redactor: Redactor | None = None,
+        sensitive: SensitivePaths | None = None,
         role: Producer = Producer.IMPLEMENTER,
         permissions: RolePermissions = RolePermissions(can_edit_files=True),  # noqa: B008
         idle_limit: float = IDLE_LIMIT,
@@ -199,7 +234,8 @@ class ExecutorAgentRunner:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._adapter, self._executable, self._env, self._log = adapter, executable, host_env, log
-        self._redactor = redactor or Redactor()
+        self._sensitive = sensitive or SensitivePaths.with_defaults()
+        self._redactor = redactor or Redactor(sensitive=self._sensitive)
         self._role, self._permissions = role, permissions
         self._idle_limit, self._poll, self._clock = idle_limit, poll, clock
 
@@ -209,12 +245,12 @@ class ExecutorAgentRunner:
         target = workcopy_of(ctx)
 
         async def payload() -> dict[str, Any]:
-            digest = build_manifest(ctx.worktree, exclude={".git"}).digest()
-            return {"workcopy": str(target), "expected_digest": digest}
+            seen = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
+            return {"workcopy": str(target), "expected_digest": seen.digest()}
 
         async def run() -> None:
             shutil.rmtree(target, ignore_errors=True)
-            shutil.copytree(ctx.worktree, target, ignore=shutil.ignore_patterns(".git"))
+            shutil.copytree(ctx.worktree, target, ignore=self._left_out(ctx.worktree))
             agent_dir = target / AGENT_DIR
             agent_dir.mkdir()
             package = build_package(ctx, self._redactor)
@@ -271,10 +307,12 @@ class ExecutorAgentRunner:
         async def payload() -> dict[str, Any]:
             declaration = ChangeDeclaration.from_output(_declared(source))
             after = build_manifest(source, exclude={AGENT_DIR})
+            self._refuse_off_limits(after)
+            hidden = self._hidden(ctx.worktree)
             problems = find_violations(after, destination_root=ctx.worktree)
             if problems:
                 raise RejectedWork("; ".join(f"{p.path}: {p.detail}" for p in problems))
-            before = build_manifest(ctx.worktree, exclude={".git"})
+            before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
             differences = compare_with_diff(declaration, diff_manifests(before, after))
             if differences:
                 raise RejectedWork(
@@ -285,14 +323,16 @@ class ExecutorAgentRunner:
                         for d in differences
                     )
                 )
-            return {"worktree": str(ctx.worktree), "expected_digest": after.digest()}
+            kept = Manifest({**after.entries, **hidden})
+            return {"worktree": str(ctx.worktree), "expected_digest": kept.digest()}
 
         async def run() -> None:
-            for entry in ctx.worktree.iterdir():
-                if entry.name != ".git":
-                    shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+            _wipe(ctx.worktree, frozenset(self._hidden(ctx.worktree)))
             shutil.copytree(
-                source, ctx.worktree, dirs_exist_ok=True, ignore=shutil.ignore_patterns(AGENT_DIR)
+                source,
+                ctx.worktree,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(AGENT_DIR, ".git"),
             )
 
         return Step(payload, run)
@@ -304,6 +344,37 @@ class ExecutorAgentRunner:
                 Path(p["workcopy"]), p["expected_digest"], exclude={AGENT_DIR}
             )
         return reconcile_apply_diff(Path(p["worktree"]), p["expected_digest"])
+
+    # -- what the agent may not see or touch ------------------------------------------------------
+
+    def _hidden(self, worktree: Path) -> dict[str, ManifestEntry]:
+        """The sensitive files: they stay out of the copy and come back untouched."""
+        entries = build_manifest(worktree, exclude={".git"}).entries
+        return {path: e for path, e in entries.items() if self._sensitive.matches(path)}
+
+    def _visible(self, manifest: Manifest) -> Manifest:
+        hidden = {path for path in manifest.entries if self._sensitive.matches(path)}
+        return Manifest({p: e for p, e in manifest.entries.items() if p not in hidden})
+
+    def _left_out(self, worktree: Path) -> Callable[[str, list[str]], set[str]]:
+        def ignore(directory: str, names: list[str]) -> set[str]:
+            relative = Path(directory).relative_to(worktree).as_posix()
+            prefix = "" if relative == "." else f"{relative}/"
+            return {
+                name
+                for name in names
+                if (not prefix and name == ".git") or self._sensitive.matches(f"{prefix}{name}")
+            }
+
+        return ignore
+
+    def _refuse_off_limits(self, after: Manifest) -> None:
+        """Git's own files and the sensitive ones are not the agent's to write, whatever it says."""
+        for path in after.entries:
+            if touches_git(path):
+                raise RejectedWork(f"{path}: the work reaches into git's own directory")
+            if self._sensitive.matches(path):
+                raise RejectedWork(f"{path}: the work creates or changes a sensitive file")
 
 
 def _declared(workcopy: Path) -> LlmOutput:

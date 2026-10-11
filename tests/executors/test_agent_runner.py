@@ -17,7 +17,7 @@ from forja.core.events import EventLog, OpenOperation
 from forja.core.idempotency import Decision
 from forja.core.states import ExecutionState, Level
 from forja.executors import ClaudeCodeAdapter
-from forja.orchestrator.agent_runner import ExecutorAgentRunner, workcopy_of
+from forja.orchestrator.agent_runner import ExecutorAgentRunner, touches_git, workcopy_of
 from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.operations import Step
 from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork, TaskInfo
@@ -330,3 +330,91 @@ def test_a_whole_run_with_the_real_runner_delivers_the_declared_work(tmp_path: P
     assert commit.subject == "refactor: reduce the complexity of f"
     assert "the name says what it does" in commit.body
     assert read_consumption(log.path).tokens == 120
+
+
+# -- what the agent may not see or touch -----------------------------------------------------------
+
+
+def declare(path: str, change: str = "created") -> dict[str, Any]:
+    return {
+        "actions": [{"summary": "s", "reason": "r", "files": [{"path": path, "change": change}]}]
+    }
+
+
+def test_work_that_reaches_into_gits_own_directory_is_rejected_even_if_declared(
+    tmp_path: Path,
+) -> None:
+    r = rig(tmp_path, {"writes": {".git/config": "[core]\n"}, "saida": declare(".git/config")})
+    go(work(r))
+
+    with pytest.raises(RejectedWork, match=r"\.git/config: the work reaches into git's own"):
+        go(settle(r.runner.apply_diff(r.ctx)))
+    assert not (r.ctx.worktree / ".git" / "config").exists()
+
+
+@pytest.mark.parametrize(
+    ("path", "reaches"),
+    [
+        (".git/config", True),
+        ("sub/.git/hooks/post-commit", True),
+        (".GIT/config", True),
+        (".Git", True),
+        (".git./config", True),  # Windows drops trailing dots and spaces
+        (".git /config", True),
+        ("GIT~1/config", True),  # and has short names
+        (".github/workflows/ci.yml", False),
+        (".gitignore", False),
+        ("src/digit.py", False),
+        ("src/git_tools.py", False),
+    ],
+)
+def test_git_s_directory_is_recognized_by_every_spelling_the_system_accepts(
+    path: str, reaches: bool
+) -> None:
+    assert touches_git(path) is reaches
+
+
+def test_a_sensitive_file_is_not_in_the_copy_and_is_back_untouched(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    (r.ctx.worktree / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    (r.ctx.worktree / "config").mkdir()
+    (r.ctx.worktree / "config" / ".env.local").write_text("A=1\n", encoding="utf-8")
+    (r.ctx.worktree / "secrets").mkdir()
+    (r.ctx.worktree / "secrets" / "k.txt").write_text("k\n", encoding="utf-8")
+    go(work(r))
+
+    assert not (r.workcopy / ".env").exists()
+    assert not (r.workcopy / "config" / ".env.local").exists()
+    assert not (r.workcopy / "secrets" / "k.txt").exists()
+
+    step = r.runner.apply_diff(r.ctx)
+    payload = go(step.payload())
+    go(step.run())
+
+    assert (r.ctx.worktree / ".env").read_text("utf-8") == "TOKEN=secret\n"
+    assert (r.ctx.worktree / "config" / ".env.local").read_text("utf-8") == "A=1\n"
+    assert (r.ctx.worktree / "secrets" / "k.txt").read_text("utf-8") == "k\n"
+    assert (r.ctx.worktree / "src" / "a.py").read_text("utf-8") == AFTER
+    verdict = go(r.runner.reconcile(operation("apply_diff", payload)))
+    assert verdict.decision is Decision.ALREADY_DONE
+
+
+def test_a_copy_without_the_sensitive_files_is_still_known_to_be_made(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    (r.ctx.worktree / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+
+    payload = go(settle(r.runner.prepare_workcopy(r.ctx)))
+
+    assert go(r.runner.reconcile(operation("prepare_workcopy", payload))).decision is (
+        Decision.ALREADY_DONE
+    )
+
+
+def test_work_that_writes_a_sensitive_file_is_rejected_even_if_declared(tmp_path: Path) -> None:
+    r = rig(tmp_path, {"writes": {".env": "TOKEN=planted\n"}, "saida": declare(".env")})
+    (r.ctx.worktree / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    go(work(r))
+
+    with pytest.raises(RejectedWork, match=r"\.env: the work creates or changes a sensitive"):
+        go(settle(r.runner.apply_diff(r.ctx)))
+    assert (r.ctx.worktree / ".env").read_text("utf-8") == "TOKEN=secret\n"

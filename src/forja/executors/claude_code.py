@@ -35,7 +35,12 @@ NAME = "claude-code"
 SETTINGS_FILE = "claude-settings.json"
 # Hooks of the user's profile would otherwise run inside every agent call and add their output to
 # what the agent reads.
-SETTINGS = {"disableAllHooks": True}
+# Best effort, and the CLI's own rules: the file tools may not reach above the working copy or into
+# the home directory. What keeps the CLI inside the copy for good is the isolation level (1e).
+OUTSIDE = tuple(
+    f"{tool}({where})" for tool in ("Read", "Edit", "Write") for where in ("../**", "~/**")
+)
+SETTINGS = {"disableAllHooks": True, "permissions": {"deny": list(OUTSIDE)}}
 
 READ_TOOLS = ("Read", "Glob", "Grep")
 EDIT_TOOLS = ("Edit", "Write")
