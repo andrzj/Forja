@@ -6,23 +6,25 @@ the arguments each port receives, and the words of the summary.
 
 import asyncio
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from forja.core.events import EventLog
+from forja.core.artifacts.schemas import TaskOutcome, TaskOutcomeKind
+from forja.core.events import EventLog, LogUnusable, OpenOperation
+from forja.core.idempotency import Decision, Reconciliation, reconcile_call_agent_cli
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.budget import Meter, read_consumption
-from forja.orchestrator.config import Budget
+from forja.orchestrator.config import Budget, confirmed_payload
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
 from forja.orchestrator.ports import AttemptContext, Baseline, PlannedTask, SinkFactory
-from forja.orchestrator.summary import Facts, render_summary
+from forja.orchestrator.summary import Facts, render_summary, summary_body
 from forja.orchestrator.task_cycle import TaskCycle, _count
 from forja.orchestrator.workspace_git import GitWorkspace
 from tests.core.idempotency.conftest import Repo
-from tests.orchestrator.crash import Interrupted
+from tests.orchestrator.crash import Counting, CrashAfter, Interrupted
 from tests.orchestrator.fakes import (
     PASSED,
     PASSED_WITH_A_GAP,
@@ -179,8 +181,8 @@ def test_a_run_reopened_while_planning_measures_the_base_again_for_the_planner(
     outcome, _ = world.run(measurer=measurer, planner=planner, log=world.open())
 
     assert outcome.state is ExecutionState.DELIVERED
-    ((tree, _), _final) = measurer.baselines
-    assert tree == world.workspace.run_worktree
+    ((tree, sinks), _final) = measurer.baselines
+    assert tree == world.workspace.run_worktree and callable(sinks)
     ((_, baseline, _),) = planner.asked
     assert baseline.metrics == {"m": 3.0}
 
@@ -234,9 +236,13 @@ def test_every_difference_git_shows_is_named_in_the_rejection(world: World) -> N
 
     payload = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.REJECTED)
     assert payload is not None
+    prefix = "git changed while the agent ran: "
     reason = str(payload["reason"])
-    assert "one" in reason and "two" in reason
-    assert reason.count("; ") >= 1
+    assert reason.startswith(prefix)
+    first, second = reason.removeprefix(prefix).split("; ")
+    assert first.startswith("ref_added refs/heads/one: None -> ")
+    assert second.startswith("ref_added refs/heads/two: None -> ")
+    assert second.endswith(first.rsplit(" ", 1)[1])  # both point at the same commit
 
 
 def test_the_agent_is_handed_a_sink_for_its_own_call(world: World) -> None:
@@ -460,3 +466,175 @@ def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: Wor
     assert facts.baseline["n"] == 1.0 and facts.baseline["f"] == 1.5
     assert "flag" not in facts.baseline and "s" not in facts.baseline
     assert facts.final["n"] == 2.0
+
+
+# -- cuts that the fast suite must still cover -----------------------------------------------------
+
+
+def line_count_at(template: Path, root: Path, wanted: Callable[[Any], bool], **parts: Any) -> int:
+    """How many lines an uninterrupted run has written when the first wanted event lands."""
+    counter, found = Counting(), []
+    reference = World.create(root, template)
+    log = reference.open(write=counter)
+    log.subscribe(lambda e: found.append(counter.count) if wanted(e) and not found else None)
+    reference.run(log=log, **parts)
+    return found[0]
+
+
+def crash_then_resume(world: World, cut: int, **parts: Any) -> tuple[Any, EventLog]:
+    with pytest.raises((Interrupted, LogUnusable)):
+        world.run(log=world.open(write=CrashAfter(cut)), **parts)
+    return world.run(log=world.open(), **parts)
+
+
+def test_a_cut_between_the_attempt_and_the_stage_being_committed_does_not_start_another_attempt(
+    tmp_path: Path, template: Path
+) -> None:
+    cut = line_count_at(
+        template,
+        tmp_path / "reference",
+        lambda e: e.type == "transition" and e.level is Level.ATTEMPT and e.to_state == "committed",
+    )
+
+    outcome, log = crash_then_resume(World.create(tmp_path / "world", template), cut)
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert list(log.state.children_of(Level.ATTEMPT, "t1-s")) == ["t1-a1"]
+    assert log.state.state_of(Level.STAGE, "t1-s") is StageState.COMMITTED
+    assert log.state.state_of(Level.TASK, "t1") is TaskState.INTEGRATED
+
+
+def test_a_cut_after_the_rollback_blocks_the_task_without_judging_the_integration_again(
+    tmp_path: Path, template: Path
+) -> None:
+    rejecting = ScriptedMeasurer(integration_verdicts=(REJECTED,))
+    cut = line_count_at(
+        template,
+        tmp_path / "reference",
+        lambda e: e.type == "effect" and e.operation == "rollback_integration",
+        measurer=rejecting,
+    )
+    spy = Spy(integration_verdicts=(REJECTED,))
+
+    outcome, log = crash_then_resume(World.create(tmp_path / "world", template), cut, measurer=spy)
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.transition_payload(Level.TASK, "t1", TaskState.BLOCKED) == {
+        "reason": "integration_gate"
+    }
+    assert len(spy.integrated) == 1  # the process that died; the resumed one did not judge again
+
+
+# -- who reconciles what ---------------------------------------------------------------------------
+
+
+class Reconciling(ScriptedAgent):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asked: list[OpenOperation] = []
+
+    async def reconcile(self, operation: OpenOperation) -> Reconciliation:
+        self.asked.append(operation)
+        return Reconciliation(Decision.DISCARD_ATTEMPT)
+
+
+class ReconcilingMeasurer(ScriptedMeasurer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asked: list[OpenOperation] = []
+
+    async def reconcile(self, operation: OpenOperation) -> Reconciliation:
+        self.asked.append(operation)
+        return Reconciliation(Decision.ALREADY_DONE)
+
+
+def an_open(name: str) -> OpenOperation:
+    return OpenOperation(name, f"{name}:t1-a1", Level.ATTEMPT, "t1-a1", 1)
+
+
+def reconcile_with(
+    world: World, agent: ScriptedAgent, measurer: ScriptedMeasurer, name: str
+) -> Any:
+    ctx = world.context(world.open(), measurer=measurer, agent=agent, planner=ScriptedPlanner())
+    return asyncio.run(Orchestrator(ctx)._reconcile(an_open(name)))  # noqa: SLF001
+
+
+def test_an_open_agent_call_is_reconciled_by_the_table_not_asked_of_the_agent(world: World) -> None:
+    agent, measurer = Reconciling(), ReconcilingMeasurer()
+
+    decision = reconcile_with(world, agent, measurer, "call_agent_cli")
+
+    assert decision == reconcile_call_agent_cli()
+    assert agent.asked == [] and measurer.asked == []
+
+
+@pytest.mark.parametrize("name", ["prepare_workcopy", "apply_diff"])
+def test_the_agents_own_operations_are_reconciled_by_the_agent(world: World, name: str) -> None:
+    agent, measurer = Reconciling(), ReconcilingMeasurer()
+
+    decision = reconcile_with(world, agent, measurer, name)
+
+    assert decision == Reconciliation(Decision.DISCARD_ATTEMPT)
+    assert agent.asked == [an_open(name)] and measurer.asked == []
+
+
+def test_an_open_tool_run_is_reconciled_by_the_measurer(world: World) -> None:
+    agent, measurer = Reconciling(), ReconcilingMeasurer()
+
+    decision = reconcile_with(world, agent, measurer, "run_tool")
+
+    assert decision == Reconciliation(Decision.ALREADY_DONE)
+    assert measurer.asked == [an_open("run_tool")] and agent.asked == []
+
+
+def test_an_operation_nobody_knows_stops_the_resume_naming_it(world: World) -> None:
+    with pytest.raises(KeyError, match="no reconciler for teleport"):
+        reconcile_with(world, Reconciling(), ReconcilingMeasurer(), "teleport")
+
+
+# -- the rest of the phases ------------------------------------------------------------------------
+
+
+def test_the_confirmation_carries_the_config_and_the_isolation(world: World) -> None:
+    log = world.open()
+
+    confirm_run(log, world.config, ISOLATION)
+
+    confirmed = log.state.transition_payload(Level.EXECUTION, RUN, ExecutionState.CONFIRMED)
+    assert confirmed == confirmed_payload(world.config, ISOLATION)
+
+
+def test_a_baseline_that_is_not_green_reports_at_most_ten_problems(world: World) -> None:
+    class Red(ScriptedMeasurer):
+        async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline:
+            return Baseline(False, tuple(f"p{n}" for n in range(12)))
+
+    _, log = world.run(measurer=Red())
+
+    payload = log.state.transition_payload(Level.EXECUTION, RUN, ExecutionState.FAILED)
+    assert payload is not None and payload["problems"] == [f"p{n}" for n in range(10)]
+
+
+def outcome_of(task: str, kind: TaskOutcomeKind, attempts: int, rejected: int) -> TaskOutcome:
+    return TaskOutcome(task_id=task, outcome=kind, attempts=attempts, rejected_attempts=rejected)
+
+
+def test_the_summary_artifact_says_how_each_task_ended(world: World) -> None:
+    measurer = Moving(verdicts=(PASSED_WITH_A_GAP, REJECTED, REJECTED, PASSED))
+    planner = ScriptedPlanner(
+        (*TWO_TASKS, PlannedTask("reduce the complexity of h", ("src/c.py",), 8, 400))
+    )
+
+    _, log = world.run(measurer=measurer, planner=planner, budget=Budget(attempts_per_task=2))
+
+    assert summary_body(log.state).tasks == (
+        outcome_of("t1", TaskOutcomeKind.INTEGRATED, 1, 0),
+        outcome_of("t2", TaskOutcomeKind.BLOCKED, 2, 2),
+        outcome_of("t3", TaskOutcomeKind.INTEGRATED, 1, 0),
+    )
+
+
+def test_a_task_never_started_is_cancelled_with_no_attempts(world: World) -> None:
+    _, log = world.run(seconds_left=0.0)
+
+    assert summary_body(log.state).tasks == (outcome_of("t1", TaskOutcomeKind.CANCELLED, 0, 0),)

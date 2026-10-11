@@ -61,8 +61,11 @@ def read_facts(log_path: Path) -> Facts:
                     for k, v in values.items()
                     if isinstance(v, int | float) and not isinstance(v, bool)
                 }
-                target = facts.baseline if payload.get("phase") == "baseline" else facts.final
-                target.update(numbers)
+                target = {"baseline": facts.baseline, "final": facts.final}.get(
+                    str(payload.get("phase"))
+                )
+                if target is not None:
+                    target.update(numbers)
     return facts
 
 

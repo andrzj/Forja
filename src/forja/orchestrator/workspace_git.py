@@ -377,7 +377,8 @@ class GitWorkspace:
     async def _clear(self, path: Path) -> None:
         """Make ``path`` and git's record of it disappear, whatever state an interruption left."""
         if path.exists():
-            shutil.rmtree(path, onexc=_make_writable_and_retry)
+            # only read-only files (Windows) need the handler; Linux cannot tell it from none
+            shutil.rmtree(path, onexc=_make_writable_and_retry)  # pragma: no mutate
         await self._git.lines("worktree", "prune")
 
 
