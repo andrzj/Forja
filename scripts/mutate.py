@@ -10,7 +10,7 @@ unless ``mutation-suppressions.toml`` names it, with a reason a person approved.
 source can switch the gate off: a comment that does is rejected by the scope gate.
 
 Exit: 0 every mutant was killed or suppressed; 2 the tests fail before any mutation; 3 a mutant
-survived. It needs a POSIX shell, so on Windows run it inside WSL.
+survived; 4 the canary failed. It needs a POSIX shell, so on Windows run it inside WSL.
 """
 
 import argparse
@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 from collections import defaultdict
@@ -32,11 +33,14 @@ OUTCOME = re.compile(
     r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
 )
 FAST = {"FORJA_FAST": "1"}
+TEST_TIMEOUT = 30  # seconds for one test; the slowest of the project takes a few
 
 
-def run(*command: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run(
+    *command: str, env: dict[str, str] | None = None, cwd: Path = ROOT
+) -> subprocess.CompletedProcess[str]:
     merged = {**os.environ, **(env or {})}
-    return subprocess.run(command, cwd=ROOT, env=merged, capture_output=True, text=True)
+    return subprocess.run(command, cwd=cwd, env=merged, capture_output=True, text=True)
 
 
 def changed_sources() -> list[str]:
@@ -61,10 +65,24 @@ def deselected() -> list[str]:
     return [arg for name in settings().get("deselect", []) for arg in ("--deselect", name)]
 
 
-def record_coverage() -> dict[str, list[str]]:
+def record_coverage(reuse: bool) -> dict[str, list[str]]:
     """Which test files ran each source file, from one run of the fast tests."""
     COVERAGE.mkdir(parents=True, exist_ok=True)
     data, report = COVERAGE / ".coverage", COVERAGE / "contexts.json"
+    if not (reuse and report.exists()):
+        measure_coverage(data, report)
+    files = json.loads(report.read_text(encoding="utf-8"))["files"]
+    tests_of: dict[str, set[str]] = defaultdict(set)
+    for name, info in files.items():
+        for contexts in info.get("contexts", {}).values():
+            for context in contexts:
+                module = test_file(context)
+                if module:
+                    tests_of[Path(name).as_posix()].add(module)
+    return {name: ordered(name, tests) for name, tests in tests_of.items()}
+
+
+def measure_coverage(data: Path, report: Path) -> None:
     data.unlink(missing_ok=True)
     tested = run(
         sys.executable, "-m", "coverage", "run", f"--data-file={data}", "-m", "pytest", "-q",
@@ -81,15 +99,6 @@ def record_coverage() -> dict[str, list[str]]:
     if exported.returncode != 0:
         print(exported.stderr, file=sys.stderr)
         raise SystemExit(2)
-    files = json.loads(report.read_text(encoding="utf-8"))["files"]
-    tests_of: dict[str, set[str]] = defaultdict(set)
-    for name, info in files.items():
-        for contexts in info.get("contexts", {}).values():
-            for context in contexts:
-                module = test_file(context)
-                if module:
-                    tests_of[Path(name).as_posix()].add(module)
-    return {name: ordered(name, tests) for name, tests in tests_of.items()}
 
 
 def ordered(source: str, tests: set[str]) -> list[str]:
@@ -144,13 +153,17 @@ def function_at(source: Path, line: int) -> str:
     return best
 
 
-def mutate(file: str, tests: list[str], engine: Path) -> tuple[int, list[str], list[str]]:
+def mutate(
+    file: str, tests: list[str], engine: Path, workers: int
+) -> tuple[int, list[str], list[str]]:
     skipped = " ".join(f"--deselect {name}" for name in settings().get("deselect", []))
-    command = (
-        f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 {skipped} {' '.join(tests)}"
-    )
+    # --timeout: a mutant that loops forever fails its test in seconds, instead of the engine
+    # waiting ten times the whole baseline for it
+    base = f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 --timeout={TEST_TIMEOUT}"
+    command = f"{base} {skipped} {' '.join(tests)}"
     done = run(
-        str(engine), "--no-coverage", "--mutate-all", "--test-command", command, file, env=FAST,
+        str(engine), "--no-coverage", "--mutate-all", "--max-workers", str(workers),
+        "--test-command", command, file, env=FAST,
     )  # fmt: skip
     survived, uncovered = [], []
     for text in done.stdout.splitlines():
@@ -160,6 +173,35 @@ def mutate(file: str, tests: list[str], engine: Path) -> tuple[int, list[str], l
         elif found and found[1] == "UNCOVERED":
             uncovered.append(f"{found['file']}:{found['line']} {found['change']}")
     return done.returncode, survived, uncovered
+
+
+def canary(engine: Path) -> bool:
+    """Prove the harness can tell a mutant from a failed command, before trusting any verdict.
+
+    A tiny project is mutated twice with the same shape of command the gate uses: tests that
+    check nothing must let the mutant survive, and tests that check the sum must kill it. A
+    command that fails for its own reasons (a wrong path, a missing module) would "kill" both.
+    """
+    with tempfile.TemporaryDirectory(prefix="forja-canary-") as name:
+        root = Path(name)
+        (root / "src").mkdir()
+        (root / "tests").mkdir()
+        (root / "src" / "canary.py").write_text("def add(a, b):\n    return a + b\n", "utf-8")
+        head = "from canary import add\n\n\ndef test_it():\n    assert "
+        (root / "tests" / "test_loose.py").write_text(head + "add(1, 2) is not None\n", "utf-8")
+        (root / "tests" / "test_tight.py").write_text(head + "add(1, 2) == 3\n", "utf-8")
+        results = {}
+        for kind in ("loose", "tight"):
+            command = (
+                f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 -o pythonpath=src "
+                f"tests/test_{kind}.py"
+            )
+            done = run(
+                str(engine), "--no-coverage", "--mutate-all", "--test-command", command,
+                "src/canary.py", cwd=root, env=FAST,
+            )  # fmt: skip
+            results[kind] = (done.returncode, done.stdout.count("SURVIVED"))
+    return results["loose"][1] >= 1 and results["tight"] == (0, 0)
 
 
 def main() -> int:
@@ -172,13 +214,21 @@ def main() -> int:
         "--engine",
         default=os.environ.get("FORJA_MUTATOR", str(Path.home() / "mutator" / "mutator")),
     )
+    parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--reuse-coverage", action="store_true")
+    parser.add_argument("--skip-canary", action="store_true")
     args = parser.parse_args()
     files = args.files or (all_sources() if args.all else changed_sources())
     if not files:
         print("no source file changed: nothing to mutate")
         return 0
     started = time.monotonic()
-    tests_of = record_coverage()
+    if not args.skip_canary and not canary(Path(args.engine)):
+        print("the canary failed: the harness cannot tell a mutant from a broken command")
+        return 4
+    print(f"canary: {time.monotonic() - started:.0f}s")
+    started = time.monotonic()
+    tests_of = record_coverage(args.reuse_coverage)
     print(f"coverage by test: {time.monotonic() - started:.0f}s")
     allowed = suppressions()
     survivors = 0
@@ -189,7 +239,7 @@ def main() -> int:
             survivors += 1
             continue
         started = time.monotonic()
-        code, survived, uncovered = mutate(file, tests, Path(args.engine))
+        code, survived, uncovered = mutate(file, tests, Path(args.engine), args.workers)
         print(f"{file}: {len(tests)} test file(s), {time.monotonic() - started:.0f}s")
         if code == 2:
             print(f"{file}: the tests fail before any mutation")

@@ -17,6 +17,7 @@ dev = [
     "lizard>=1.24.1",
     "pytest-xdist>=3.8.0",
     "coverage>=7.6",
+    "pytest-timeout>=2.3",
 ]
 mutation = [
     "mutmut>=3.8.0",
