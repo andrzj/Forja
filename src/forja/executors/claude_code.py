@@ -53,7 +53,7 @@ READ_TOOLS = ("Read", "Glob", "Grep")
 
 def _scoped(tool: str) -> str:
     """Allowed only for paths under the working directory; anything else is refused (dontAsk)."""
-    return f"{tool}(./**)" if tool in ("Read", "Edit", "Write") else tool
+    return f"{tool}(./**)"
 
 
 EDIT_TOOLS = ("Edit", "Write")
@@ -124,7 +124,9 @@ class ClaudeCodeAdapter:
 
     def permission_setup(self, role: Producer, permissions: RolePermissions) -> PermissionSetup:
         tools = [*READ_TOOLS, *(EDIT_TOOLS if permissions.can_edit_files else ())]
-        allowed = [_scoped(tool) for tool in tools]
+        # Glob and Grep are not allowed by name: a bare allow reaches any directory, while the
+        # file rules cover them under the working directory only
+        allowed = [_scoped(tool) for tool in tools if tool not in ("Glob", "Grep")]
         if permissions.allowed_commands:
             tools.append("Bash")
             allowed += [f"Bash({command} *)" for command in permissions.allowed_commands]

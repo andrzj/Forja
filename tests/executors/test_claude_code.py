@@ -88,7 +88,7 @@ def test_an_editing_role_can_read_and_edit_but_not_run_commands(tmp_path: Path) 
     argv = plan_of(tmp_path)
 
     assert argv[argv.index("--tools") + 1] == "Read,Glob,Grep,Edit,Write"
-    assert argv[argv.index("--allowedTools") + 1] == "Read(./**),Glob,Grep,Edit(./**),Write(./**)"
+    assert argv[argv.index("--allowedTools") + 1] == "Read(./**),Edit(./**),Write(./**)"
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
 
 
