@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ from forja.orchestrator.outcome import Outcome
 from forja.orchestrator.phases import Orchestrator, confirm_run
 from forja.orchestrator.ports import PlannedTask, RunContext
 from forja.orchestrator.workspace_git import GitWorkspace, Identity, Layout, git_environment
+from forja.testing import MemoryRepo, MemoryWorkspace
 from tests.core.events.support import FakeClock
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.fakes import ScriptedAgent, ScriptedMeasurer, ScriptedPlanner
@@ -72,20 +74,24 @@ def make_workspace(repo: Repo, root: Path) -> GitWorkspace:
         log_dir=root / "logs" / "guard",
         protected=ProtectedBranches(frozenset({"main"})),
     )
-    return GitWorkspace(git, run_id=RUN, layout=Layout(root / "wt"))
+    return GitWorkspace(git, run_id=RUN, layout=Layout(root / "wt"), git_running=lambda: False)
 
 
 class World:
     """One run being assembled: the pieces a test may want to look at afterwards."""
 
     def __init__(self, root: Path, repo: Repo, workspace: GitWorkspace) -> None:
-        self.root, self.repo, self.workspace = root, repo, workspace
+        self.repo = repo
+        self._assemble(root, workspace, str(repo.path), repo.sh("rev-parse", "HEAD"))
+
+    def _assemble(self, root: Path, workspace: Any, repo_path: str, base_commit: str) -> None:
+        self.root, self.workspace = root, workspace
         self.run_dir = root / "run"
         self.slept: list[float] = []
         self.network: list[bool] = [True]
         self.config = RunConfig(
-            repo=str(repo.path),
-            base_commit=repo.sh("rev-parse", "HEAD"),
+            repo=repo_path,
+            base_commit=base_commit,
             objective=Objective.REFACTOR,
             implementer=ExecutorRef(name="fake-cli", path="/bin/fake", version="1.0"),
             forja_version="0.0.0",
@@ -164,6 +170,19 @@ class World:
             hook=hook,
         )
         return asyncio.run(Orchestrator(ctx).run()), opened
+
+
+class MemoryWorld(World):
+    """The same run with git in memory: no repository, no git process, no waiting for either.
+
+    The behaviour of ``MemoryWorkspace`` is held to ``GitWorkspace``'s by a contract test, so what
+    a run does here is what it does against git. Tests of git itself use ``World``.
+    """
+
+    def __init__(self, root: Path, files: Mapping[str, str] | None = None) -> None:
+        self.memory = MemoryRepo(files or {"base.txt": "base"})
+        workspace = MemoryWorkspace(self.memory, run_id=RUN, layout=Layout(root / "wt"))
+        self._assemble(root, workspace, str(root / "repo"), self.memory.base)
 
 
 def execution_state(log: EventLog) -> ExecutionState:

@@ -18,7 +18,9 @@ def main() -> None:
     root = Path(sys.argv[1])
     world = World.at(root)
     log = world.open(write=torn_write_from_environment(root))
-    agent = ScriptedAgent(by_feedback=True, pause=float(os.environ.get(PAUSE_ENV, "0")))
+    agent = ScriptedAgent(
+        in_process=False, by_feedback=True, pause=float(os.environ.get(PAUSE_ENV, "0"))
+    )
     scenario(
         world, log=log, agent=agent, measurer=ContentMeasurer(), hook=stall_from_environment(root)
     )

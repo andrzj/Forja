@@ -41,6 +41,7 @@ from forja.core.idempotency import (
 )
 from forja.core.idempotency.git import Git
 from forja.core.locking import IndexLockReport, remove_orphan_index_locks
+from forja.core.locking.index_locks import git_is_running
 from forja.orchestrator.operations import Step
 
 FORJA_NAME = "Forja"
@@ -174,8 +175,16 @@ class CommitMessage:
 
 
 class GitWorkspace:
-    def __init__(self, git: Git, *, run_id: str, layout: Layout) -> None:
+    def __init__(
+        self,
+        git: Git,
+        *,
+        run_id: str,
+        layout: Layout,
+        git_running: Callable[[], bool] = git_is_running,
+    ) -> None:
         self._git = git
+        self._git_running = git_running
         self.run_id = run_id
         self.layout = layout
         self.run_branch = run_branch_name(run_id)
@@ -205,7 +214,7 @@ class GitWorkspace:
 
     async def recover(self) -> IndexLockReport:
         """What a resume does before reconciling: stale locks go, stale worktree records go."""
-        report = await remove_orphan_index_locks(self._git)
+        report = await remove_orphan_index_locks(self._git, git_running=self._git_running)
         await self._git.lines("worktree", "prune")
         return report
 

@@ -37,6 +37,8 @@ from forja.orchestrator.workspace_git import (
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.harness import IDENTITY, RUN
 
+pytestmark = pytest.mark.integration
+
 TASK = "t1abcdef0123"
 ATTEMPT = "a1abcdef0123"
 MESSAGE = CommitMessage.refactor(

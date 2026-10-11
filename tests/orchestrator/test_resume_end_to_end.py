@@ -75,7 +75,7 @@ def restart(world: World, **log_options: Any) -> Any:
     return scenario(
         world,
         log=world.open(**log_options),
-        agent=ScriptedAgent(by_feedback=True),
+        agent=ScriptedAgent(in_process=False, by_feedback=True),
         measurer=ContentMeasurer(),
     )
 

@@ -26,6 +26,8 @@ from forja.testing import MemoryRepo, MemoryWorkspace
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.harness import RUN, make_workspace, minimal_env
 
+pytestmark = pytest.mark.integration
+
 MESSAGE = CommitMessage(
     "refactor: make it simpler", "Split the long function.", "fake-cli 1.0", "0.0.0+abc"
 )

@@ -42,8 +42,6 @@ from forja.orchestrator.ports import (
 )
 from forja.orchestrator.summary import Facts, render_summary, summary_body
 from forja.orchestrator.task_cycle import REASON_LIMIT, TaskCycle, _count, describe_stop
-from forja.orchestrator.workspace_git import GitWorkspace
-from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.crash import Counting, CrashAfter, Interrupted
 from tests.orchestrator.fakes import (
     PASSED,
@@ -53,12 +51,12 @@ from tests.orchestrator.fakes import (
     ScriptedMeasurer,
     ScriptedPlanner,
 )
-from tests.orchestrator.harness import ISOLATION, RUN, TWO_TASKS, World
+from tests.orchestrator.harness import ISOLATION, RUN, TWO_TASKS, MemoryWorld
 
 
 @pytest.fixture
-def world(tmp_path: Path, repo: Repo, workspace: GitWorkspace) -> World:
-    return World(tmp_path, repo, workspace)
+def world(tmp_path: Path) -> MemoryWorld:
+    return MemoryWorld(tmp_path)
 
 
 def intents(log: EventLog) -> list[str]:
@@ -70,7 +68,7 @@ def intents(log: EventLog) -> list[str]:
 # -- operation ids: the idempotency table is keyed by them ----------------------------------------
 
 
-def test_a_run_with_a_rejection_begins_these_operations_in_this_order(world: World) -> None:
+def test_a_run_with_a_rejection_begins_these_operations_in_this_order(world: MemoryWorld) -> None:
     _, log = world.run(measurer=ScriptedMeasurer(verdicts=(REJECTED, PASSED)))
 
     assert intents(log) == [
@@ -94,7 +92,7 @@ def test_a_run_with_a_rejection_begins_these_operations_in_this_order(world: Wor
     ]
 
 
-def test_a_rolled_back_integration_is_an_operation_of_the_task(world: World) -> None:
+def test_a_rolled_back_integration_is_an_operation_of_the_task(world: MemoryWorld) -> None:
     measurer = ScriptedMeasurer(integration_verdicts=(REJECTED,))
 
     _, log = world.run(measurer=measurer)
@@ -109,7 +107,7 @@ def test_a_rolled_back_integration_is_an_operation_of_the_task(world: World) -> 
     assert blocked["detail"] == "gate 8 (complexity): too complex [src/a.py::f]"
 
 
-def test_the_delivery_cites_the_stored_summary(world: World) -> None:
+def test_the_delivery_cites_the_stored_summary(world: MemoryWorld) -> None:
     _, log = world.run()
 
     delivered = [
@@ -157,7 +155,7 @@ class SpyPlanner(ScriptedPlanner):
 
 
 def test_the_measurer_and_the_planner_get_the_run_worktree_and_the_runs_sinks(
-    world: World,
+    world: MemoryWorld,
 ) -> None:
     measurer, planner = Spy(metrics={"m": 1.0}), SpyPlanner()
     budget = Budget(tasks=3)
@@ -176,7 +174,7 @@ def test_the_measurer_and_the_planner_get_the_run_worktree_and_the_runs_sinks(
     assert planned_budget.tasks == 3
 
 
-def test_the_plan_does_not_measure_the_base_again(world: World) -> None:
+def test_the_plan_does_not_measure_the_base_again(world: MemoryWorld) -> None:
     measurer = Spy()
 
     world.run(measurer=measurer)
@@ -192,7 +190,7 @@ class Dying(ScriptedPlanner):
 
 
 def test_a_run_reopened_while_planning_measures_the_base_again_for_the_planner(
-    world: World,
+    world: MemoryWorld,
 ) -> None:
     with pytest.raises(Interrupted):
         world.run(planner=Dying())
@@ -217,7 +215,7 @@ def test_only_a_real_integer_is_a_count(value: object, expected: int) -> None:
     assert _count(value) == expected
 
 
-def test_the_task_info_is_what_the_planner_said(world: World) -> None:
+def test_the_task_info_is_what_the_planner_said(world: MemoryWorld) -> None:
     planner = ScriptedPlanner((PlannedTask("do it", ("a.py", "b.py"), 3, 99),))
     _, log = world.run(planner=planner)
     cycle = TaskCycle(
@@ -230,7 +228,7 @@ def test_the_task_info_is_what_the_planner_said(world: World) -> None:
     assert (info.scope, info.max_files, info.max_lines) == (("a.py", "b.py"), 3, 99)
 
 
-def test_a_task_without_details_has_empty_ones(world: World) -> None:
+def test_a_task_without_details_has_empty_ones(world: MemoryWorld) -> None:
     _, log = world.run()
     ctx = world.context(
         log, measurer=ScriptedMeasurer(), agent=ScriptedAgent(), planner=ScriptedPlanner()
@@ -245,12 +243,10 @@ def test_a_task_without_details_has_empty_ones(world: World) -> None:
 # -- the sentences the agent and the reviewer read -------------------------------------------------
 
 
-def test_every_difference_git_shows_is_named_in_the_rejection(world: World) -> None:
-    repo = world.repo
-
+def test_every_difference_git_shows_is_named_in_the_rejection(world: MemoryWorld) -> None:
     def meddle() -> None:
-        repo.sh("branch", "one")
-        repo.sh("branch", "two")
+        world.memory.create_branch("one")
+        world.memory.create_branch("two")
 
     _, log = world.run(agent=ScriptedAgent(meddle=meddle), budget=Budget(attempts_per_task=1))
 
@@ -265,7 +261,7 @@ def test_every_difference_git_shows_is_named_in_the_rejection(world: World) -> N
     assert second.endswith(first.rsplit(" ", 1)[1])  # both point at the same commit
 
 
-def test_the_agent_is_handed_a_sink_for_its_own_call(world: World) -> None:
+def test_the_agent_is_handed_a_sink_for_its_own_call(world: MemoryWorld) -> None:
     sinks: list[object] = []
 
     class Recording(ScriptedAgent):
@@ -286,7 +282,9 @@ def test_the_agent_is_handed_a_sink_for_its_own_call(world: World) -> None:
 # -- the time budget between attempts --------------------------------------------------------------
 
 
-def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(world: World) -> None:
+def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(
+    world: MemoryWorld,
+) -> None:
     now = [0.0]
 
     class Slow(ScriptedMeasurer):
@@ -313,7 +311,7 @@ def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(wor
 
 
 def test_a_resume_skips_the_tasks_already_integrated_or_blocked_and_runs_the_rest(
-    world: World,
+    world: MemoryWorld,
 ) -> None:
     starts: list[str] = []
 
@@ -341,7 +339,7 @@ def test_a_resume_skips_the_tasks_already_integrated_or_blocked_and_runs_the_res
     assert log.state.state_of(Level.TASK, "t2") is TaskState.INTEGRATED
 
 
-def test_a_run_left_in_a_middle_state_reports_that_state(world: World) -> None:
+def test_a_run_left_in_a_middle_state_reports_that_state(world: MemoryWorld) -> None:
     log = world.open()
     log.append_transition(Level.EXECUTION, RUN, None, ExecutionState.PREPARING)
 
@@ -369,7 +367,7 @@ class Moving(ScriptedMeasurer):
         return Baseline(True, (), values)
 
 
-def test_the_summary_says_everything_in_this_order(world: World) -> None:
+def test_the_summary_says_everything_in_this_order(world: MemoryWorld) -> None:
     measurer = Moving(verdicts=(PASSED_WITH_A_GAP, REJECTED, REJECTED, PASSED))
     planner = ScriptedPlanner(
         (*TWO_TASKS, PlannedTask("reduce the complexity of h", ("src/c.py",), 8, 400))
@@ -426,7 +424,7 @@ def test_the_summary_says_everything_in_this_order(world: World) -> None:
     )
 
 
-def test_an_empty_run_has_nothing_to_list(world: World) -> None:
+def test_an_empty_run_has_nothing_to_list(world: MemoryWorld) -> None:
     world.run(planner=ScriptedPlanner(()), measurer=ScriptedMeasurer(metrics={}))
 
     text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
@@ -436,7 +434,7 @@ def test_an_empty_run_has_nothing_to_list(world: World) -> None:
     assert "## Métricas antes e depois\n\nSem medições registradas.\n" in text
 
 
-def test_a_log_that_stops_in_the_middle_still_gives_the_facts_before_it(world: World) -> None:
+def test_a_log_that_stops_in_the_middle_still_gives_the_facts_before_it(world: MemoryWorld) -> None:
     _, log = world.run(measurer=ScriptedMeasurer(metrics={"m": 4.0}))
     log.close()
     with world.run_dir.joinpath("events.jsonl").open("ab") as raw:
@@ -450,7 +448,7 @@ def test_a_log_that_stops_in_the_middle_still_gives_the_facts_before_it(world: W
     assert facts.baseline == {"m": 4.0} and facts.final == {"m": 4.0}
 
 
-def test_a_blocked_task_with_no_reason_or_intent_is_still_listed(world: World) -> None:
+def test_a_blocked_task_with_no_reason_or_intent_is_still_listed(world: MemoryWorld) -> None:
     _, log = world.run()
     log.append_transition(Level.TASK, "odd", None, TaskState.PENDING, parent_id=RUN)
     log.append_transition(Level.TASK, "odd", TaskState.PENDING, TaskState.IN_PROGRESS)
@@ -461,7 +459,7 @@ def test_a_blocked_task_with_no_reason_or_intent_is_still_listed(world: World) -
     assert "- `odd` (): motivo não registrado" in text
 
 
-def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: World) -> None:
+def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: MemoryWorld) -> None:
     _, log = world.run()
     for check in ("c1", "c1", "c2"):
         log.append_progress(
@@ -491,32 +489,31 @@ def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: Wor
 # -- cuts that the fast suite must still cover -----------------------------------------------------
 
 
-def line_count_at(template: Path, root: Path, wanted: Callable[[Any], bool], **parts: Any) -> int:
+def line_count_at(root: Path, wanted: Callable[[Any], bool], **parts: Any) -> int:
     """How many lines an uninterrupted run has written when the first wanted event lands."""
     counter, found = Counting(), []
-    reference = World.create(root, template)
+    reference = MemoryWorld(root)
     log = reference.open(write=counter)
     log.subscribe(lambda e: found.append(counter.count) if wanted(e) and not found else None)
     reference.run(log=log, **parts)
     return found[0]
 
 
-def crash_then_resume(world: World, cut: int, **parts: Any) -> tuple[Any, EventLog]:
+def crash_then_resume(world: MemoryWorld, cut: int, **parts: Any) -> tuple[Any, EventLog]:
     with pytest.raises((Interrupted, LogUnusable)):
         world.run(log=world.open(write=CrashAfter(cut)), **parts)
     return world.run(log=world.open(), **parts)
 
 
 def test_a_cut_between_the_attempt_and_the_stage_being_committed_does_not_start_another_attempt(
-    tmp_path: Path, template: Path
+    tmp_path: Path,
 ) -> None:
     cut = line_count_at(
-        template,
         tmp_path / "reference",
         lambda e: e.type == "transition" and e.level is Level.ATTEMPT and e.to_state == "committed",
     )
 
-    outcome, log = crash_then_resume(World.create(tmp_path / "world", template), cut)
+    outcome, log = crash_then_resume(MemoryWorld(tmp_path / "world"), cut)
 
     assert outcome.state is ExecutionState.DELIVERED
     assert list(log.state.children_of(Level.ATTEMPT, "t1-s")) == ["t1-a1"]
@@ -525,18 +522,17 @@ def test_a_cut_between_the_attempt_and_the_stage_being_committed_does_not_start_
 
 
 def test_a_cut_after_the_rollback_blocks_the_task_without_judging_the_integration_again(
-    tmp_path: Path, template: Path
+    tmp_path: Path,
 ) -> None:
     rejecting = ScriptedMeasurer(integration_verdicts=(REJECTED,))
     cut = line_count_at(
-        template,
         tmp_path / "reference",
         lambda e: e.type == "effect" and e.operation == "rollback_integration",
         measurer=rejecting,
     )
     spy = Spy(integration_verdicts=(REJECTED,))
 
-    outcome, log = crash_then_resume(World.create(tmp_path / "world", template), cut, measurer=spy)
+    outcome, log = crash_then_resume(MemoryWorld(tmp_path / "world"), cut, measurer=spy)
 
     assert outcome.state is ExecutionState.DELIVERED
     assert log.state.transition_payload(Level.TASK, "t1", TaskState.BLOCKED) == {
@@ -573,13 +569,15 @@ def an_open(name: str) -> OpenOperation:
 
 
 def reconcile_with(
-    world: World, agent: ScriptedAgent, measurer: ScriptedMeasurer, name: str
+    world: MemoryWorld, agent: ScriptedAgent, measurer: ScriptedMeasurer, name: str
 ) -> Any:
     ctx = world.context(world.open(), measurer=measurer, agent=agent, planner=ScriptedPlanner())
     return asyncio.run(Orchestrator(ctx)._reconcile(an_open(name)))  # noqa: SLF001
 
 
-def test_an_open_agent_call_is_reconciled_by_the_table_not_asked_of_the_agent(world: World) -> None:
+def test_an_open_agent_call_is_reconciled_by_the_table_not_asked_of_the_agent(
+    world: MemoryWorld,
+) -> None:
     agent, measurer = Reconciling(), ReconcilingMeasurer()
 
     decision = reconcile_with(world, agent, measurer, "call_agent_cli")
@@ -589,7 +587,9 @@ def test_an_open_agent_call_is_reconciled_by_the_table_not_asked_of_the_agent(wo
 
 
 @pytest.mark.parametrize("name", ["prepare_workcopy", "apply_diff"])
-def test_the_agents_own_operations_are_reconciled_by_the_agent(world: World, name: str) -> None:
+def test_the_agents_own_operations_are_reconciled_by_the_agent(
+    world: MemoryWorld, name: str
+) -> None:
     agent, measurer = Reconciling(), ReconcilingMeasurer()
 
     decision = reconcile_with(world, agent, measurer, name)
@@ -598,7 +598,7 @@ def test_the_agents_own_operations_are_reconciled_by_the_agent(world: World, nam
     assert agent.asked == [an_open(name)] and measurer.asked == []
 
 
-def test_an_open_tool_run_is_reconciled_by_the_measurer(world: World) -> None:
+def test_an_open_tool_run_is_reconciled_by_the_measurer(world: MemoryWorld) -> None:
     agent, measurer = Reconciling(), ReconcilingMeasurer()
 
     decision = reconcile_with(world, agent, measurer, "run_tool")
@@ -607,7 +607,7 @@ def test_an_open_tool_run_is_reconciled_by_the_measurer(world: World) -> None:
     assert measurer.asked == [an_open("run_tool")] and agent.asked == []
 
 
-def test_an_operation_nobody_knows_stops_the_resume_naming_it(world: World) -> None:
+def test_an_operation_nobody_knows_stops_the_resume_naming_it(world: MemoryWorld) -> None:
     with pytest.raises(KeyError, match="no reconciler for teleport"):
         reconcile_with(world, Reconciling(), ReconcilingMeasurer(), "teleport")
 
@@ -615,7 +615,7 @@ def test_an_operation_nobody_knows_stops_the_resume_naming_it(world: World) -> N
 # -- the rest of the phases ------------------------------------------------------------------------
 
 
-def test_the_confirmation_carries_the_config_and_the_isolation(world: World) -> None:
+def test_the_confirmation_carries_the_config_and_the_isolation(world: MemoryWorld) -> None:
     log = world.open()
 
     confirm_run(log, world.config, ISOLATION)
@@ -624,7 +624,7 @@ def test_the_confirmation_carries_the_config_and_the_isolation(world: World) -> 
     assert confirmed == confirmed_payload(world.config, ISOLATION)
 
 
-def test_a_baseline_that_is_not_green_reports_at_most_ten_problems(world: World) -> None:
+def test_a_baseline_that_is_not_green_reports_at_most_ten_problems(world: MemoryWorld) -> None:
     class Red(ScriptedMeasurer):
         async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline:
             return Baseline(False, tuple(f"p{n}" for n in range(12)))
@@ -639,7 +639,7 @@ def outcome_of(task: str, kind: TaskOutcomeKind, attempts: int, rejected: int) -
     return TaskOutcome(task_id=task, outcome=kind, attempts=attempts, rejected_attempts=rejected)
 
 
-def test_the_summary_artifact_says_how_each_task_ended(world: World) -> None:
+def test_the_summary_artifact_says_how_each_task_ended(world: MemoryWorld) -> None:
     measurer = Moving(verdicts=(PASSED_WITH_A_GAP, REJECTED, REJECTED, PASSED))
     planner = ScriptedPlanner(
         (*TWO_TASKS, PlannedTask("reduce the complexity of h", ("src/c.py",), 8, 400))
@@ -654,7 +654,7 @@ def test_the_summary_artifact_says_how_each_task_ended(world: World) -> None:
     )
 
 
-def test_a_task_never_started_is_cancelled_with_no_attempts(world: World) -> None:
+def test_a_task_never_started_is_cancelled_with_no_attempts(world: MemoryWorld) -> None:
     _, log = world.run(seconds_left=0.0)
 
     assert summary_body(log.state).tasks == (outcome_of("t1", TaskOutcomeKind.CANCELLED, 0, 0),)
@@ -701,7 +701,9 @@ def test_what_the_agent_is_told_is_cut_to_the_limit() -> None:
     assert len(describe_stop(a_stop(result))) == REASON_LIMIT
 
 
-def test_the_detail_of_an_agent_error_is_cut_to_three_hundred_characters(world: World) -> None:
+def test_the_detail_of_an_agent_error_is_cut_to_three_hundred_characters(
+    world: MemoryWorld,
+) -> None:
     class Wordy(ScriptedAgent):
         async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> Any:
             await super().call(ctx, operation_id, sink)
@@ -713,7 +715,7 @@ def test_the_detail_of_an_agent_error_is_cut_to_three_hundred_characters(world: 
     assert discarded is not None and discarded["detail"] == "x" * 300
 
 
-def test_waiting_for_the_network_is_noted_under_that_name(world: World) -> None:
+def test_waiting_for_the_network_is_noted_under_that_name(world: MemoryWorld) -> None:
     world.network = [False, True]
 
     _, log = world.run(agent=ScriptedAgent(errors={0: ErrorKind.PERSISTENT}))

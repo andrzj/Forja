@@ -12,7 +12,7 @@ from tests.orchestrator.harness import RUN, World
 
 def scenario(world: World, **options: Any) -> tuple[Outcome, EventLog]:
     """One task; the agent first writes work the gate rejects, then work it accepts."""
-    options.setdefault("agent", ScriptedAgent(by_feedback=True))
+    options.setdefault("agent", ScriptedAgent(in_process=False, by_feedback=True))
     options.setdefault("measurer", ContentMeasurer())
     return world.run(**options)
 

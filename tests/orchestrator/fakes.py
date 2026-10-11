@@ -127,6 +127,7 @@ class ScriptedAgent:
     reject_diff: str | None = None
     die_after_the_call: bool = False
     by_feedback: bool = False
+    in_process: bool = True  # False starts a real process, as the resume tests need
     seen: list[AttemptContext] = field(default_factory=list)
 
     def prepare_workcopy(self, ctx: AttemptContext) -> Step:
@@ -153,6 +154,40 @@ class ScriptedAgent:
             files = {f"src/{ctx.task.task_id}.py": verdict + "\n"}
         if self.edits:
             files = self.edits[min(number, len(self.edits) - 1)]
+        if self.in_process and not self.pause:
+            await self._write_in_process(ctx, operation_id, sink, files)
+        else:
+            await self._run_process(ctx, operation_id, sink, files)
+        if self.die_after_the_call:
+            raise RuntimeError("the process died right after the agent finished")
+        if number in self.errors:
+            return AgentResult(error=ErrorActivity("the service said no", self.errors[number]))
+        return AgentResult(reason=self.reason)
+
+    async def _write_in_process(
+        self, ctx: AttemptContext, operation_id: str, sink: EventSink, files: Mapping[str, str]
+    ) -> None:
+        """What the process would have done and said, without starting one."""
+        target = workcopy_of(ctx)
+        log = ctx.worktree.parent / f"{operation_id}.log"
+        sink.intent(
+            operation_id,
+            {"command": ["in-process-agent"], "cwd": str(target), "env_names": [],
+             "timeout": 60, "grace": 5.0, "stdin_file": None},
+        )  # fmt: skip
+        for name, content in files.items():
+            path = target / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        log.write_text(f"[out] wrote {len(files)} file(s)\n", encoding="utf-8")
+        sink.effect(
+            operation_id,
+            {"outcome": "exited", "exit_code": 0, "duration_seconds": 0.0, "log_path": str(log)},
+        )
+
+    async def _run_process(
+        self, ctx: AttemptContext, operation_id: str, sink: EventSink, files: Mapping[str, str]
+    ) -> None:
         spec = ProcessSpec(
             [sys.executable, str(AGENT_SCRIPT), json.dumps(files), str(self.pause)],
             workcopy_of(ctx),
@@ -162,11 +197,6 @@ class ScriptedAgent:
         await ProcessRunner(sink).run(
             operation_id, spec, ctx.worktree.parent / f"{operation_id}.log"
         )
-        if self.die_after_the_call:
-            raise RuntimeError("the process died right after the agent finished")
-        if number in self.errors:
-            return AgentResult(error=ErrorActivity("the service said no", self.errors[number]))
-        return AgentResult(reason=self.reason)
 
     def apply_diff(self, ctx: AttemptContext) -> Step:
         source = workcopy_of(ctx)
