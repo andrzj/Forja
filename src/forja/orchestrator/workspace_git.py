@@ -1,0 +1,374 @@
+"""The git side of an execution: branches, worktrees and commits, as steps the journal runs once.
+
+Nothing here talks to a remote. Every git command goes through the git passed in, which in
+production is the restricted facade, so what the allow-list refuses is refused here too. The
+agent never works in these worktrees: it works in a copy without ``.git``, and Forja brings the
+result back (that part lives with the agent runner).
+
+Layout of a run:
+
+- the run branch ``forja-run/<run>`` is checked out in its own worktree, so merges and the style
+  commit never touch the user's working tree;
+- each task has a branch ``forja/<run>/<task>``;
+- each attempt has a throw-away worktree that checks out the task branch itself, so committing
+  moves the branch and no command that moves refs by hand is needed.
+"""
+
+import os
+import shutil
+import stat
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from forja.core.events import OpenOperation
+from forja.core.gitguard import GitWatch
+from forja.core.idempotency import (
+    Reconciliation,
+    normalize_stage_id,
+    reconcile_commit_stage,
+    reconcile_create_attempt_worktree,
+    reconcile_create_run_branch,
+    reconcile_create_task_branch,
+    reconcile_integrate_task,
+    reconcile_normalize_style,
+    reconcile_remove_worktree,
+    reconcile_rollback_integration,
+    run_branch_name,
+    task_branch_name,
+)
+from forja.core.idempotency.git import Git
+from forja.core.locking import IndexLockReport, remove_orphan_index_locks
+from forja.orchestrator.operations import Step
+
+FORJA_NAME = "Forja"
+FORJA_EMAIL = "forja@localhost"
+# Git matches these case-insensitively; as constants they are not an opportunity for a typo.
+_USER_NAME_KEY = "user.name"
+_USER_EMAIL_KEY = "user.email"
+_TASK_TRAILER = "Task-Id"
+SUBJECT_LIMIT = 72
+BODY_LINES = 20
+HANDLED_OPERATIONS = frozenset(
+    {
+        "create_run_branch",
+        "create_attempt_worktree",
+        "normalize_style",
+        "create_task_branch",
+        "commit_stage",
+        "integrate_task",
+        "rollback_integration",
+        "remove_worktree",
+    }
+)
+
+
+class RepositoryNotReady(Exception):
+    """The repository cannot be refactored right now; the message says what to do."""
+
+
+class NothingToCommit(Exception):
+    """The attempt was approved but its worktree holds no change."""
+
+
+class IntegrationConflict(Exception):
+    """The task branch did not merge into the run branch; the merge was abandoned."""
+
+
+class NothingToRollBack(Exception):
+    """The tip of the run branch is not the merge of this task."""
+
+
+# -- who the commits are from, and the settings every git command of a run shares ----------------
+
+
+@dataclass(frozen=True)
+class Identity:
+    """The agent CLI is the author; whoever owns the repository is the committer."""
+
+    author_name: str
+    author_email: str
+    committer_name: str
+    committer_email: str
+
+
+async def detect_identity(git: Git, cli_name: str) -> Identity:
+    """Author ``Forja (<cli>)``; committer is the identity git already has, or Forja's own."""
+
+    async def configured(key: str, fallback: str) -> str:
+        result = await git.run("config", "--get", key)
+        value = result.lines[0].strip() if result.exit_code == 0 and result.lines else ""
+        return value or fallback
+
+    return Identity(
+        f"{FORJA_NAME} ({cli_name})",
+        FORJA_EMAIL,
+        await configured(_USER_NAME_KEY, FORJA_NAME),
+        await configured(_USER_EMAIL_KEY, FORJA_EMAIL),
+    )
+
+
+def git_environment(base: Mapping[str, str], identity: Identity) -> dict[str, str]:
+    """``base`` plus the identity and long-path support, given as environment variables.
+
+    The restricted facade refuses ``-c`` before the subcommand, so settings travel this way.
+    """
+    return {
+        **base,
+        "GIT_AUTHOR_NAME": identity.author_name,
+        "GIT_AUTHOR_EMAIL": identity.author_email,
+        "GIT_COMMITTER_NAME": identity.committer_name,
+        "GIT_COMMITTER_EMAIL": identity.committer_email,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "core.longpaths",
+        "GIT_CONFIG_VALUE_0": "true",
+    }
+
+
+@dataclass(frozen=True)
+class Layout:
+    """Where the worktrees of a run live: a short path, because Windows paths are limited."""
+
+    root: Path
+
+    @classmethod
+    def for_run(cls, home: Path, run_id: str) -> "Layout":
+        return cls(home / "wt" / run_id[:8])
+
+    def worktree(self, name: str) -> Path:
+        return self.root / name
+
+    @property
+    def run_worktree(self) -> Path:
+        return self.worktree("run")
+
+    def attempt_worktree(self, attempt_id: str) -> Path:
+        return self.worktree(attempt_id)
+
+
+@dataclass(frozen=True)
+class CommitMessage:
+    """Subject from the task, reason from the agent, facts from Forja as trailers."""
+
+    subject: str
+    body: str
+    agent: str
+    policy_version: str
+
+    @classmethod
+    def refactor(
+        cls, intent: str, reason: str, *, agent: str, policy_version: str
+    ) -> "CommitMessage":
+        subject = f"refactor: {' '.join(intent.split())}"[:SUBJECT_LIMIT].rstrip()
+        body = "\n".join(line.rstrip() for line in reason.strip().splitlines()[:BODY_LINES])
+        return cls(subject, body.strip(), agent, policy_version)
+
+
+# -- the workspace -------------------------------------------------------------------------------
+
+
+class GitWorkspace:
+    def __init__(self, git: Git, *, run_id: str, layout: Layout) -> None:
+        self._git = git
+        self.run_id = run_id
+        self.layout = layout
+        self.run_branch = run_branch_name(run_id)
+
+    # -- before the run ---------------------------------------------------------------------------
+
+    async def check_ready(self) -> str:
+        """The commit the run starts from; refuses a repository the run could not honour."""
+        head = await self._git.run("symbolic-ref", "HEAD")
+        if head.exit_code != 0:
+            raise RepositoryNotReady("HEAD is detached; check out a branch and try again")
+        changes = await self._git.lines("status", "--porcelain")
+        if changes:
+            raise RepositoryNotReady(
+                f"{len(changes)} path(s) have uncommitted changes; commit or stash them first, "
+                "because the run works on committed code"
+            )
+        (commit,) = await self._git.lines("rev-parse", "HEAD")
+        return commit
+
+    async def recover(self) -> IndexLockReport:
+        """What a resume does before reconciling: stale locks go, stale worktree records go."""
+        report = await remove_orphan_index_locks(self._git)
+        await self._git.lines("worktree", "prune")
+        return report
+
+    def watch(self) -> GitWatch:
+        """Photograph refs, HEAD, index, config and hooks around a call to the agent."""
+        return GitWatch(self._git)
+
+    # -- the run branch and its worktree ----------------------------------------------------------
+
+    def create_run_branch(self, base_commit: str) -> Step:
+        async def run() -> None:
+            await self._git.lines("branch", self.run_branch, base_commit)
+
+        return Step.plain({"branch": self.run_branch, "base": base_commit}, run)
+
+    def create_run_worktree(self) -> Step:
+        return self._add_worktree(self.layout.run_worktree, self.run_branch)
+
+    def normalize_style(self, apply: Callable[[Path], Awaitable[None]]) -> Step:
+        """Run ``apply`` (the formatter) in the run worktree and commit whatever it changed."""
+        stage_id = normalize_stage_id(self.run_id)
+
+        async def run() -> None:
+            worktree = self.layout.run_worktree
+            await apply(worktree)
+            git = self._git.at(worktree)
+            if await git.lines("status", "--porcelain"):
+                await git.lines("add", "-A")
+                await git.lines(
+                    "commit",
+                    "-m",
+                    "style: normalize formatting",
+                    "--trailer",
+                    f"Stage-Id: {stage_id}",
+                )
+
+        return Step.plain({"run_branch": self.run_branch, "stage_id": stage_id}, run)
+
+    # -- a task ---------------------------------------------------------------------------------
+
+    def create_task_branch(self, task_id: str) -> Step:
+        branch = task_branch_name(self.run_id, task_id)
+
+        async def run() -> None:
+            await self._git.lines("branch", branch, self.run_branch)
+
+        return Step.plain({"branch": branch}, run)
+
+    def create_attempt_worktree(self, task_id: str, attempt_id: str) -> Step:
+        return self._add_worktree(
+            self.layout.attempt_worktree(attempt_id), task_branch_name(self.run_id, task_id)
+        )
+
+    def commit_stage(
+        self, task_id: str, stage_id: str, attempt_id: str, message: CommitMessage
+    ) -> Step:
+        branch = task_branch_name(self.run_id, task_id)
+
+        async def run() -> None:
+            git = self._git.at(self.layout.attempt_worktree(attempt_id))
+            await git.lines("add", "-A")
+            if (await git.run("diff", "--cached", "--quiet")).exit_code == 0:
+                raise NothingToCommit(f"attempt {attempt_id} changed nothing")
+            args = ["commit", "-m", message.subject]
+            if message.body:
+                args += ["-m", message.body]
+            for key, value in (
+                ("Task-Id", task_id),
+                ("Stage-Id", stage_id),
+                ("Attempt-Id", attempt_id),
+                ("Agent", message.agent),
+                ("Policy-Version", message.policy_version),
+            ):
+                args += ["--trailer", f"{key}: {value}"]
+            await git.lines(*args)
+
+        return Step.plain({"task_branch": branch, "stage_id": stage_id}, run)
+
+    def integrate_task(self, task_id: str, subject: str) -> Step:
+        """Merge the task branch into the run branch with a merge commit that names the task."""
+        branch = task_branch_name(self.run_id, task_id)
+        message = f"{' '.join(subject.split())[:SUBJECT_LIMIT]}\n\nTask-Id: {task_id}"
+
+        async def run() -> None:
+            git = self._git.at(self.layout.run_worktree)
+            await git.run("merge", "--abort")  # a merge cut short by a crash would block this one
+            result = await git.run("merge", "--no-ff", "-m", message, branch)
+            if result.exit_code != 0:
+                await git.run("merge", "--abort")
+                raise IntegrationConflict(f"{branch} does not merge into {self.run_branch}")
+
+        return Step.plain({"task_branch": branch, "run_branch": self.run_branch}, run)
+
+    def rollback_integration(self, task_id: str) -> Step:
+        """Put the run branch back where it was before the merge of ``task_id``."""
+
+        async def payload() -> dict[str, Any]:
+            return {
+                "run_branch": self.run_branch,
+                "expected_tip": await self._before_merge(task_id),
+            }
+
+        async def run() -> None:
+            target = await self._before_merge(task_id)
+            await self._git.at(self.layout.run_worktree).lines("reset", "--hard", target)
+
+        return Step(payload, run)
+
+    def remove_worktree(self, name: str) -> Step:
+        """Remove the worktree of an attempt, or the run worktree when ``name`` is ``run``."""
+        path = self.layout.worktree(name)
+
+        async def run() -> None:
+            await self._clear(path)
+
+        return Step.plain({"worktree": str(path)}, run)
+
+    # -- settling an open operation -------------------------------------------------------------
+
+    async def reconcile(self, operation: OpenOperation) -> Reconciliation:
+        """What became of one of this workspace's operations that has an intent but no effect."""
+        p: Any = operation.payload
+        git = self._git
+        match operation.operation:
+            case "create_run_branch":
+                return await reconcile_create_run_branch(git, p["branch"])
+            case "create_task_branch":
+                return await reconcile_create_task_branch(git, p["branch"])
+            case "create_attempt_worktree":
+                return await reconcile_create_attempt_worktree(
+                    git, Path(p["worktree"]), p["expected_head"]
+                )
+            case "normalize_style":
+                return await reconcile_normalize_style(git, p["run_branch"], p["stage_id"])
+            case "commit_stage":
+                return await reconcile_commit_stage(git, p["task_branch"], p["stage_id"])
+            case "integrate_task":
+                return await reconcile_integrate_task(git, p["task_branch"], p["run_branch"])
+            case "rollback_integration":
+                return await reconcile_rollback_integration(git, p["run_branch"], p["expected_tip"])
+            case "remove_worktree":
+                return await reconcile_remove_worktree(git, Path(p["worktree"]))
+        raise KeyError(f"{operation.operation} is not a git operation")
+
+    # -- helpers --------------------------------------------------------------------------------
+
+    def _add_worktree(self, path: Path, branch: str) -> Step:
+        async def payload() -> dict[str, Any]:
+            (tip,) = await self._git.lines("rev-parse", f"refs/heads/{branch}")
+            return {"worktree": str(path), "expected_head": tip}
+
+        async def run() -> None:
+            await self._clear(path)
+            await self._git.lines("worktree", "add", str(path), branch)
+
+        return Step(payload, run)
+
+    async def _before_merge(self, task_id: str) -> str:
+        """The commit the run branch had before the merge of ``task_id``, which must be its tip."""
+        tip = f"refs/heads/{self.run_branch}"
+        trailers = await self._git.lines(
+            "log", "-1", f"--format=%(trailers:key={_TASK_TRAILER},valueonly)", tip
+        )
+        if task_id not in {line.strip() for line in trailers}:
+            raise NothingToRollBack(f"{self.run_branch} does not end with the merge of {task_id}")
+        (before,) = await self._git.lines("rev-parse", f"{tip}^1")
+        return before
+
+    async def _clear(self, path: Path) -> None:
+        """Make ``path`` and git's record of it disappear, whatever state an interruption left."""
+        if path.exists():
+            shutil.rmtree(path, onexc=_make_writable_and_retry)
+        await self._git.lines("worktree", "prune")
+
+
+def _make_writable_and_retry(function: Callable[[str], object], path: str, _error: Any) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    function(path)

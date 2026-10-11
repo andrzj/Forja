@@ -29,13 +29,22 @@ def _no_hook(_point: str) -> None:
 class Step:
     """One external operation: what its intent records and how it is done.
 
-    ``payload`` runs only if the step is going to run, because it may read the world as it is
-    right then (a commit to expect, a manifest to compare with). ``run`` must be safe to repeat
-    after a ``redo`` verdict.
+    ``payload`` runs only if the step is going to run, because it reads the world as it is right
+    then (a commit to expect, a manifest to compare with). ``run`` must be safe to repeat after a
+    ``redo`` verdict.
     """
 
-    payload: Callable[[], dict[str, JsonValue]]
+    payload: Callable[[], Awaitable[dict[str, JsonValue]]]
     run: Callable[[], Awaitable[None]]
+
+    @classmethod
+    def plain(cls, payload: dict[str, JsonValue], run: Callable[[], Awaitable[None]]) -> "Step":
+        """A step whose intent is known in advance."""
+
+        async def constant() -> dict[str, JsonValue]:
+            return payload
+
+        return cls(constant, run)
 
 
 class HookPoint(StrEnum):
@@ -115,7 +124,7 @@ class Journal:
         op_id = self.operation_id(name, subject)
         if op_id is None:
             return False
-        self.log.append_intent(level, target, name, op_id, payload=step.payload())
+        self.log.append_intent(level, target, name, op_id, payload=await step.payload())
         self._hook(f"{name}:{HookPoint.AFTER_INTENT}")
         await step.run()
         self._hook(f"{name}:{HookPoint.BEFORE_EFFECT}")

@@ -32,7 +32,7 @@ def step(done: list[str], label: str = "x") -> Step:
     async def run() -> None:
         done.append(label)
 
-    return Step(lambda: {"label": label}, run)
+    return Step.plain({"label": label}, run)
 
 
 def operate(journal: Journal, to_run: Step, subject: str = "t1") -> bool:
@@ -118,7 +118,7 @@ def test_an_operation_that_happened_is_not_done_again_and_its_payload_is_not_rea
     operate(journal, step(done))
     reads: list[int] = []
 
-    def payload() -> dict[str, Any]:
+    async def payload() -> dict[str, Any]:
         reads.append(1)
         return {}
 
@@ -187,7 +187,7 @@ def test_the_hook_sees_the_two_points_where_a_process_can_die(log: EventLog) -> 
     async def run() -> None:
         seen_in_log.append(len(kinds(log)))
 
-    operate(journal, Step(lambda: {}, run))
+    operate(journal, Step.plain({}, run))
 
     assert points == ["create_task_branch:after_intent", "create_task_branch:before_effect"]
     assert seen_in_log == [len(kinds(log)) - 1]  # the work ran with the intent written only
@@ -200,7 +200,7 @@ def test_a_failing_step_leaves_the_operation_open(log: EventLog) -> None:
         raise RuntimeError("disk gone")
 
     with pytest.raises(RuntimeError):
-        operate(journal, Step(lambda: {}, run))
+        operate(journal, Step.plain({}, run))
 
     assert "create_task_branch:t1" in log.state.open_operations
 
