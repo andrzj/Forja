@@ -33,7 +33,15 @@ def agent_was_running(world: World) -> bool:
     copy_of_log = probe / "events.jsonl"
     copy_of_log.write_bytes((world.run_dir / "events.jsonl").read_bytes())
     with EventLog.open(copy_of_log, RUN) as log:
-        return any(op.operation == "call_agent_cli" for op in log.state.open_operations.values())
+        if not log.state.has_target(Level.STAGE, "t1-s"):
+            return False
+        # the call was begun (its intent is in the log) and its result was never acted on
+        raw = copy_of_log.read_text(encoding="utf-8")
+        return any(
+            log.state.state_of(Level.ATTEMPT, a) is AttemptState.AGENT_RUNNING
+            and f"call_agent_cli:{a}" in raw
+            for a in log.state.children_of(Level.ATTEMPT, "t1-s")
+        )
 
 
 def fingerprint(world: World, log: EventLog) -> dict[str, Any]:
