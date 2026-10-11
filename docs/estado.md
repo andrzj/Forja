@@ -58,6 +58,11 @@ Pedaços combinados: 1a orquestrador, 1b Python e gates, 1c gestor de git, 1d ex
 - `mypy` (strict, `files = ["src", "tests"]`) acusa 29 erros em 10 arquivos de `tests/` que já existiam (só rodávamos `mypy src`); `src` e `scripts` estão limpos. Pendente.
 - Os quatro testes que falham no Linux estão agora em `[tool.forja.mutation] deselect` no `pyproject.toml` (o gate precisa partir de um verde); a investigação deles continua pendente.
 
+### Direção (decidida)
+
+- **Terminar a Forja primeiro (1d a 1h), sem perfeccionismo.** Depois, um segundo plano: a Forja avalia a si mesma (qualidade, assertividade, pontos de melhoria), com os próprios gates. Mutação em `--all` e o fechamento do 1b entram nessa autoavaliação, não antes.
+- **Mutação e CRAP seguem `unclebob/mutator` e `unclebob/crapper`**, desde que cubram as linguagens da Forja (Python, JavaScript, TypeScript, Java, Go, C#). Pelo README, os dois cobrem Clojure, Java, Go, TypeScript (e JavaScript), Rust e Python. **C# não está coberto:** quando chegarmos ao incremento 5, as opções são contribuir com C# upstream seguindo as mesmas decisões de operadores, manter um adaptador próprio equivalente ou usar outra ferramenta (Stryker.NET para mutação) atrás da mesma porta. A decisão fica para esse incremento.
+
 ## Estados persistidos (português da spec → inglês do código)
 
 - **Execução:** preparando `preparing`, confirmada `confirmed`, medindo_base `measuring_baseline`, planejando `planning`, executando `executing`, fechando `closing`, pausada `paused`, falhou `failed`, entregue `delivered`, descartada `discarded`.
