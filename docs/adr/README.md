@@ -19,3 +19,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0011](0011-a-retomada-fecha-as-operacoes-abertas-com-um-efeito.md) | A retomada fecha as operações abertas com um efeito | Proposto |
 | [0012](0012-nomes-das-branches.md) | Nomes das branches da execução e da tarefa | Aceito |
 | [0013](0013-a-forja-nunca-faz-push.md) | A Forja nunca faz push | Aceito |
+| [0014](0014-os-gates-leem-o-diff-da-tentativa-e-comparam-com-o-commit-pai.md) | Os gates leem o diff da tentativa e comparam com o commit pai | Aceito |

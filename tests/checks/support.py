@@ -122,3 +122,11 @@ class Scene:
     ) -> AttemptContext:
         task = TaskInfo("t1", "t1-s", "reduce the complexity", scope, max_files, max_lines)
         return AttemptContext(task, "t1-a1", self.repo.path, None)
+
+
+def judge_with(scene: Scene, check: str) -> Any:
+    """The result of one check of the pipeline for the current working tree."""
+    import asyncio  # noqa: PLC0415
+
+    outcome = asyncio.run(scene.measurer.judge(scene.context(), sinks))
+    return next(run.result for run in outcome.runs if run.check_id == check)

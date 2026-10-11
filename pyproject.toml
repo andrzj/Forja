@@ -25,7 +25,10 @@ packages = ["src/forja"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: end-to-end runs that start many processes; run them before every release"]
+markers = [
+    "slow: end-to-end runs that start many processes; run them before every release",
+    "tools: needs an external tool (gitleaks); skipped when it is not installed",
+]
 
 [tool.ruff]
 line-length = 100
