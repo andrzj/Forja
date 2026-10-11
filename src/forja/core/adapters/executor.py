@@ -2,8 +2,8 @@
 
 import os
 import re
-import shutil
 import string
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -358,5 +358,21 @@ class TemplateExecutorAdapter:
 
 def locate_in_path(name: str, path: str | None = None) -> Path | None:
     """First executable called ``name`` on the PATH, as the platform would find it."""
-    found = shutil.which(name, path=path)
-    return Path(found) if found else None
+    raw = os.environ.get("PATH", "") if path is None else path
+    here = os.path.normcase(os.path.realpath(os.getcwd()))
+    suffixes = [""]
+    if sys.platform == "win32":
+        wanted = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(";")
+        suffixes = [""] if name.lower().endswith(tuple(wanted)) else wanted
+    for directory in raw.split(os.pathsep):
+        # An empty or relative entry means "the current directory", which in a repository the
+        # Forja was pointed at is where an attacker's `git.exe` or `claude.exe` would be.
+        if not directory or not os.path.isabs(directory):
+            continue
+        if os.path.normcase(os.path.realpath(directory)) == here:
+            continue
+        for suffix in suffixes:
+            candidate = os.path.join(directory, name + suffix)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return Path(candidate)
+    return None

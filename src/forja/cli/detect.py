@@ -5,12 +5,13 @@ when the answer is "not here": a missing tool is a line the doctor explains, not
 """
 
 import shutil
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from forja.cli.session import git_base_environment, git_executable
-from forja.core.adapters.executor import ExecutorChoice, find_executors
+from forja.core.adapters.executor import ExecutorChoice, find_executors, locate_in_path
 from forja.core.idempotency.git import Git
 from forja.executors import ClaudeCodeAdapter
 
@@ -42,15 +43,19 @@ class Detection:
 
 
 async def detect(cwd: Path, environ: Mapping[str, str]) -> Detection:
-    git_found = shutil.which("git") is not None
+    with tempfile.TemporaryDirectory(prefix="forja-detect-") as scratch:  # private, then gone
+        return await _detect(cwd, environ, Path(scratch))
+
+
+async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detection:
+    git_found = locate_in_path("git") is not None
     free = shutil.disk_usage(cwd).free / 2**30
     base = dict(
-        cwd=cwd, python=False, gitleaks=shutil.which("gitleaks") is not None, git=git_found,
+        cwd=cwd, python=False, gitleaks=locate_in_path("gitleaks") is not None, git=git_found,
         disk_free_gib=free,
     )  # fmt: skip
     if not git_found:
         return Detection(repo=None, has_commits=False, branch="", head="", changed=(), **base)  # type: ignore[arg-type]
-    log_dir = Path(environ.get("TEMP") or environ.get("TMPDIR") or "/tmp") / "forja-detect"
     env = git_base_environment(environ)
     git = Git(cwd, executable=git_executable(), env=env, timeout=30, log_dir=log_dir)
     top = await git.run("rev-parse", "--show-toplevel")
@@ -61,7 +66,7 @@ async def detect(cwd: Path, environ: Mapping[str, str]) -> Detection:
     head = await git.run("rev-parse", "HEAD")
     has_commits = head.exit_code == 0
     branch = await git.run("rev-parse", "--abbrev-ref", "HEAD")
-    changed = await git.lines("status", "--porcelain")
+    changed = await git.lines("-c", "core.fsmonitor=false", "status", "--porcelain")
     base["python"] = (root / "pyproject.toml").is_file()
     return Detection(
         repo=root,

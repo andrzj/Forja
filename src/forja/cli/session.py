@@ -6,13 +6,13 @@ the work; this only connects the pieces the orchestrator is written against.
 """
 
 import os
-import shutil
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
+from forja.core.adapters.executor import locate_in_path
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog, LogEventSink
@@ -66,7 +66,8 @@ def repo_python(repo: Path) -> tuple[str, ...]:
                      "venv/bin/python"):  # fmt: skip
         if (repo / relative).is_file():
             return (str(repo / relative),)
-    return (shutil.which("python") or shutil.which("python3") or sys.executable,)
+    found = locate_in_path("python") or locate_in_path("python3")
+    return (str(found) if found else sys.executable,)
 
 
 def standard_settings() -> dict[str, CheckSettings]:
@@ -84,7 +85,8 @@ def in_scope(path: str, scope: tuple[str, ...]) -> bool:
 
 
 def git_executable() -> str:
-    return shutil.which("git") or "git"
+    found = locate_in_path("git")
+    return str(found) if found else "git"
 
 
 @dataclass
@@ -220,7 +222,7 @@ async def _context(
         host_env=env,
         settings=standard_settings(),
         lizard=(sys.executable, "-m", "lizard"),
-        gitleaks=(shutil.which("gitleaks") or "gitleaks",),
+        gitleaks=(str(locate_in_path("gitleaks") or "gitleaks"),),
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
