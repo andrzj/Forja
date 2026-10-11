@@ -21,6 +21,14 @@ class Outcome:
     message: str
 
 
+class StopRun(Exception):
+    """Unwinds a task to the orchestrator, which pauses the run with this reason."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
 def exit_code_for(state: ExecutionState) -> ExitCode:
     """The code for the state a run was left in; any state in the middle means it was cut short."""
     match state:

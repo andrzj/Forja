@@ -25,6 +25,7 @@ from tests.core.events.support import RUN, create_run, open_log
 
 CONFIG = RunConfig(
     repo="C:/work/repo",
+    base_commit="a" * 40,
     objective=Objective.REFACTOR,
     implementer=ExecutorRef(name="claude-code", path="/usr/bin/claude", version="2.1.0"),
     forja_version="0.0.0",

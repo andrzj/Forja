@@ -175,6 +175,13 @@ class GitWorkspace:
         self.layout = layout
         self.run_branch = run_branch_name(run_id)
 
+    @property
+    def run_worktree(self) -> Path:
+        return self.layout.run_worktree
+
+    def attempt_worktree(self, attempt_id: str) -> Path:
+        return self.layout.attempt_worktree(attempt_id)
+
     # -- before the run ---------------------------------------------------------------------------
 
     async def check_ready(self) -> str:

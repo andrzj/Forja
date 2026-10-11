@@ -45,6 +45,7 @@ class RunConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     repo: NonEmpty
+    base_commit: NonEmpty
     objective: Objective
     implementer: ExecutorRef
     budget: Budget = Budget()

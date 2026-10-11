@@ -97,6 +97,11 @@ class RunState:
         """Payload of the latest transition into ``state``, or ``None`` if it never happened."""
         return self._targets[(level, target_id)].entered.get(state.value)
 
+    def previous_state(self, level: Level, target_id: str) -> StrEnum | None:
+        """The state a paused or failed target left, which is where resuming sends it back."""
+        stack = self._targets[(level, target_id)].stack
+        return stack[-1] if stack else None
+
     def parent_of(self, level: Level, target_id: str) -> str | None:
         return self._targets[(level, target_id)].parent_id
 

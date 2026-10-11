@@ -1,0 +1,248 @@
+"""The phases of an execution, from the confirmed run to the delivered branch.
+
+``Orchestrator.run`` is called for a new run and again for a resumed one: the state in the log
+says which phase is next, and the journal skips what each phase already did. A run that must stop
+(a CLI that cannot continue, the network gone) is left ``paused`` with everything saved.
+"""
+
+from pathlib import Path
+
+from pydantic import JsonValue
+
+from forja.core.artifacts import ArtifactStore
+from forja.core.artifacts.models import ArtifactType, Producer
+from forja.core.atomic import atomic_write_bytes
+from forja.core.confirmation import Confirmation
+from forja.core.events import EventLog
+from forja.core.idempotency import reconcile_call_agent_cli
+from forja.core.resume import resume
+from forja.core.states import ExecutionState, Level, TaskState
+from forja.orchestrator.config import RunConfig, confirmed_payload
+from forja.orchestrator.outcome import ExitCode, Outcome, StopRun, exit_code_for
+from forja.orchestrator.ports import Baseline, RunContext
+from forja.orchestrator.summary import (
+    METRICS,
+    read_facts,
+    render_summary,
+    summary_body,
+)
+from forja.orchestrator.task_cycle import TaskCycle
+from forja.orchestrator.workspace_git import HANDLED_OPERATIONS
+
+AGENT_OPERATIONS = frozenset({"prepare_workcopy", "apply_diff"})
+SUMMARY_NAME = "resumo.md"
+METRIC_LIMIT = 40
+_ENDED = (ExecutionState.DELIVERED, ExecutionState.DISCARDED, ExecutionState.FAILED)
+
+
+def confirm_run(log: EventLog, config: RunConfig, confirmation: Confirmation) -> None:
+    """Create the run and record what the user confirmed; the point of no return."""
+    run_id = log.state.run_id
+    log.append_transition(Level.EXECUTION, run_id, None, ExecutionState.PREPARING)
+    log.append_transition(
+        Level.EXECUTION,
+        run_id,
+        ExecutionState.PREPARING,
+        ExecutionState.CONFIRMED,
+        payload=confirmed_payload(config, confirmation),
+    )
+
+
+class Orchestrator:
+    def __init__(self, ctx: RunContext) -> None:
+        self._ctx = ctx
+        self._journal = ctx.journal
+        self._log = ctx.journal.log
+        self._run_id = ctx.journal.run_id
+        self._baseline: Baseline | None = None
+
+    @property
+    def _state(self) -> ExecutionState:
+        state = self._log.state.state_of(Level.EXECUTION, self._run_id)
+        assert isinstance(state, ExecutionState)
+        return state
+
+    async def run(self) -> Outcome:
+        """Take the run as far as it can go; the outcome says where it was left."""
+        journal = self._journal
+        journal.session_started()
+        try:
+            await self._settle_leftovers()
+            self._leave_pause()
+            await self._phases()
+            outcome = self._outcome()
+        except StopRun as stop:
+            outcome = self._pause(stop.reason)
+        journal.session_ended(outcome.state.value)
+        return outcome
+
+    # -- starting up ----------------------------------------------------------------------------
+
+    async def _settle_leftovers(self) -> None:
+        await self._ctx.workspace.recover()
+        await resume(self._log, self._reconcile)
+
+    async def _reconcile(self, operation):  # type: ignore[no-untyped-def]
+        ctx = self._ctx
+        name = operation.operation
+        if name in HANDLED_OPERATIONS:
+            return await ctx.workspace.reconcile(operation)
+        if name == "call_agent_cli":
+            return reconcile_call_agent_cli()
+        if name in AGENT_OPERATIONS:
+            return await ctx.agent.reconcile(operation)
+        if name == "run_tool":
+            return await ctx.measurer.reconcile(operation)
+        raise KeyError(f"no reconciler for {name}")
+
+    def _leave_pause(self) -> None:
+        state = self._state
+        if state in (ExecutionState.PAUSED, ExecutionState.FAILED):
+            previous = self._log.state.previous_state(Level.EXECUTION, self._run_id)
+            if previous is not None:
+                self._log.append_transition(Level.EXECUTION, self._run_id, state, previous)
+
+    def _pause(self, reason: str) -> Outcome:
+        state = self._state
+        if state is not ExecutionState.PAUSED:
+            self._log.append_transition(
+                Level.EXECUTION,
+                self._run_id,
+                state,
+                ExecutionState.PAUSED,
+                payload={"reason": reason},
+            )
+        return Outcome(ExecutionState.PAUSED, ExitCode.PAUSED, reason)
+
+    def _outcome(self) -> Outcome:
+        state = self._state
+        return Outcome(state, exit_code_for(state), self._message(state))
+
+    def _message(self, state: ExecutionState) -> str:
+        if state is ExecutionState.DELIVERED:
+            return (
+                f"delivered on {self._ctx.workspace.run_branch}; summary in "
+                f"{self._ctx.run_dir / SUMMARY_NAME}"
+            )
+        payload = self._log.state.transition_payload(Level.EXECUTION, self._run_id, state) or {}
+        return str(payload.get("reason", state.value))
+
+    # -- the phases -----------------------------------------------------------------------------
+
+    async def _phases(self) -> None:
+        if self._state is ExecutionState.CONFIRMED:
+            await self._prepare()
+        if self._state is ExecutionState.MEASURING_BASELINE:
+            await self._measure()
+        if self._state is ExecutionState.PLANNING:
+            await self._plan()
+        if self._state is ExecutionState.EXECUTING:
+            await self._execute()
+        if self._state is ExecutionState.CLOSING:
+            await self._close()
+
+    def _go(self, to: ExecutionState, payload: dict[str, JsonValue] | None = None) -> None:
+        self._log.append_transition(Level.EXECUTION, self._run_id, self._state, to, payload=payload)
+
+    async def _prepare(self) -> None:
+        ctx, journal, run_id = self._ctx, self._journal, self._run_id
+        ws = ctx.workspace
+        await journal.operate(
+            "create_run_branch",
+            Level.EXECUTION,
+            run_id,
+            run_id,
+            ws.create_run_branch(ctx.config.base_commit),
+        )
+        await journal.operate(
+            "create_attempt_worktree", Level.EXECUTION, run_id, "run", ws.create_run_worktree()
+        )
+        await journal.operate(
+            "normalize_style",
+            Level.EXECUTION,
+            run_id,
+            run_id,
+            ws.normalize_style(ctx.measurer.format_worktree),
+        )
+        self._go(ExecutionState.MEASURING_BASELINE)
+
+    async def _measure(self) -> None:
+        ctx = self._ctx
+        baseline = await ctx.measurer.baseline(ctx.workspace.run_worktree, ctx.sinks)
+        self._baseline = baseline
+        self._record_metrics("baseline", baseline)
+        if not baseline.ok:
+            problems: list[JsonValue] = [*baseline.problems[:10]]
+            self._go(ExecutionState.FAILED, {"reason": "baseline_not_green", "problems": problems})
+            return
+        self._go(ExecutionState.PLANNING)
+
+    def _record_metrics(self, phase: str, baseline: Baseline) -> None:
+        values = dict(sorted(baseline.metrics.items())[:METRIC_LIMIT])
+        self._journal.note(METRICS, {"phase": phase, "values": values})  # type: ignore[dict-item]
+
+    async def _plan(self) -> None:
+        ctx, journal = self._ctx, self._journal
+        baseline = self._baseline or await ctx.measurer.baseline(
+            ctx.workspace.run_worktree, ctx.sinks
+        )
+        planned = await ctx.planner.plan(ctx.workspace.run_worktree, baseline, ctx.config.budget)
+        for number, task in enumerate(planned[: ctx.config.budget.tasks], start=1):
+            journal.enter(
+                Level.TASK,
+                f"t{number}",
+                TaskState.PENDING,
+                parent=self._run_id,
+                payload={
+                    "intent": task.intent,
+                    "scope": list(task.scope),
+                    "max_files": task.max_files,
+                    "max_lines": task.max_lines,
+                },
+            )
+        self._go(ExecutionState.EXECUTING)
+
+    async def _execute(self) -> None:
+        cycle = TaskCycle(self._ctx)
+        state = self._log.state
+        for task in state.children_of(Level.TASK, self._run_id):
+            if state.state_of(Level.TASK, task) in (TaskState.INTEGRATED, TaskState.BLOCKED):
+                continue
+            if self._ctx.meter.exhausted():
+                break
+            await cycle.run(task)
+        self._go(ExecutionState.CLOSING)
+
+    async def _close(self) -> None:
+        ctx, journal = self._ctx, self._journal
+        final = await ctx.measurer.baseline(ctx.workspace.run_worktree, ctx.sinks)
+        self._record_metrics("final", final)
+        store = ArtifactStore(ctx.run_dir / "store")
+        header = store.put(
+            artifact_type=ArtifactType.EXECUTION_SUMMARY,
+            producer=Producer.FORJA,
+            body=summary_body(self._log.state),
+            artifact_id="summary",
+        )
+        path = self._write_summary(ctx.run_dir / SUMMARY_NAME)
+        await journal.operate(
+            "remove_worktree",
+            Level.EXECUTION,
+            self._run_id,
+            "run",
+            ctx.workspace.remove_worktree("run"),
+        )
+        journal.enter(
+            Level.EXECUTION,
+            self._run_id,
+            ExecutionState.DELIVERED,
+            payload={"summary": str(path)},
+            refs=(store.ref(header),),
+        )
+
+    def _write_summary(self, path: Path) -> Path:
+        ctx = self._ctx
+        facts = read_facts(self._log.path)
+        text = render_summary(self._log.state, facts, ctx.config, ctx.workspace.run_branch, path)
+        atomic_write_bytes(path, text.encode("utf-8"))
+        return path

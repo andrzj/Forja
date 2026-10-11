@@ -404,3 +404,25 @@ def test_a_process_started_event_needs_an_open_operation(log: EventLog) -> None:
     )
 
     assert rejected(log.state, event) == "process_started needs an open operation"
+
+
+def test_a_paused_target_remembers_where_it_came_from(log: EventLog) -> None:
+    create_run(log)
+    to_execution_state(log, E.CONFIRMED, E.MEASURING_BASELINE, E.PAUSED)
+
+    assert log.state.previous_state(Level.EXECUTION, RUN) is E.MEASURING_BASELINE
+
+
+def test_a_target_that_was_never_paused_has_no_previous_state(log: EventLog) -> None:
+    create_run(log)
+    to_execution_state(log, E.CONFIRMED)
+
+    assert log.state.previous_state(Level.EXECUTION, RUN) is None
+
+
+def test_going_back_from_a_pause_clears_the_previous_state(log: EventLog) -> None:
+    create_run(log)
+    to_execution_state(log, E.CONFIRMED, E.MEASURING_BASELINE, E.PAUSED)
+    log.append_transition(Level.EXECUTION, RUN, E.PAUSED, E.MEASURING_BASELINE)
+
+    assert log.state.previous_state(Level.EXECUTION, RUN) is None
