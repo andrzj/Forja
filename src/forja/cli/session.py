@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
-from forja.core.adapters.executor import locate_in_path
+from forja.core.adapters.executor import RolePermissions, locate_in_path
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog, LogEventSink
@@ -84,9 +84,18 @@ def in_scope(path: str, scope: tuple[str, ...]) -> bool:
     )
 
 
+def missing_tool(name: str) -> str:
+    """Where a tool is, or an absolute path that is not there: a bare name could be run from the
+    current directory, which belongs to the repository and not to the person."""
+    found = locate_in_path(name)
+    return str(found) if found else str(Path(sys.prefix) / f"{name}-is-not-installed")
+
+
 def git_executable() -> str:
     found = locate_in_path("git")
-    return str(found) if found else "git"
+    if found is None:
+        raise FileNotFoundError("git is not installed or not on the PATH; run `forja doctor`")
+    return str(found)
 
 
 @dataclass
@@ -222,14 +231,21 @@ async def _context(
         host_env=env,
         settings=standard_settings(),
         lizard=(sys.executable, "-m", "lizard"),
-        gitleaks=(str(locate_in_path("gitleaks") or "gitleaks"),),
+        gitleaks=(missing_tool("gitleaks"),),
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
         found = await measurer.functions(worktree, sinks)
         return {key: ccn for key, ccn in found.items() if in_scope(key[0], config.scope)}
 
-    agent = ExecutorAgentRunner(ClaudeCodeAdapter(), Path(config.implementer.path), env, log)
+    commands = ("forja agente",) if locate_in_path("forja") else ()
+    agent = ExecutorAgentRunner(
+        ClaudeCodeAdapter(),
+        Path(config.implementer.path),
+        {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
+        log,
+        permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
+    )
     return RunContext(
         journal=Journal(log),
         config=config,

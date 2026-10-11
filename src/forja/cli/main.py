@@ -14,6 +14,7 @@ from forja.cli.args import Arguments, parse
 from forja.cli.console import Console, TerminalConsole, choose, confirm
 from forja.cli.detect import Detection, detect
 from forja.cli.doctor import doctor
+from forja.cli.facade import run_facade
 from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
@@ -143,8 +144,7 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
             cache = probe_cache(profile_dir(environ))
             return await doctor(detection, profile, environ, console, cache, cli=args.cli)
         if args.command == "agente":
-            console.say("`forja agente` ainda não está disponível.")
-            return int(ExitCode.INVALID_CONFIG)
+            return run_facade(args.agent, Path.cwd(), environ)
         return await start(args, console, environ, detection)
     except Refused as refused:
         console.say(refused.message)

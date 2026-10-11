@@ -66,12 +66,17 @@ PACKAGE = "package.md"
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
+NO_COMMANDS = "You cannot run commands. "
+FACADE_COMMANDS = (
+    "You cannot run commands except `forja agente testar [path...]`, `forja agente lint "
+    "[path...]` and `forja agente medir [path...]`, which show what the checks will see. "
+)
 
 INSTRUCTIONS = """\
 You are refactoring existing code. The behaviour must stay exactly the same: same results, same
 public names, same side effects. Do not change tests and do not add dependencies.
 
-You cannot run commands. Read the files you need and change them with the edit tools.
+{commands}Read the files you need and change them with the edit tools.
 
 When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else, listing
 every file you created, modified or removed (the list is checked against what really changed):
@@ -140,7 +145,7 @@ def _fence(text: str) -> str:
     return "`" * ticks
 
 
-def build_package(ctx: AttemptContext, redactor: Redactor) -> str:
+def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = False) -> str:
     """The text the agent receives: the task, the rules, the files in scope and the last verdict."""
     task = ctx.task
     items, notes = [], []
@@ -153,7 +158,11 @@ def build_package(ctx: AttemptContext, redactor: Redactor) -> str:
     result = redactor.redact(items)
     parts = [
         f"# Task\n\n{task.intent}\n",
-        INSTRUCTIONS.format(agent_dir=AGENT_DIR, output=OUTPUT),
+        INSTRUCTIONS.format(
+            agent_dir=AGENT_DIR,
+            output=OUTPUT,
+            commands=FACADE_COMMANDS if facade else NO_COMMANDS,
+        ),
         "## What you may change\n",
         f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}.",
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
@@ -273,7 +282,9 @@ class ExecutorAgentRunner:
             shutil.copytree(ctx.worktree, target, ignore=self._left_out(ctx.worktree))
             agent_dir = target / AGENT_DIR
             agent_dir.mkdir()
-            package = build_package(ctx, self._redactor)
+            package = build_package(
+                ctx, self._redactor, facade=bool(self._permissions.allowed_commands)
+            )
             (agent_dir / PACKAGE).write_text(package, encoding="utf-8", newline="\n")
             setup = self._adapter.permission_setup(self._role, self._permissions)
             for name, data in setup.files.items():
