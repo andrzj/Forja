@@ -125,6 +125,7 @@ class ScriptedAgent:
     pause: float = 0.0
     meddle: Callable[[], object] | None = None
     reject_diff: str | None = None
+    die_after_the_call: bool = False
     seen: list[AttemptContext] = field(default_factory=list)
 
     def prepare_workcopy(self, ctx: AttemptContext) -> Step:
@@ -157,6 +158,8 @@ class ScriptedAgent:
         await ProcessRunner(sink).run(
             operation_id, spec, ctx.worktree.parent / f"{operation_id}.log"
         )
+        if self.die_after_the_call:
+            raise RuntimeError("the process died right after the agent finished")
         if number in self.errors:
             return AgentResult(error=ErrorActivity("the service said no", self.errors[number]))
         return AgentResult(reason=self.reason)

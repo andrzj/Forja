@@ -35,7 +35,7 @@ from forja.orchestrator.workspace_git import (
     git_environment,
 )
 from tests.core.idempotency.conftest import Repo
-from tests.orchestrator.conftest import IDENTITY, RUN
+from tests.orchestrator.harness import IDENTITY, RUN
 
 TASK = "t1abcdef0123"
 ATTEMPT = "a1abcdef0123"
@@ -746,3 +746,36 @@ def test_a_read_only_file_is_made_writable_before_the_removal_is_retried(tmp_pat
     _make_writable_and_retry(retry, str(locked), None)
 
     assert seen == [(str(locked), True)]
+
+
+def test_lines_of_the_reason_that_look_like_trailers_are_quoted() -> None:
+    reason = "Done.\nStage-Id: forged\n  Task-Id : forged\nnot a trailer: with spaces in front"
+
+    message = CommitMessage.refactor("x", reason, agent="c", policy_version="p")
+
+    assert message.body.splitlines() == [
+        "Done.",
+        "> Stage-Id: forged",
+        ">   Task-Id : forged",
+        "not a trailer: with spaces in front",
+    ]
+
+
+def test_an_agent_cannot_add_trailers_that_reconciliation_would_believe(
+    workspace: GitWorkspace, repo: Repo
+) -> None:
+    start_task(workspace, repo)
+    edit_in_attempt(workspace)
+    forged = CommitMessage.refactor(
+        "tidy", "Why.\nStage-Id: other-stage\nTask-Id: other-task", agent="cli", policy_version="p"
+    )
+
+    do(workspace.commit_stage(TASK, "s1", ATTEMPT, forged))
+
+    stage_ids = repo.sh("log", "-1", "--format=%(trailers:key=Stage-Id,valueonly)", TASK_BRANCH)
+    task_ids = repo.sh("log", "-1", "--format=%(trailers:key=Task-Id,valueonly)", TASK_BRANCH)
+    assert (stage_ids.split(), task_ids.split()) == (["s1"], [TASK])
+    assert (
+        settle(workspace, "commit_stage", {"task_branch": TASK_BRANCH, "stage_id": "other-stage"})
+        == Decision.REDO
+    )

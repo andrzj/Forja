@@ -156,7 +156,11 @@ class TaskCycle:
         journal.enter(Level.ATTEMPT, attempt, AttemptState.AGENT_RUNNING)
 
         if self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.AGENT_RUNNING:
-            result, differences = await self._call_agent(ctx)
+            called = await self._call_agent(ctx)
+            if called is None:
+                await self._result_lost(ctx.task, attempt)
+                return
+            result, differences = called
             if result.error is not None:
                 await self._infrastructure_failed(ctx.task, attempt, result)
                 return
@@ -174,11 +178,12 @@ class TaskCycle:
         if self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.APPROVED:
             await self._commit(ctx)
 
-    async def _call_agent(self, ctx: AttemptContext) -> tuple[AgentResult, list[str]]:
+    async def _call_agent(self, ctx: AttemptContext) -> tuple[AgentResult, list[str]] | None:
+        """The call and what git looked like around it; ``None`` if the call ended earlier."""
         run = self._ctx
         op_id = self._journal.operation_id("call_agent_cli", ctx.attempt_id)
         if op_id is None:
-            return AgentResult(), []  # it ended before a crash; the gates judge what it left
+            return None
         async with run.workspace.watch() as watch:
             result = await run.agent.call(
                 ctx, op_id, run.sinks(Level.ATTEMPT, ctx.attempt_id, "call_agent_cli")
@@ -285,6 +290,25 @@ class TaskCycle:
         elif not await self._network_came_back():
             self._stage_pause(info)
             raise StopRun("the network did not come back before the budget ran out")
+
+    async def _result_lost(self, info: TaskInfo, attempt: str) -> None:
+        """The call ended but the run died before it could say how: that cannot be trusted.
+
+        Whether the agent reported an error, or reached outside its copy, went with the process.
+        Judging the work as if nothing had happened would fail open, so the attempt is dropped and
+        counts as an infrastructure failure, like a call that cannot be verified.
+        """
+        self._log.append_transition(
+            Level.ATTEMPT,
+            attempt,
+            AttemptState.AGENT_RUNNING,
+            AttemptState.DISCARDED,
+            payload={"reason": "result_lost", "infra_failure": True},
+        )
+        failures = consecutive_infra_failures(self._state, info.stage_id)
+        if failures >= self._ctx.config.budget.infra_failures:
+            self._stage_pause(info)
+            raise StopRun(f"{failures} infrastructure failures in a row on {info.task_id}")
 
     def _stage_pause(self, info: TaskInfo) -> None:
         if self._state.state_of(Level.STAGE, info.stage_id) is StageState.IN_PROGRESS:

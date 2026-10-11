@@ -6,20 +6,14 @@ from pathlib import Path
 import pytest
 
 from forja.core.adapters.executor import ErrorKind
-from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog
-from forja.core.isolation import IsolationLevel, IsolationRecord
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.budget import Meter, read_consumption
-from forja.orchestrator.config import Budget, ExecutorRef, Objective, RunConfig
-from forja.orchestrator.operations import Journal
-from forja.orchestrator.outcome import ExitCode, Outcome
+from forja.orchestrator.config import Budget
+from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
-from forja.orchestrator.ports import PlannedTask, RunContext
 from forja.orchestrator.workspace_git import GitWorkspace
-from tests.core.events.support import FakeClock
 from tests.core.idempotency.conftest import Repo
-from tests.orchestrator.conftest import RUN
 from tests.orchestrator.fakes import (
     INCONCLUSIVE,
     PASSED,
@@ -29,89 +23,7 @@ from tests.orchestrator.fakes import (
     ScriptedMeasurer,
     ScriptedPlanner,
 )
-
-ISOLATION = Confirmation(IsolationRecord(agent=IsolationLevel.WSL, repo_code=IsolationLevel.WSL))
-TWO_TASKS = (
-    PlannedTask("reduce the complexity of f", ("src/a.py",), 8, 400),
-    PlannedTask("reduce the complexity of g", ("src/b.py",), 8, 400),
-)
-
-
-class World:
-    """One run being assembled: the pieces a test may want to look at afterwards."""
-
-    def __init__(self, tmp_path: Path, repo: Repo, workspace: GitWorkspace) -> None:
-        self.repo, self.workspace, self.run_dir = repo, workspace, tmp_path / "run"
-        self.slept: list[float] = []
-        self.network: list[bool] = [True]
-        self.log: EventLog | None = None
-        self.config = RunConfig(
-            repo=str(repo.path),
-            base_commit=repo.sh("rev-parse", "HEAD"),
-            objective=Objective.REFACTOR,
-            implementer=ExecutorRef(name="fake-cli", path="/bin/fake", version="1.0"),
-            forja_version="0.0.0",
-            policy_version="0.0.0+abc",
-        )
-
-    async def sleep(self, seconds: float) -> None:
-        self.slept.append(seconds)
-
-    async def network_is_up(self) -> bool:
-        return self.network.pop(0) if len(self.network) > 1 else self.network[0]
-
-    def open(self) -> EventLog:
-        self.log = EventLog.open(self.run_dir / "events.jsonl", RUN, clock=FakeClock())
-        return self.log
-
-    def context(
-        self,
-        log: EventLog,
-        *,
-        measurer: ScriptedMeasurer,
-        agent: ScriptedAgent,
-        planner: ScriptedPlanner,
-        budget: Budget | None = None,
-        seconds_left: float = 7200.0,
-    ) -> RunContext:
-        config = self.config.model_copy(update={"budget": budget or Budget()})
-        return RunContext(
-            journal=Journal(log),
-            config=config,
-            workspace=self.workspace,
-            measurer=measurer,
-            agent=agent,
-            planner=planner,
-            meter=Meter(seconds_left, read_consumption(log.path)),
-            run_dir=self.run_dir,
-            sleep=self.sleep,
-            network_is_up=self.network_is_up,
-        )
-
-    def run(
-        self,
-        *,
-        measurer: ScriptedMeasurer | None = None,
-        agent: ScriptedAgent | None = None,
-        planner: ScriptedPlanner | None = None,
-        budget: Budget | None = None,
-        seconds_left: float = 7200.0,
-        log: EventLog | None = None,
-    ) -> tuple[Outcome, EventLog]:
-        opened = log or self.open()
-        if not opened.state.has_target(Level.EXECUTION, RUN):
-            confirm_run(
-                opened, self.config.model_copy(update={"budget": budget or Budget()}), ISOLATION
-            )
-        ctx = self.context(
-            opened,
-            measurer=measurer or ScriptedMeasurer(),
-            agent=agent or ScriptedAgent(),
-            planner=planner or ScriptedPlanner(),
-            budget=budget,
-            seconds_left=seconds_left,
-        )
-        return asyncio.run(Orchestrator(ctx).run()), opened
+from tests.orchestrator.harness import ISOLATION, RUN, TWO_TASKS, World
 
 
 @pytest.fixture
@@ -495,3 +407,34 @@ def test_the_confirmation_is_recorded_as_the_first_two_states(world: World) -> N
 
     assert log.state.state_of(Level.EXECUTION, RUN) is ExecutionState.CONFIRMED
     assert log.state.transition_payload(Level.EXECUTION, RUN, ExecutionState.PREPARING) == {}
+
+
+def test_a_call_that_ended_but_whose_result_was_lost_is_not_judged_as_if_it_were_clean(
+    world: World,
+) -> None:
+    dying = ScriptedAgent(die_after_the_call=True)
+    with pytest.raises(RuntimeError, match="died"):
+        world.run(agent=dying)
+
+    outcome, log = world.run(agent=ScriptedAgent(), log=world.open())
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert attempts(log, "t1") == {
+        "t1-a1": AttemptState.DISCARDED,
+        "t1-a2": AttemptState.COMMITTED,
+    }
+    lost = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.DISCARDED)
+    assert lost == {"reason": "result_lost", "infra_failure": True}
+
+
+def test_results_lost_again_and_again_pause_the_run_like_any_infrastructure_failure(
+    world: World,
+) -> None:
+    for _ in range(3):
+        with pytest.raises(RuntimeError):
+            world.run(agent=ScriptedAgent(die_after_the_call=True), log=world.open())
+
+    outcome, log = world.run(agent=ScriptedAgent(), log=world.open())
+
+    assert (outcome.state, outcome.exit_code) == (ExecutionState.PAUSED, ExitCode.PAUSED)
+    assert outcome.message == "3 infrastructure failures in a row on t1"

@@ -15,6 +15,7 @@ Layout of a run:
 """
 
 import os
+import re
 import shutil
 import stat
 from collections.abc import Awaitable, Callable, Mapping
@@ -50,6 +51,9 @@ _USER_EMAIL_KEY = "user.email"
 _TASK_TRAILER = "Task-Id"
 SUBJECT_LIMIT = 72
 BODY_LINES = 20
+# What git reads as a trailer. The body is written by the agent, so a line like this in it could
+# add a Stage-Id or Task-Id that Forja never put there, and reconciliation would believe it.
+_TRAILER_LIKE = re.compile(r"^\s*[A-Za-z][A-Za-z0-9-]*\s*:")
 HANDLED_OPERATIONS = frozenset(
     {
         "create_run_branch",
@@ -161,7 +165,8 @@ class CommitMessage:
         cls, intent: str, reason: str, *, agent: str, policy_version: str
     ) -> "CommitMessage":
         subject = f"refactor: {' '.join(intent.split())}"[:SUBJECT_LIMIT].rstrip()
-        body = "\n".join(line.rstrip() for line in reason.strip().splitlines()[:BODY_LINES])
+        lines = reason.strip().splitlines()[:BODY_LINES]
+        body = "\n".join(_defuse(line.rstrip()) for line in lines)
         return cls(subject, body.strip(), agent, policy_version)
 
 
@@ -374,6 +379,11 @@ class GitWorkspace:
         if path.exists():
             shutil.rmtree(path, onexc=_make_writable_and_retry)
         await self._git.lines("worktree", "prune")
+
+
+def _defuse(line: str) -> str:
+    """Quote a line that git would read as a trailer."""
+    return f"> {line}" if _TRAILER_LIKE.match(line) else line
 
 
 def _make_writable_and_retry(function: Callable[[str], object], path: str, _error: Any) -> None:
