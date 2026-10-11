@@ -8,6 +8,7 @@ becomes activity and token events, and a CLI that stays silent for too long is e
 
 import asyncio
 import contextlib
+import re
 import shutil
 import time
 from collections.abc import Callable, Mapping
@@ -45,7 +46,9 @@ from forja.core.idempotency import (
 )
 from forja.core.isolation import SensitivePaths
 from forja.core.manifest import (
+    EntryKind,
     Manifest,
+    ManifestDiff,
     ManifestEntry,
     build_manifest,
     diff_manifests,
@@ -79,6 +82,14 @@ every file you created, modified or removed (the list is checked against what re
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
 had to guess. Then answer with one short sentence.
 """
+
+
+_SHORT_NAME = re.compile(r"~\d")
+
+
+def plain(path: str) -> str:
+    """The path as Windows would read it: trailing dots and spaces of each part are dropped."""
+    return "/".join(part.rstrip(" .") for part in path.replace("\\", "/").split("/"))
 
 
 def touches_git(path: str) -> bool:
@@ -307,12 +318,13 @@ class ExecutorAgentRunner:
         async def payload() -> dict[str, Any]:
             declaration = ChangeDeclaration.from_output(_declared(source))
             after = build_manifest(source, exclude={AGENT_DIR})
-            self._refuse_off_limits(after)
             hidden = self._hidden(ctx.worktree)
+            before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
+            self._refuse_tampering(source)
+            self._refuse_off_limits(after, diff_manifests(before, after))
             problems = find_violations(after, destination_root=ctx.worktree)
             if problems:
                 raise RejectedWork("; ".join(f"{p.path}: {p.detail}" for p in problems))
-            before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
             differences = compare_with_diff(declaration, diff_manifests(before, after))
             if differences:
                 raise RejectedWork(
@@ -327,13 +339,16 @@ class ExecutorAgentRunner:
             return {"worktree": str(ctx.worktree), "expected_digest": kept.digest()}
 
         async def run() -> None:
-            _wipe(ctx.worktree, frozenset(self._hidden(ctx.worktree)))
+            kept = self._hidden(ctx.worktree)
+            _wipe(ctx.worktree, frozenset(kept))
             shutil.copytree(
                 source,
                 ctx.worktree,
                 dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns(AGENT_DIR, ".git"),
             )
+            if self._hidden(ctx.worktree) != kept:
+                raise RuntimeError("a file that was to stay untouched changed on the way back")
 
         return Step(payload, run)
 
@@ -350,11 +365,14 @@ class ExecutorAgentRunner:
     def _hidden(self, worktree: Path) -> dict[str, ManifestEntry]:
         """The sensitive files: they stay out of the copy and come back untouched."""
         entries = build_manifest(worktree, exclude={".git"}).entries
-        return {path: e for path, e in entries.items() if self._sensitive.matches(path)}
+        return {path: e for path, e in entries.items() if self._is_hidden(path, e)}
+
+    def _is_hidden(self, path: str, entry: ManifestEntry) -> bool:
+        # a link may point at anything, so the agent gets neither it nor what it points at
+        return entry.kind is EntryKind.SYMLINK or self._sensitive.matches(plain(path))
 
     def _visible(self, manifest: Manifest) -> Manifest:
-        hidden = {path for path in manifest.entries if self._sensitive.matches(path)}
-        return Manifest({p: e for p, e in manifest.entries.items() if p not in hidden})
+        return Manifest({p: e for p, e in manifest.entries.items() if not self._is_hidden(p, e)})
 
     def _left_out(self, worktree: Path) -> Callable[[str, list[str]], set[str]]:
         def ignore(directory: str, names: list[str]) -> set[str]:
@@ -363,18 +381,36 @@ class ExecutorAgentRunner:
             return {
                 name
                 for name in names
-                if (not prefix and name == ".git") or self._sensitive.matches(f"{prefix}{name}")
+                if (not prefix and name == ".git")
+                or (Path(directory) / name).is_symlink()
+                or self._sensitive.matches(plain(f"{prefix}{name}"))
             }
 
         return ignore
 
-    def _refuse_off_limits(self, after: Manifest) -> None:
-        """Git's own files and the sensitive ones are not the agent's to write, whatever it says."""
+    def _refuse_off_limits(self, after: Manifest, changed: ManifestDiff) -> None:
+        """Git's own files and the sensitive ones are not the agent's to write, whatever it says.
+
+        The copy holds none of the sensitive files, so any it holds the agent made. Names are read
+        the way Windows reads them, where ``.env.`` and ``.env `` are ``.env``, and a short name
+        (``ENV~1``) can stand for a long one, so no new name may look like one.
+        """
         for path in after.entries:
             if touches_git(path):
                 raise RejectedWork(f"{path}: the work reaches into git's own directory")
-            if self._sensitive.matches(path):
+            if self._sensitive.matches(plain(path)):
                 raise RejectedWork(f"{path}: the work creates or changes a sensitive file")
+        for path in (*changed.created, *changed.modified):
+            if any(_SHORT_NAME.search(part) for part in path.split("/")):
+                raise RejectedWork(f"{path}: a name with a short-name marker (~digit) is refused")
+
+    def _refuse_tampering(self, source: Path) -> None:
+        """The agent writes in its own directory; its permissions are not for it to change."""
+        setup = self._adapter.permission_setup(self._role, self._permissions)
+        for name, data in setup.files.items():
+            kept = source / AGENT_DIR / name
+            if not kept.is_file() or kept.read_bytes() != data:
+                raise RejectedWork(f"{AGENT_DIR}/{name}: the agent changed its own permissions")
 
 
 def _declared(workcopy: Path) -> LlmOutput:

@@ -12,12 +12,19 @@ from typing import Any
 import pytest
 
 from forja.core.adapters.common import CommandPlan
-from forja.core.adapters.executor import AgentRequest, ErrorKind, PermissionSetup
+from forja.core.adapters.executor import AgentRequest, ErrorKind, PermissionSetup, RolePermissions
+from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog, OpenOperation
 from forja.core.idempotency import Decision
+from forja.core.manifest import EntryKind, Manifest, ManifestDiff, ManifestEntry
 from forja.core.states import ExecutionState, Level
 from forja.executors import ClaudeCodeAdapter
-from forja.orchestrator.agent_runner import ExecutorAgentRunner, touches_git, workcopy_of
+from forja.orchestrator.agent_runner import (
+    PACKAGE,
+    ExecutorAgentRunner,
+    touches_git,
+    workcopy_of,
+)
 from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.operations import Step
 from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork, TaskInfo
@@ -418,3 +425,65 @@ def test_work_that_writes_a_sensitive_file_is_rejected_even_if_declared(tmp_path
     with pytest.raises(RejectedWork, match=r"\.env: the work creates or changes a sensitive"):
         go(settle(r.runner.apply_diff(r.ctx)))
     assert (r.ctx.worktree / ".env").read_text("utf-8") == "TOKEN=secret\n"
+
+
+def listed(*paths: str) -> Manifest:
+    return Manifest({p: ManifestEntry(p, EntryKind.FILE, "0" * 64, False) for p in paths})
+
+
+@pytest.mark.parametrize("name", [".env ", ".env.", "config/.env.", "secrets./k.txt", ".env.local"])
+def test_a_sensitive_name_is_recognized_the_way_windows_reads_it(tmp_path: Path, name: str) -> None:
+    runner = rig(tmp_path, GOOD).runner
+    created = ManifestDiff((name,), (), ())
+
+    with pytest.raises(RejectedWork, match="sensitive file"):
+        runner._refuse_off_limits(listed(name), created)  # noqa: SLF001
+
+
+def test_a_new_name_that_could_be_a_short_name_is_refused_but_an_old_one_is_not(
+    tmp_path: Path,
+) -> None:
+    runner = rig(tmp_path, GOOD).runner
+
+    with pytest.raises(RejectedWork, match="short-name marker"):
+        runner._refuse_off_limits(listed("ENV~1"), ManifestDiff(("ENV~1",), (), ()))  # noqa: SLF001
+    runner._refuse_off_limits(listed("report~1.txt"), ManifestDiff((), (), ()))  # noqa: SLF001
+
+
+def test_a_link_is_not_followed_into_the_copy_and_stays_where_it_was(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("not for the agent\n", encoding="utf-8")
+    try:
+        (r.ctx.worktree / "src" / "link.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlinks need a privilege here")
+    go(work(r))
+
+    assert not (r.workcopy / "src" / "link.txt").exists()
+    go(settle(r.runner.apply_diff(r.ctx)))
+    assert (r.ctx.worktree / "src" / "link.txt").is_symlink()
+
+
+def test_an_agent_that_rewrites_its_own_permissions_has_its_work_rejected(
+    tmp_path: Path,
+) -> None:
+    changed = {"writes": {".forja-agent/claude-settings.json": "{}"}}
+    r = rig(tmp_path, {**GOOD, **changed})
+    go(work(r))
+    (r.workcopy / ".forja-agent" / "claude-settings.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(RejectedWork, match="changed its own permissions"):
+        go(settle(r.runner.apply_diff(r.ctx)))
+    assert (r.ctx.worktree / "src" / "a.py").read_text("utf-8") == BEFORE
+
+
+def test_the_adapter_also_denies_the_agent_its_own_package_and_settings() -> None:
+    deny = json.loads(
+        ClaudeCodeAdapter()
+        .permission_setup(Producer.IMPLEMENTER, RolePermissions(True))
+        .files["claude-settings.json"]
+    )["permissions"]["deny"]
+
+    assert f"Edit(./.forja-agent/{PACKAGE})" in deny
+    assert "Write(./.forja-agent/claude-settings.json)" in deny

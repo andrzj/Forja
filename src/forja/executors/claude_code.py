@@ -40,7 +40,14 @@ SETTINGS_FILE = "claude-settings.json"
 OUTSIDE = tuple(
     f"{tool}({where})" for tool in ("Read", "Edit", "Write") for where in ("../**", "~/**")
 )
-SETTINGS = {"disableAllHooks": True, "permissions": {"deny": list(OUTSIDE)}}
+# ... and not its own instructions and permissions, which sit inside the copy. Changing them
+# is also checked for when the work comes back.
+OWN = tuple(
+    f"{tool}(./{AGENT_DIR}/{name})"
+    for tool in ("Edit", "Write")
+    for name in (SETTINGS_FILE, "package.md")
+)
+SETTINGS = {"disableAllHooks": True, "permissions": {"deny": [*OUTSIDE, *OWN]}}
 
 READ_TOOLS = ("Read", "Glob", "Grep")
 EDIT_TOOLS = ("Edit", "Write")
