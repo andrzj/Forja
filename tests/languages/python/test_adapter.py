@@ -1,0 +1,468 @@
+"""The Python adapter: the shared promises, the commands it plans, and what it reads back."""
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from forja.core.adapters import (
+    CommandPlan,
+    FileClass,
+    NotSupported,
+    Operation,
+    OperationRequest,
+    Parsed,
+    ToolInfo,
+    ToolOutput,
+    Unparseable,
+    read_output_lines,
+)
+from forja.core.evidence import TargetKind
+from forja.languages.python import PythonAdapter
+from tests.core.adapters.conformance import language_problems
+
+ADAPTER = PythonAdapter(python=("py",), ruff=("rf",))
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+    return root
+
+
+def log_with(tmp_path: Path, *lines: str, name: str = "op.log") -> Path:
+    log = tmp_path / name
+    log.write_text("\n".join(f"[out] {line}" for line in lines), encoding="utf-8")
+    return log
+
+
+def parsed(operation: Operation, tmp_path: Path, code: int | None, *lines: str) -> Parsed:
+    result = ADAPTER.parse(operation, ToolOutput(code, log_with(tmp_path, *lines)))
+    assert isinstance(result, Parsed), result
+    return result
+
+
+def facts(result: Parsed) -> list[tuple[str, str, object]]:
+    return [(d.measurement, d.target.id, d.value) for d in result.drafts]
+
+
+# -- the shared promises ------------------------------------------------------------------------
+
+
+def test_the_adapter_keeps_every_promise_of_the_interface(project: Path, tmp_path: Path) -> None:
+    assert language_problems(PythonAdapter(), project, tmp_path / "scratch") == []
+
+
+# -- finding and classifying ----------------------------------------------------------------------
+
+
+def test_a_project_is_found_by_its_manifest(project: Path, tmp_path: Path) -> None:
+    found = ADAPTER.detect(project)
+
+    assert found is not None
+    assert (found.language, found.roots, found.manifests) == ("python", (".",), ("pyproject.toml",))
+    assert found.toolchain_probe is not None and found.toolchain_probe.plan.argv == (
+        "py",
+        "--version",
+    )
+    assert ADAPTER.detect(tmp_path / "nowhere") is None
+
+
+@pytest.mark.parametrize(
+    ("path", "kind"),
+    [
+        ("src/pkg/mod.py", FileClass.PRODUCTION),
+        ("src/pkg/mod.pyi", FileClass.PRODUCTION),
+        ("tests/test_mod.py", FileClass.TEST),
+        ("tests\\unit\\helpers.py", FileClass.TEST),
+        ("pkg/test_mod.py", FileClass.TEST),
+        ("pkg/mod_test.py", FileClass.TEST),
+        ("pkg/conftest.py", FileClass.TEST),
+        ("tests/fixtures/sample.py", FileClass.FIXTURE),
+        ("tests/testdata/sample.py", FileClass.FIXTURE),
+        ("fixtures/sample.py", FileClass.PRODUCTION),
+        ("README.md", None),
+        ("pyproject.toml", None),
+        ("docs/guide.rst", None),
+    ],
+)
+def test_files_are_classified_by_where_they_live_and_how_they_are_named(
+    path: str, kind: FileClass | None
+) -> None:
+    assert ADAPTER.classify(path) is kind
+
+
+# -- commands --------------------------------------------------------------------------------------
+
+
+def argv(operation: Operation, project: Path, **options: object) -> tuple[str, ...]:
+    plan = ADAPTER.plan(operation, OperationRequest(root=project, **options))  # type: ignore[arg-type]
+    assert isinstance(plan, CommandPlan)
+    return plan.argv
+
+
+def test_format_checks_or_rewrites_the_files_it_is_given(project: Path) -> None:
+    assert argv(Operation.FORMAT, project) == ("rf", "format", "--no-cache", "--force-exclude", ".")
+    assert argv(Operation.FORMAT, project, files=("a.py",), check_only=True) == (
+        "rf", "format", "--check", "--no-cache", "--force-exclude", "a.py",
+    )  # fmt: skip
+
+
+def test_lint_reads_the_concise_format_and_the_fix_only_touches_what_is_safe(project: Path) -> None:
+    options = ("--output-format=concise", "--no-cache", "--force-exclude")
+
+    assert argv(Operation.LINT, project, files=("a.py", "b.py")) == (
+        "rf", "check", *options, "a.py", "b.py",
+    )  # fmt: skip
+    assert argv(Operation.LINT_FIX, project) == (
+        "rf",
+        "check",
+        "--fix",
+        "--exit-zero",
+        *options,
+        ".",
+    )
+
+
+def test_build_compiles_everything_but_other_peoples_code(project: Path) -> None:
+    command = argv(Operation.BUILD, project)
+
+    assert command[:5] == ("py", "-m", "compileall", "-q", "-x")
+    assert command[6:] == (".",)
+
+
+def test_tests_run_in_the_repositorys_python_and_can_be_limited_to_files(project: Path) -> None:
+    everything = argv(Operation.TEST, project)
+    one_file = argv(Operation.TEST, project, test_files=("tests/test_a.py",))
+
+    assert everything == (
+        "py", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no",
+    )  # fmt: skip
+    assert one_file == (*everything, "tests/test_a.py")
+
+
+def test_a_plan_runs_in_the_project_leaves_no_bytecode_behind_and_hashes_the_configuration(
+    project: Path, tmp_path: Path
+) -> None:
+    plan = ADAPTER.plan(Operation.LINT, OperationRequest(root=project))
+
+    assert isinstance(plan, CommandPlan)
+    assert plan.cwd == project
+    assert plan.env_set["NO_COLOR"] == "1"
+    assert Path(plan.env_set["PYTHONPYCACHEPREFIX"]).is_absolute()
+    assert "pyproject.toml" in plan.config_files and "ruff.toml" in plan.config_files
+
+
+@pytest.mark.parametrize("operation", [Operation.COVERAGE, Operation.MUTATION, Operation.E2E])
+def test_what_the_adapter_does_not_offer_is_said_so(operation: Operation, project: Path) -> None:
+    assert isinstance(ADAPTER.plan(operation, OperationRequest(root=project)), NotSupported)
+    assert isinstance(ADAPTER.tool_info(operation), NotSupported)
+
+
+def test_a_test_name_filter_is_refused_rather_than_ignored(project: Path) -> None:
+    answer = ADAPTER.plan(Operation.TEST, OperationRequest(root=project, tests=("a::b",)))
+
+    assert isinstance(answer, NotSupported)
+
+
+def test_each_operation_names_its_tool_and_how_to_ask_its_version() -> None:
+    expected = {
+        Operation.FORMAT: ("ruff", ("rf", "--version")),
+        Operation.LINT: ("ruff", ("rf", "--version")),
+        Operation.LINT_FIX: ("ruff", ("rf", "--version")),
+        Operation.BUILD: ("compileall", ("py", "--version")),
+        Operation.TEST: ("pytest", ("py", "-m", "pytest", "--version")),
+    }
+    for operation, (tool, probe) in expected.items():
+        info = ADAPTER.tool_info(operation)
+        assert isinstance(info, ToolInfo)
+        assert (info.tool, info.tool_probe.plan.argv) == (tool, probe)
+        assert (info.toolchain, info.toolchain_probe.plan.argv) == ("python", ("py", "--version"))
+
+
+def test_there_is_no_progress_to_show() -> None:
+    assert all(ADAPTER.progress_parser(op) is None for op in Operation)
+
+
+# -- reading lint ----------------------------------------------------------------------------------
+
+
+def test_lint_counts_violations_per_file_and_rule(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.LINT,
+        tmp_path,
+        1,
+        r"pkg\bad.py:1:5: invalid-syntax: Expected an identifier",
+        r"pkg\bad.py:2:1: invalid-syntax: unexpected EOF while parsing",
+        r"pkg\m.py:1:8: F401 [*] `os` imported but unused",
+        "pkg/m.py:9:1: F401 `sys` imported but unused",
+        "pkg/m.py:12:5: E501 Line too long (120 > 100)",
+        "Found 5 errors.",
+        "[*] 1 fixable with `--fix`.",
+    )
+
+    assert facts(result) == [
+        ("lint.invalid-syntax", "pkg/bad.py", 2),
+        ("lint.E501", "pkg/m.py", 1),
+        ("lint.F401", "pkg/m.py", 2),
+    ]
+    assert {d.target.kind for d in result.drafts} == {TargetKind.FILE}
+    assert {d.unit for d in result.drafts} == {"violations"}
+
+
+def test_a_clean_lint_has_nothing_to_report(tmp_path: Path) -> None:
+    assert parsed(Operation.LINT, tmp_path, 0, "All checks passed!").drafts == ()
+    assert (
+        parsed(Operation.LINT_FIX, tmp_path, 0, "Found 2 errors (2 fixed, 0 remaining).").drafts
+        == ()
+    )
+
+
+@pytest.mark.parametrize("code", [None, 2, 101])
+def test_lint_that_did_not_finish_normally_is_not_read(tmp_path: Path, code: int | None) -> None:
+    result = ADAPTER.parse(
+        Operation.LINT, ToolOutput(code, log_with(tmp_path, "pkg/a.py:1:1: F401 x"))
+    )
+
+    assert isinstance(result, Unparseable)
+
+
+def test_violations_nobody_can_read_are_not_taken_for_a_clean_run(tmp_path: Path) -> None:
+    result = ADAPTER.parse(Operation.LINT, ToolOutput(1, log_with(tmp_path, "something changed")))
+
+    assert isinstance(result, Unparseable)
+
+
+# -- reading format --------------------------------------------------------------------------------
+
+
+def test_format_names_the_files_that_would_change_and_the_ones_it_cannot_read(
+    tmp_path: Path,
+) -> None:
+    result = parsed(
+        Operation.FORMAT,
+        tmp_path,
+        2,
+        "invalid-syntax: Expected an identifier",
+        r" --> pkg\bad.py:1:5",
+        "  |",
+        "unformatted: File would be reformatted",
+        r" --> pkg\m.py:4:7",
+        "  |",
+        "unformatted: File would be reformatted",
+        " --> pkg/a.py:2:1",
+        "1 file would be reformatted",
+    )
+
+    assert facts(result) == [
+        ("format.invalid_syntax", "pkg/bad.py", 1),
+        ("format.unformatted", "pkg/a.py", 1),
+        ("format.unformatted", "pkg/m.py", 1),
+    ]
+
+
+def test_the_older_wording_of_ruff_is_read_too(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.FORMAT, tmp_path, 1, "Would reformat: pkg/m.py", "1 file would be reformatted"
+    )
+
+    assert facts(result) == [("format.unformatted", "pkg/m.py", 1)]
+
+
+def test_a_formatted_tree_has_nothing_to_report(tmp_path: Path) -> None:
+    assert parsed(Operation.FORMAT, tmp_path, 0, "2 files already formatted").drafts == ()
+
+
+@pytest.mark.parametrize(("code", "line"), [(None, ""), (3, ""), (1, "no idea"), (2, "no idea")])
+def test_format_output_that_cannot_be_read_is_unparseable(
+    tmp_path: Path, code: int | None, line: str
+) -> None:
+    result = ADAPTER.parse(Operation.FORMAT, ToolOutput(code, log_with(tmp_path, line)))
+
+    assert isinstance(result, Unparseable)
+
+
+# -- reading build ---------------------------------------------------------------------------------
+
+
+def test_build_names_the_files_that_do_not_compile(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.BUILD,
+        tmp_path,
+        1,
+        "*** Error compiling 'pkg\\\\bad.py'...",
+        '  File "pkg\\bad.py", line 1',
+        "SyntaxError: invalid syntax",
+        "*** Error compiling './pkg/worse.py'...",
+        "*** Error compiling 'pkg\\\\bad.py'...",
+    )
+
+    assert facts(result) == [
+        ("build.compile_error", "pkg/bad.py", 1),
+        ("build.compile_error", "pkg/worse.py", 1),
+    ]
+
+
+def test_a_build_that_failed_without_saying_where_still_failed(tmp_path: Path) -> None:
+    assert facts(parsed(Operation.BUILD, tmp_path, 1, "boom")) == [("build.failed", "build", 1)]
+
+
+def test_a_build_that_compiled_has_nothing_to_report(tmp_path: Path) -> None:
+    assert parsed(Operation.BUILD, tmp_path, 0).drafts == ()
+    assert isinstance(
+        ADAPTER.parse(Operation.BUILD, ToolOutput(None, log_with(tmp_path))), Unparseable
+    )
+
+
+# -- reading tests ---------------------------------------------------------------------------------
+
+
+def test_every_test_has_an_outcome_and_skips_are_counted(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.TEST,
+        tmp_path,
+        1,
+        "=========================== short test summary info ===========================",
+        "PASSED tests/test_m.py::test_ok",
+        "PASSED tests/test_m.py::test_p[a b]",
+        "SKIPPED [1] tests\\test_m.py:13: not today",
+        "SKIPPED [2] tests\\test_m.py:20: not today",
+        "FAILED tests/test_m.py::test_bad - assert 1 == 2",
+        "ERROR tests/test_m.py::test_err - RuntimeError: x - y",
+        "XFAIL tests/test_m.py::test_known",
+        "1 failed, 2 passed, 3 skipped in 0.18s",
+    )
+
+    assert facts(result) == [
+        ("test.outcome", "tests/test_m.py::test_bad", "failed"),
+        ("test.outcome", "tests/test_m.py::test_err", "error"),
+        ("test.outcome", "tests/test_m.py::test_known", "xfail"),
+        ("test.outcome", "tests/test_m.py::test_ok", "passed"),
+        ("test.outcome", "tests/test_m.py::test_p[a b]", "passed"),
+        ("test.skipped", "tests", 3),
+    ]
+
+
+def test_a_collection_error_is_an_error_of_the_file(tmp_path: Path) -> None:
+    result = parsed(Operation.TEST, tmp_path, 2, "ERROR tests/test_imp.py", "1 error in 0.17s")
+
+    assert facts(result) == [("test.outcome", "tests/test_imp.py", "error")]
+
+
+def test_no_tests_collected_is_a_result_not_a_failure_to_read(tmp_path: Path) -> None:
+    assert facts(parsed(Operation.TEST, tmp_path, 5, "no tests ran in 0.01s")) == [
+        ("test.collected", "tests", 0)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("code", "lines"),
+    [
+        (None, ()),
+        (3, ("INTERNALERROR",)),
+        (4, ("usage: pytest",)),
+        (1, ("PASSED tests/a.py::t",)),
+        (0, ("FAILED tests/a.py::t - x",)),
+    ],
+)
+def test_test_output_that_does_not_add_up_is_not_trusted(
+    tmp_path: Path, code: int | None, lines: tuple[str, ...]
+) -> None:
+    result = ADAPTER.parse(Operation.TEST, ToolOutput(code, log_with(tmp_path, *lines)))
+
+    assert isinstance(result, Unparseable)
+
+
+def test_an_operation_nobody_reads_is_unparseable(tmp_path: Path) -> None:
+    assert isinstance(
+        ADAPTER.parse(Operation.MUTATION, ToolOutput(0, log_with(tmp_path))), Unparseable
+    )
+
+
+def test_absurdly_long_lines_are_not_ours(tmp_path: Path) -> None:
+    huge = "a.py:1:1: F401 " + "x" * 5000
+
+    assert parsed(Operation.LINT, tmp_path, 0, huge).drafts == ()
+
+
+# -- the real tools --------------------------------------------------------------------------------
+
+
+REAL = PythonAdapter()
+
+
+def run(operation: Operation, root: Path, tmp_path: Path, **options: object) -> Parsed:
+    plan = REAL.plan(operation, OperationRequest(root=root, **options))  # type: ignore[arg-type]
+    assert isinstance(plan, CommandPlan)
+    done = subprocess.run(plan.argv, cwd=root, capture_output=True, text=True, check=False)
+    log = tmp_path / f"{operation.value}.log"
+    log.write_text(
+        "".join(f"[out] {line}\n" for line in (done.stdout + done.stderr).splitlines()),
+        encoding="utf-8",
+    )
+    result = REAL.parse(operation, ToolOutput(done.returncode, log))
+    assert isinstance(result, Parsed), (result, read_output_lines(log))
+    return result
+
+
+@pytest.fixture
+def sample(tmp_path: Path) -> Path:
+    root = tmp_path / "sample"
+    (root / "pkg").mkdir(parents=True)
+    (root / "tests").mkdir()
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0"\n[tool.ruff]\nline-length = 100\n', encoding="utf-8"
+    )
+    (root / "pkg" / "m.py").write_text("import os\n\n\ndef g( x ):\n  return x\n", encoding="utf-8")
+    (root / "tests" / "test_m.py").write_text(
+        "import pytest\n\n\ndef test_ok():\n    assert True\n\n\n"
+        "@pytest.mark.parametrize('n', [1, 2])\ndef test_p(n):\n    assert n\n\n\n"
+        "def test_bad():\n    assert 1 == 2\n\n\ndef test_skip():\n    pytest.skip('x')\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_the_real_ruff_and_the_adapter_agree_on_lint_and_format(
+    sample: Path, tmp_path: Path
+) -> None:
+    lint = run(Operation.LINT, sample, tmp_path, files=("pkg",))
+    layout = run(Operation.FORMAT, sample, tmp_path, files=("pkg",), check_only=True)
+
+    assert facts(lint) == [("lint.F401", "pkg/m.py", 1)]
+    assert facts(layout) == [("format.unformatted", "pkg/m.py", 1)]
+
+
+def test_the_real_compileall_names_the_file_it_cannot_compile(sample: Path, tmp_path: Path) -> None:
+    assert run(Operation.BUILD, sample, tmp_path, files=("pkg",)).drafts == ()
+    (sample / "pkg" / "bad.py").write_text("def (:\n", encoding="utf-8")
+
+    assert facts(run(Operation.BUILD, sample, tmp_path, files=("pkg",))) == [
+        ("build.compile_error", "pkg/bad.py", 1)
+    ]
+
+
+def test_the_real_pytest_outcomes_are_read_test_by_test(sample: Path, tmp_path: Path) -> None:
+    result = run(Operation.TEST, sample, tmp_path, test_files=("tests",))
+
+    assert facts(result) == [
+        ("test.outcome", "tests/test_m.py::test_bad", "failed"),
+        ("test.outcome", "tests/test_m.py::test_ok", "passed"),
+        ("test.outcome", "tests/test_m.py::test_p[1]", "passed"),
+        ("test.outcome", "tests/test_m.py::test_p[2]", "passed"),
+        ("test.skipped", "tests", 1),
+    ]
+
+
+def test_the_real_tools_report_their_versions(sample: Path) -> None:
+    for operation, word in ((Operation.LINT, "ruff"), (Operation.TEST, "pytest")):
+        info = REAL.tool_info(operation)
+        assert isinstance(info, ToolInfo)
+        done = subprocess.run(
+            info.tool_probe.plan.argv, cwd=sample, capture_output=True, text=True, check=False
+        )
+        assert word in (done.stdout + done.stderr).lower()
+    assert sys.executable in REAL.plan(Operation.TEST, OperationRequest(root=sample)).argv  # type: ignore[union-attr]

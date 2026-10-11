@@ -1,0 +1,172 @@
+"""The Python adapter: ruff for format and lint, compileall for build, pytest for tests.
+
+It only describes commands and reads their output; the core runs them. The program for each tool
+is a parameter, because ruff comes from Forja's own environment while pytest must run in the
+repository's, with its dependencies.
+"""
+
+import sys
+import tempfile
+from pathlib import Path
+
+from forja.core.adapters import (
+    CONTRACT_VERSION,
+    CommandPlan,
+    Detection,
+    FileClass,
+    LanguageCapability,
+    NotSupported,
+    Operation,
+    OperationRequest,
+    ParseResult,
+    ProgressParser,
+    ToolInfo,
+    ToolOutput,
+    Unparseable,
+    VersionProbe,
+)
+from forja.languages.python import parsers
+
+MANIFEST = "pyproject.toml"
+CONFIG_FILES = (MANIFEST, "ruff.toml", ".ruff.toml", "setup.cfg", "pytest.ini", "tox.ini")
+# Directories that hold someone else's code or Forja's own leftovers.
+SKIPPED_DIRECTORIES = (
+    r"(^|[\\/])(\.git|\.venv|venv|node_modules|__pycache__|\.tox|build|dist)([\\/]|$)"
+)
+_FIXTURE_DIRECTORIES = frozenset({"fixtures", "testdata"})
+_TEST_DIRECTORIES = frozenset({"tests", "test"})
+_SOURCE_SUFFIXES = (".py", ".pyi")
+_RUFF_VERSION = r"ruff (\S+)"
+_PYTHON_VERSION = r"Python (\S+)"
+_PYTEST_VERSION = r"pytest (\S+)"
+
+
+class PythonAdapter:
+    contract_version = CONTRACT_VERSION
+    language = "python"
+    grammar = "python"
+    capabilities = frozenset(
+        {LanguageCapability.TEST_FILTER_BY_FILE, LanguageCapability.STRUCTURAL_METERS}
+    )
+
+    def __init__(
+        self,
+        *,
+        python: tuple[str, ...] = (sys.executable,),
+        ruff: tuple[str, ...] = (sys.executable, "-m", "ruff"),
+    ) -> None:
+        self._python = python
+        self._ruff = ruff
+
+    # -- finding and classifying ---------------------------------------------------------------
+
+    def detect(self, root: Path) -> Detection | None:
+        if not (root / MANIFEST).is_file():
+            return None
+        probe = VersionProbe(self._plan(root, (*self._python, "--version")), _PYTHON_VERSION)
+        return Detection("python", (".",), (MANIFEST,), probe)
+
+    def classify(self, path: str) -> FileClass | None:
+        parts = path.replace("\\", "/").split("/")
+        name, directories = parts[-1], set(parts[:-1])
+        if not name.endswith(_SOURCE_SUFFIXES):
+            return None
+        if directories & _TEST_DIRECTORIES and directories & _FIXTURE_DIRECTORIES:
+            return FileClass.FIXTURE
+        if (
+            directories & _TEST_DIRECTORIES
+            or name.startswith("test_")
+            or name.endswith(("_test.py", "_test.pyi"))
+            or name == "conftest.py"
+        ):
+            return FileClass.TEST
+        return FileClass.PRODUCTION
+
+    # -- commands ----------------------------------------------------------------------------
+
+    def tool_info(self, operation: Operation) -> ToolInfo | NotSupported:
+        here = Path(".")
+        python = VersionProbe(self._plan(here, (*self._python, "--version")), _PYTHON_VERSION)
+        match operation:
+            case Operation.FORMAT | Operation.LINT | Operation.LINT_FIX:
+                ruff = VersionProbe(self._plan(here, (*self._ruff, "--version")), _RUFF_VERSION)
+                return ToolInfo("ruff", ruff, "python", python)
+            case Operation.BUILD:
+                return ToolInfo("compileall", python, "python", python)
+            case Operation.TEST:
+                pytest = VersionProbe(
+                    self._plan(here, (*self._python, "-m", "pytest", "--version")), _PYTEST_VERSION
+                )
+                return ToolInfo("pytest", pytest, "python", python)
+        return NotSupported(operation.value, "the Python adapter does not offer it")
+
+    def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
+        targets = request.files or (".",)
+        match operation:
+            case Operation.FORMAT:
+                check = ("--check",) if request.check_only else ()
+                argv = (*self._ruff, "format", *check, "--no-cache", "--force-exclude", *targets)
+            case Operation.LINT:
+                argv = (*self._ruff, "check", *self._ruff_options(), *targets)
+            case Operation.LINT_FIX:
+                argv = (
+                    *self._ruff,
+                    "check",
+                    "--fix",
+                    "--exit-zero",
+                    *self._ruff_options(),
+                    *targets,
+                )
+            case Operation.BUILD:
+                argv = (
+                    *self._python,
+                    "-m",
+                    "compileall",
+                    "-q",
+                    "-x",
+                    SKIPPED_DIRECTORIES,
+                    *targets,
+                )
+            case Operation.TEST if request.tests:
+                return NotSupported("test", "filtering by test name is not offered")
+            case Operation.TEST:
+                argv = (
+                    *self._python,
+                    *("-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no"),
+                    *request.test_files,
+                )
+            case _:
+                return NotSupported(operation.value, "the Python adapter does not offer it")
+        return self._plan(request.root, argv, config_files=CONFIG_FILES)
+
+    @staticmethod
+    def _ruff_options() -> tuple[str, ...]:
+        return ("--output-format=concise", "--no-cache", "--force-exclude")
+
+    @staticmethod
+    def _plan(root: Path, argv: tuple[str, ...], config_files: tuple[str, ...] = ()) -> CommandPlan:
+        # Compiled files go to one place outside the worktree, so a run leaves nothing in the diff.
+        cache = str(Path(tempfile.gettempdir()) / "forja-pycache")
+        return CommandPlan(
+            argv,
+            root,
+            env_set={"NO_COLOR": "1", "PYTHONPYCACHEPREFIX": cache},
+            config_files=config_files,
+        )
+
+    # -- reading what they print ---------------------------------------------------------------
+
+    def parse(self, operation: Operation, output: ToolOutput) -> ParseResult:
+        match operation:
+            case Operation.FORMAT:
+                return parsers.parse_format(output)
+            case Operation.LINT | Operation.LINT_FIX:
+                return parsers.parse_lint(output)
+            case Operation.BUILD:
+                return parsers.parse_build(output)
+            case Operation.TEST:
+                return parsers.parse_tests(output)
+        return Unparseable(f"the Python adapter does not read {operation.value} output")
+
+    def progress_parser(self, operation: Operation) -> ProgressParser | None:
+        return None
