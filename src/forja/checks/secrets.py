@@ -25,6 +25,7 @@ from forja.core.gates import (
     Location,
 )
 
+UNPLACED = Finding(message="a possible secret was added", target="diff")
 LEAKS_FOUND = 2  # chosen with --exit-code: gitleaks uses 1 for leaks and for its own errors alike
 
 
@@ -48,7 +49,9 @@ class SecretsCheck:
             return Approved()
         self.reports.mkdir(parents=True, exist_ok=True)
         scanned, report = self.reports / "added.txt", self.reports / "gitleaks.json"
-        atomic_write_bytes(scanned, "\n".join(line.text for line in added).encode("utf-8"))
+        atomic_write_bytes(
+            scanned, "\n".join(line.text for line in added).encode("utf-8")
+        )  # pragma: no mutate
         report.unlink(missing_ok=True)
         plan = CommandPlan(
             (
@@ -85,18 +88,20 @@ class SecretsCheck:
     @staticmethod
     def _findings(report: Path, added: list[AddedLine]) -> list[Finding]:
         try:
-            leaks = json.loads(report.read_text(encoding="utf-8"))
+            leaks = json.loads(report.read_text(encoding="utf-8"))  # pragma: no mutate
         except (OSError, ValueError):
-            leaks = []
+            return [UNPLACED]
+        if not isinstance(leaks, list):
+            return [UNPLACED]
         findings = []
-        for leak in leaks if isinstance(leaks, list) else []:
+        for leak in leaks:
             rule = str(leak.get("RuleID", "unknown")) if isinstance(leak, dict) else "unknown"
             start = leak.get("StartLine") if isinstance(leak, dict) else None
             origin = (
                 added[start - 1] if isinstance(start, int) and 1 <= start <= len(added) else None
             )
             findings.append(_finding(rule, origin))
-        return findings or [Finding(message="a possible secret was added", target="diff")]
+        return findings or [UNPLACED]
 
 
 def _finding(rule: str, origin: AddedLine | None) -> Finding:

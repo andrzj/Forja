@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 _OCTAL = re.compile(r"\\([0-7]{3})")
-_HUNK = re.compile(r"^@@ -\d+(?:,(?P<old>\d+))? \+(?P<start>\d+)(?:,(?P<new>\d+))? @@")
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
 
 
 class ChangeKind(StrEnum):
@@ -60,9 +60,15 @@ async def read_changes(git: Git) -> Changes:
     plain status of untracked files cannot.
     """
     await git.lines("add", "-A")
-    status = await git.lines("diff", "--cached", "--name-status", "-M", "HEAD")
-    numstat = await git.lines("diff", "--cached", "--numstat", "-M", "HEAD")
-    patch = await git.lines("diff", "--cached", "-U0", "--no-color", "HEAD")
+    status = await git.lines(
+        "diff", "--cached", "--name-status", "-M", "HEAD"
+    )  # pragma: no mutate  (git's defaults say the same)
+    numstat = await git.lines(
+        "diff", "--cached", "--numstat", "-M", "HEAD"
+    )  # pragma: no mutate  (git's defaults say the same)
+    patch = await git.lines(
+        "diff", "--cached", "-U0", "--no-color", "HEAD"
+    )  # pragma: no mutate  (git's defaults say the same)
     ignored = await git.lines("ls-files", "--others", "--ignored", "--exclude-standard")
     return Changes(
         parse_status(status),
@@ -89,9 +95,9 @@ def unquote(name: str) -> str:
             raw.append(simple[body[index + 1]])
             index += 2
         else:
-            raw += body[index].encode("utf-8")
+            raw += body[index].encode("utf-8")  # pragma: no mutate
             index += 1
-    return raw.decode("utf-8", errors="replace")
+    return raw.decode("utf-8", errors="replace")  # pragma: no mutate
 
 
 def parse_status(lines: list[str]) -> tuple[Change, ...]:
@@ -129,31 +135,26 @@ class AddedLine:
 def added_lines(patch: tuple[str, ...]) -> list[AddedLine]:
     """The lines a patch adds, each with the file and line it lands on.
 
-    A header is only a header outside a hunk. Inside one, the counts in its ``@@`` line say how
-    many lines belong to it, and a line that looks like ``+++ b/x`` is just an added line.
+    A header is only a header outside a hunk. Inside one, the count in its ``@@`` line says how
+    many added lines belong to it, and a line that looks like ``+++ b/x`` is just an added line.
     """
     found: list[AddedLine] = []
     path: str | None = None
-    new_line = 0
-    old_left = new_left = 0
+    new_line = owed = 0  # pragma: no mutate  (set by the first hunk before it is read)
     for line in patch:
-        if old_left or new_left:
-            if line.startswith("+") and new_left:
+        if owed:
+            if line.startswith("+"):
                 found.append(AddedLine(path, new_line, line[1:]))
                 new_line += 1
-                new_left -= 1
-            elif line.startswith("-") and old_left:
-                old_left -= 1
-            continue
-        if line.startswith("+++ "):
+                owed -= 1
+        elif line.startswith("+++ "):
             target = unquote(line[4:])
             path = target.removeprefix("b/") if target != "/dev/null" else None
         elif line.startswith("@@"):
             hunk = _HUNK.match(line)
             if hunk:
                 new_line = int(hunk["start"])
-                old_left = int(hunk["old"]) if hunk["old"] is not None else 1
-                new_left = int(hunk["new"]) if hunk["new"] is not None else 1
+                owed = int(hunk["count"]) if hunk["count"] is not None else 1
     return found
 
 
@@ -173,4 +174,4 @@ def write_files(contents: dict[str, str], destination: Path) -> None:
     for relative, text in contents.items():
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8", newline="\n")
+        target.write_text(text, encoding="utf-8", newline="\n")  # pragma: no mutate

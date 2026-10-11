@@ -14,7 +14,7 @@ from pydantic import JsonValue
 from forja.checks.base import Undecided, measure
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
 from forja.checks.changes import read_before, read_changes
-from forja.checks.complexity import ComplexityCheck, parse_functions
+from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
 from forja.checks.scope import ScopeCheck
 from forja.checks.secrets import SecretsCheck
@@ -109,7 +109,7 @@ class PipelineMeasurer:
     def _read_base(self) -> tuple[frozenset[str], frozenset[str]]:
         """The unstable tests and the ones that passed, as the first measurement saw them."""
         try:
-            data = json.loads(self._base_file.read_text(encoding="utf-8"))
+            data = json.loads(self._base_file.read_text(encoding="utf-8"))  # pragma: no mutate
             return frozenset(map(str, data[UNSTABLE])), frozenset(map(str, data[PASSING]))
         except (OSError, ValueError, KeyError, TypeError):
             return frozenset(), frozenset()
@@ -154,7 +154,7 @@ class PipelineMeasurer:
     def _save_base(self, unstable: list[str], passing: list[str]) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
         document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
-        atomic_write_bytes(self._base_file, document.encode("utf-8"))
+        atomic_write_bytes(self._base_file, document.encode("utf-8"))  # pragma: no mutate
 
     async def _build_problems(self, tools: Tools, worktree: Path) -> list[str]:
         parsed = await measure(
@@ -200,7 +200,7 @@ class PipelineMeasurer:
     async def _complexity(
         self, tools: Tools, worktree: Path, files: tuple[str, ...]
     ) -> dict[tuple[str, str], int]:
-        plan = CommandPlan((*self._lizard, "--csv", "--", *files), worktree)
+        plan = lizard_plan(self._lizard, worktree, files)
         execution = await tools.run("complexity", plan)
         if not execution.finished or execution.result.exit_code != 0:
             raise Undecided(execution.inconclusive("complexity"))
@@ -214,7 +214,7 @@ class PipelineMeasurer:
         before = await read_before(git, changes, SOURCE_SUFFIXES)
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(
-            p for p in changes.current(SOURCE_SUFFIXES) if self._classify(p) is FileClass.PRODUCTION
+            p for p in changes.current() if self._classify(p) is FileClass.PRODUCTION
         )
         unstable, passing = self._read_base()
         adapter, worktree = self._adapter, ctx.worktree

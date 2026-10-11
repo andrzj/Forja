@@ -23,6 +23,11 @@ FIELDS = 11  # NLOC, CCN, tokens, params, length, "name@lines@file", file, name,
 Functions = dict[tuple[str, str], int]
 
 
+def lizard_plan(lizard: tuple[str, ...], root: Path, files: tuple[str, ...]) -> CommandPlan:
+    """Lizard over ``files`` as CSV, one row per function."""
+    return CommandPlan((*lizard, "--csv", "--", *files), root, env_set={"NO_COLOR": "1"})
+
+
 def max_ccn(data: GateInput, language: str) -> int:
     thresholds = data.values.get("thresholds")
     per_language = thresholds.get(language) if isinstance(thresholds, dict) else None
@@ -87,7 +92,7 @@ class ComplexityCheck:
             return await self._read(Path(directory), tuple(sorted(self.before)))
 
     async def _read(self, root: Path, files: tuple[str, ...]) -> Functions:
-        plan = CommandPlan((*self.lizard, "--csv", "--", *files), root, env_set={"NO_COLOR": "1"})
+        plan = lizard_plan(self.lizard, root, files)
         execution = await self.tools.run("complexity", plan)
         if not execution.finished:
             raise Undecided(execution.inconclusive("complexity"))

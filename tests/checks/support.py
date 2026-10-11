@@ -43,11 +43,53 @@ def deep(name: str, branches: int) -> str:
     return f"def {name}(n: int) -> int:\n{body}    return -1\n"
 
 
+class Run:
+    """One process the pipeline started, as the runner announced it."""
+
+    def __init__(
+        self, where: tuple[Level, str, str], operation_id: str, details: Mapping[str, object]
+    ) -> None:
+        self.where = where
+        self.operation_id = operation_id
+        self.command: tuple[str, ...] = tuple(details["command"])  # type: ignore[call-overload]
+        self.cwd = Path(str(details["cwd"]))
+        self.timeout = details["timeout"]
+        self.stdin_file = details["stdin_file"]
+        self.env_names = tuple(details["env_names"])  # type: ignore[call-overload]
+
+    @property
+    def check(self) -> str:
+        return self.operation_id.split(":")[-2]
+
+
+class Recorder:
+    """The sink factory of the pipeline in a test: remembers who asked and what ran."""
+
+    def __init__(self) -> None:
+        self.asked: list[tuple[Level, str, str]] = []
+        self.runs: list[Run] = []
+
+    def sinks(self, level: Level, target_id: str, operation: str) -> "RecordingSink":
+        where = (level, target_id, operation)
+        self.asked.append(where)
+        return RecordingSink(self, where)
+
+    def forget(self) -> None:
+        self.asked.clear()
+        self.runs.clear()
+
+
 class RecordingSink:
-    """Takes what the process runner reports and keeps nothing."""
+    """Takes what the process runner reports; keeps the announcements of what it starts."""
+
+    def __init__(
+        self, recorder: Recorder | None = None, where: tuple[Level, str, str] | None = None
+    ) -> None:
+        self._recorder, self._where = recorder, where
 
     def intent(self, operation_id: str, details: Mapping[str, object]) -> None:
-        pass
+        if self._recorder is not None and self._where is not None:
+            self._recorder.runs.append(Run(self._where, operation_id, details))
 
     def started(self, operation_id: str, identity: ProcessIdentity) -> None:
         pass
@@ -83,6 +125,7 @@ class Scene:
                 python=(*fake, "python"), ruff=(*fake, "ruff"), cache_dir=work / "pycache"
             )
             self.lizard = (*fake, "lizard")
+        self.recorder = Recorder()
         self.measurer = self.make_measurer(**options)
 
     def make_measurer(
@@ -92,6 +135,7 @@ class Scene:
         gitleaks: tuple[str, ...] | None = None,
         values: Mapping[str, Mapping[str, Any]] | None = None,
         timeouts: Mapping[str, float] | None = None,
+        workdir: Path | None = None,
     ) -> PipelineMeasurer:
         standard = {
             name: BLOCKING for name in ("scope", "secrets", "format", "lint", "build", "tests")
@@ -100,7 +144,7 @@ class Scene:
             adapter=self.adapter,
             git=self.repo.git,
             log=self.log,
-            workdir=self.work / "run",
+            workdir=workdir or self.work / "run",
             host_env=self.repo.env,
             settings=settings or standard,
             values=values,

@@ -10,11 +10,13 @@ the checks can be tested in milliseconds. Markers, one per line, in comments:
     # BREAKS           (in a non-test file) every test fails
     # FAILS            the test defined on this line fails (a test is a ``def test_*`` line)
     # FLAKY            the test passes the first time it runs in a directory and fails after
+    # VANISHES         the test is listed the first time it runs in a directory and not after
 
 Usage: ``fake_tools.py ruff|python|lizard ARGS...`` with the arguments the adapter plans.
 """
 
 import hashlib
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -121,9 +123,12 @@ def pytest(args: list[str]) -> int:
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.startswith("def test_"):
                 name = line[4 : line.index("(")]
+                if "# VANISHES" in line and seen:
+                    continue
                 fails = breaks or "# FAILS" in line or ("# FLAKY" in line and seen)
                 results.append((f"{shown(path)}::{name}", "FAILED" if fails else "PASSED"))
-    if "# FLAKY" in "".join(p.read_text(encoding="utf-8") for p in tests):
+    text = "".join(p.read_text(encoding="utf-8") for p in tests)
+    if "# FLAKY" in text or "# VANISHES" in text:
         state.write_text("seen")
     if not results:
         print("no tests ran in 0.01s")
@@ -152,4 +157,7 @@ def lizard(args: list[str]) -> int:
 
 if __name__ == "__main__":
     tool, *rest = sys.argv[1:]
+    if os.environ.get("NO_COLOR") != "1" and "--version" not in rest:
+        print("the environment lacks NO_COLOR=1")
+        sys.exit(3)
     sys.exit({"ruff": ruff, "python": python, "lizard": lizard}[tool](rest))

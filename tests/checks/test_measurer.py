@@ -7,6 +7,7 @@ the real tools to show the parsers and the tools still agree.
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from forja.core.gates.pipeline import PipelineOutcome
 from forja.core.idempotency import Decision, Reconciliation
 from forja.core.states import Level
 from forja.orchestrator.ports import Baseline
-from tests.checks.support import BLOCKING, SAMPLE, Scene, deep, sinks
+from tests.checks.support import BLOCKING, SAMPLE, Scene, deep
 from tests.core.idempotency.conftest import Repo
 
 MOD = SAMPLE["src/sample/mod.py"]
@@ -37,15 +38,15 @@ def findings(outcome: PipelineOutcome) -> list[str]:
 
 
 def judge(scene: Scene, **context: object) -> PipelineOutcome:
-    return asyncio.run(scene.measurer.judge(scene.context(**context), sinks))  # type: ignore[arg-type]
+    return asyncio.run(scene.measurer.judge(scene.context(**context), scene.recorder.sinks))  # type: ignore[arg-type]
 
 
 def base_of(scene: Scene) -> Baseline:
-    return asyncio.run(scene.measurer.baseline(scene.repo.path, sinks))
+    return asyncio.run(scene.measurer.baseline(scene.repo.path, scene.recorder.sinks))
 
 
 def integration(scene: Scene) -> PipelineOutcome:
-    return asyncio.run(scene.measurer.integration(scene.repo.path, sinks))
+    return asyncio.run(scene.measurer.integration(scene.repo.path, scene.recorder.sinks))
 
 
 def reconcile(scene: Scene, operation: OpenOperation) -> Reconciliation:
@@ -579,3 +580,103 @@ def test_a_tool_run_is_reconciled_by_running_it_again(scene: Scene) -> None:
     operation = OpenOperation("run_tool", "run_tool:t1-a1:tests:1", Level.ATTEMPT, "t1-a1", 1)
 
     assert reconcile(scene, operation).decision is Decision.REDO
+
+
+# -- more about the base and the numbers -----------------------------------------------------------
+
+
+def test_the_base_file_is_written_with_its_keys_in_order_and_in_a_directory_made_for_it(
+    scene: Scene,
+) -> None:
+    deep_dir = scene.work / "one" / "two" / "three"
+    scene.measurer = scene.make_measurer(workdir=deep_dir)
+
+    base_of(scene)
+
+    text = (deep_dir / "base.json").read_text(encoding="utf-8")
+    assert text == '{"passing": ["tests/test_mod.py::test_add"], "unstable": []}'
+
+
+def test_a_base_that_fails_in_two_ways_lists_the_build_first_and_then_the_tests(
+    scene: Scene,
+) -> None:
+    scene.write("src/sample/mod.py", MOD + "\n# NOCOMPILE\n# BREAKS\n")
+
+    measured = base_of(scene)
+
+    assert measured.problems == (
+        "build: src/sample/mod.py does not compile",
+        "tests: tests/test_mod.py::test_add fails on the base",
+    )
+
+
+def test_a_tool_that_does_not_run_makes_the_base_not_green_in_so_many_words(
+    repo: Repo, tmp_path: Path
+) -> None:
+    scene = Scene(repo, tmp_path / "scene", timeouts={"build": 0.01})
+
+    measured = base_of(scene)
+
+    assert measured.ok is False
+    assert measured.problems == (f"build: {Path(sys.executable).name} timed out",)
+    assert measured.metrics == {}
+
+
+def test_a_test_listed_in_only_one_of_the_two_runs_is_unstable(scene: Scene) -> None:
+    scene.write("tests/test_once.py", "def test_once() -> None:  # VANISHES\n    pass\n")
+
+    measured = base_of(scene)
+
+    assert measured.metrics["unstable_tests"] == 1.0
+    saved = json.loads((scene.work / "run" / "base.json").read_text(encoding="utf-8"))
+    assert saved["unstable"] == ["tests/test_once.py::test_once"]
+
+
+def test_a_project_without_functions_has_a_complexity_of_zero(scene: Scene) -> None:
+    scene.write("src/sample/mod.py", "X = 1\n")
+    scene.write("src/sample/other.py", "Y = 2\n")
+
+    measured = base_of(scene)
+
+    assert measured.metrics["max_ccn"] == 0.0 and measured.metrics["functions"] == 0.0
+
+
+def test_a_project_without_production_files_has_no_complexity_to_report(scene: Scene) -> None:
+    for path in ("src/sample/__init__.py", "src/sample/mod.py", "src/sample/other.py"):
+        scene.repo.sh("rm", "-f", path)
+
+    measured = base_of(scene)
+
+    assert "max_ccn" not in measured.metrics and "functions" not in measured.metrics
+    assert measured.metrics["tests"] == 1.0
+
+
+def test_a_lizard_that_fails_names_its_run_in_the_gap(scene: Scene) -> None:
+    scene.measurer._lizard = (*scene.measurer._lizard[:2], "nonsense")  # noqa: SLF001
+    edit_mod(scene, "X = 1\n")
+
+    (gap,) = judge(scene).assumptions
+
+    assert isinstance(gap.result, Inconclusive)
+    assert gap.result.tool_run_ids == ("run_tool:t1-a1:complexity:1",)
+    assert gap.result.reason is InconclusiveReason.TOOL_FAILED
+
+
+def test_a_renamed_file_keeps_the_complexity_it_already_had(scene: Scene) -> None:
+    scene.write("src/sample/other.py", OTHER + "\n\n" + deep("branchy", 20))
+    scene.repo.sh("commit", "-am", "complex already")
+
+    scene.repo.sh("mv", "src/sample/other.py", "src/sample/renamed.py")
+    outcome = judge(scene, scope=("src/sample/other.py", "src/sample/renamed.py"))
+
+    assert outcome.verdict is Verdict.PASSED
+
+
+def test_a_lizard_that_cannot_start_leaves_a_gap_that_says_so(scene: Scene) -> None:
+    scene.measurer._lizard = ("no-such-lizard-anywhere",)  # noqa: SLF001
+    edit_mod(scene, "X = 1\n")
+
+    (gap,) = judge(scene).assumptions
+
+    assert isinstance(gap.result, Inconclusive)
+    assert gap.result.detail == "complexity: no-such-lizard-anywhere could not start"

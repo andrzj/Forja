@@ -51,9 +51,12 @@ def in_scope(path: str, scope: tuple[str, ...]) -> bool:
 
 
 def _limit(task_value: int, data: GateInput, name: str) -> int:
+    """The stricter of the task's limit and the policy's; zero means neither set one."""
     limits = data.values.get("limits")
     from_policy = limits.get(name) if isinstance(limits, dict) else None
-    policy = from_policy if isinstance(from_policy, int) and from_policy > 0 else 0
+    policy = (
+        from_policy if isinstance(from_policy, int) and not isinstance(from_policy, bool) else 0
+    )
     chosen = [v for v in (task_value, policy) if v > 0]
     return min(chosen) if chosen else 0
 
@@ -85,12 +88,10 @@ class ScopeCheck:
 
     def _forbidden(self) -> list[Finding]:
         findings = []
-        seen: set[str] = set()
         for change in self.changes.files:
             for path in (change.old_path, change.path):
-                if path is None or path in seen:
+                if path is None:
                     continue
-                seen.add(path)
                 kind = self.classify(path)
                 if kind is not FileClass.PRODUCTION:
                     message = (

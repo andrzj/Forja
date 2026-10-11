@@ -1,7 +1,6 @@
 """What the checks share: asking an adapter for a command, running it, and reading the output."""
 
 from collections.abc import Awaitable, Mapping
-from pathlib import Path
 
 from pydantic import JsonValue
 
@@ -94,7 +93,3 @@ async def measure_plan(
 
 def rejected(findings: list[Finding]) -> Rejected:
     return Rejected(findings=tuple(findings[:MAX_FINDINGS]))
-
-
-def in_directory(path: Path, parent: Path) -> bool:
-    return path == parent or parent in path.parents
