@@ -68,8 +68,8 @@ IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck,
 OPERATION = "call_agent_cli"
 NO_COMMANDS = "You cannot run commands. "
 FACADE_COMMANDS = (
-    "You cannot run commands except `forja agente testar [path...]`, `forja agente lint "
-    "[path...]` and `forja agente medir [path...]`, which show what the checks will see. "
+    "You cannot run commands except `forja agente lint [path...]` and `forja agente medir "
+    "[path...]`, which show what the checks will see. "
 )
 
 INSTRUCTIONS = """\

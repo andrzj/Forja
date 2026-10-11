@@ -1,10 +1,19 @@
 """The agent's few commands: fixed, narrow, and unable to turn into anything else."""
 
+import os
 from pathlib import Path
 
 import pytest
 
-from forja.cli.facade import PYTHON_VARIABLE, Refused, command_for, run_facade, safe_paths, tail
+from forja.cli.facade import (
+    ISOLATED_VARIABLE,
+    PYTHON_VARIABLE,
+    Refused,
+    command_for,
+    run_facade,
+    safe_paths,
+    tail,
+)
 
 
 def test_paths_inside_the_project_are_accepted(tmp_path: Path) -> None:
@@ -39,8 +48,14 @@ def test_a_link_pointing_out_of_the_project_is_refused(tmp_path: Path) -> None:
         safe_paths(project, ["ponte"])
 
 
-def test_the_tests_run_with_the_python_of_the_project() -> None:
-    command = command_for("testar", ["tests"], {PYTHON_VARIABLE: "/p/python"})
+def test_running_the_tests_is_refused_without_a_real_sandbox() -> None:
+    with pytest.raises(Refused, match="isolamento real"):
+        command_for("testar", [], {PYTHON_VARIABLE: "/p/python"})
+
+
+def test_the_tests_run_with_the_python_of_the_project_when_isolated() -> None:
+    environ = {PYTHON_VARIABLE: "/p/python", ISOLATED_VARIABLE: "1"}
+    command = command_for("testar", ["tests"], environ)
     assert command[:3] == ["/p/python", "-m", "pytest"]
     assert command[-1] == "tests"
 
@@ -67,6 +82,15 @@ def test_long_output_keeps_the_end_and_says_what_was_left_out() -> None:
 def test_the_usage_is_shown_without_a_command(capsys: pytest.CaptureFixture[str]) -> None:
     assert run_facade([], Path.cwd(), {}) == 2
     assert "uso:" in capsys.readouterr().out
+
+
+def test_the_tool_does_not_see_the_secrets_of_the_caller(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "ok.py").write_text("x = 1" + chr(10), encoding="utf-8")
+    secret = {"ANTHROPIC_API_KEY": "sk-secret", "PATH": os.environ["PATH"]}
+    assert run_facade(["lint", "ok.py"], tmp_path, secret) == 0
+    assert "sk-secret" not in capsys.readouterr().out
 
 
 def test_lint_runs_and_returns_the_exit_code_of_the_tool(

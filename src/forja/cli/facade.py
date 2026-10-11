@@ -15,6 +15,8 @@ from pathlib import Path
 from forja.ui.glyphs import clean
 
 PYTHON_VARIABLE = "FORJA_AGENT_PYTHON"
+ISOLATED_VARIABLE = "FORJA_AGENT_ISOLATED"  # set only when the agent runs in a real sandbox
+SAFE_ENVIRONMENT = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "PATHEXT", "COMSPEC")
 TIMEOUT_SECONDS = 600
 TAIL_LINES = 80
 COMMANDS = {
@@ -46,6 +48,11 @@ def command_for(name: str, paths: list[str], environ: Mapping[str, str]) -> list
     own = [sys.executable, "-m"]
     match name:
         case "testar":
+            if environ.get(ISOLATED_VARIABLE) != "1":
+                raise Refused(
+                    "testar roda código do projeto, que pode ter sido escrito por você; só é "
+                    "permitido com isolamento real (incremento 1e). Use lint e medir."
+                )
             python = environ.get(PYTHON_VARIABLE) or sys.executable
             return [python, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *paths]
         case "lint":
@@ -75,6 +82,7 @@ def run_facade(argv: Sequence[str], cwd: Path, environ: Mapping[str, str]) -> in
         done = subprocess.run(  # noqa: S603
             command,
             cwd=cwd,
+            env={k: v for k, v in environ.items() if k.upper() in SAFE_ENVIRONMENT},
             capture_output=True,
             text=True,
             encoding="utf-8",
