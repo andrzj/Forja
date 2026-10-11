@@ -11,14 +11,28 @@ from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.orchestrator.ports import TaskInfo
 
 SUPPRESSIONS = re.compile(
-    r"noqa|ruff:\s*noqa|fmt:\s*(?:off|on|skip)|gitleaks:allow|lizard\s+forgives|nosemgrep",
+    r"noqa|fmt:\s*(?:off|on|skip)|yapf:\s*(?:disable|enable)|gitleaks:allow"
+    r"|lizard\s+forgive|#\s*lizard|generated\s+code|nosem",
     re.IGNORECASE,
 )
-# what tools leave behind that git is right to ignore
-DISPOSABLE = (
-    "__pycache__/", ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".hypothesis/",
-)  # fmt: skip
-DISPOSABLE_SUFFIXES = (".pyc", ".pyo")
+# Directories tools write their caches to, and what could still be code inside them.
+CACHE_DIRECTORIES = frozenset(
+    {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".hypothesis"}
+)
+CODE_SUFFIXES = (".py", ".pyi", ".pth", ".so", ".pyd")
+COMPILED_SUFFIXES = (".pyc", ".pyo")
+
+
+def disposable(path: str) -> bool:
+    """Whether an ignored file is only a tool's cache. A compiled file anywhere but in
+    ``__pycache__`` is importable without its source, so it is not a cache."""
+    parts = path.replace("\\", "/").split("/")
+    name, directories = parts[-1], parts[:-1]
+    if name.endswith(CODE_SUFFIXES):
+        return False
+    if name.endswith(COMPILED_SUFFIXES):
+        return bool(directories) and directories[-1] == "__pycache__"
+    return any(directory in CACHE_DIRECTORIES for directory in directories)
 
 
 def in_scope(path: str, scope: tuple[str, ...]) -> bool:
@@ -87,10 +101,7 @@ class ScopeCheck:
         return [
             Finding(message="a file git ignores was added", target=path)
             for path in self.changes.ignored
-            if not (
-                any(part in path.replace("\\", "/") for part in DISPOSABLE)
-                or path.endswith(DISPOSABLE_SUFFIXES)
-            )
+            if not disposable(path)
         ]
 
     def _suppressions(self) -> list[Finding]:

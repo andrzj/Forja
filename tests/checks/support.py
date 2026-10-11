@@ -16,6 +16,7 @@ from tests.core.events.support import FakeClock
 from tests.core.idempotency.conftest import Repo
 
 FAKE_GITLEAKS = Path(__file__).with_name("fake_gitleaks.py")
+FAKE_TOOLS = str(Path(__file__).with_name("fake_tools.py"))
 LIZARD = (sys.executable, "-m", "lizard")
 BLOCKING = CheckSettings(Mode.BLOCKING, InconclusivePolicy.BLOCK)
 PREMISE = CheckSettings(Mode.BLOCKING, InconclusivePolicy.PREMISE)
@@ -65,7 +66,7 @@ def sinks(level: Level, target_id: str, operation: str) -> RecordingSink:
 class Scene:
     """The sample project committed in ``repo``; edit its files, then judge the working tree."""
 
-    def __init__(self, repo: Repo, work: Path, **options: Any) -> None:
+    def __init__(self, repo: Repo, work: Path, *, real: bool = False, **options: Any) -> None:
         self.repo, self.work = repo, work
         for relative, text in SAMPLE.items():
             self.write(relative, text)
@@ -73,7 +74,15 @@ class Scene:
         repo.sh("commit", "-m", "sample project")
         self.log = EventLog.open(work / "events.jsonl", RUN, clock=FakeClock())
         self.log.append_transition(Level.EXECUTION, RUN, None, ExecutionState.PREPARING)
-        self.adapter = PythonAdapter(cache_dir=work / "pycache")
+        if real:
+            self.adapter = PythonAdapter(cache_dir=work / "pycache")
+            self.lizard = LIZARD
+        else:
+            fake = (sys.executable, FAKE_TOOLS)
+            self.adapter = PythonAdapter(
+                python=(*fake, "python"), ruff=(*fake, "ruff"), cache_dir=work / "pycache"
+            )
+            self.lizard = (*fake, "lizard")
         self.measurer = self.make_measurer(**options)
 
     def make_measurer(
@@ -95,7 +104,7 @@ class Scene:
             host_env=self.repo.env,
             settings=settings or standard,
             values=values,
-            lizard=LIZARD,
+            lizard=self.lizard,
             gitleaks=gitleaks or (sys.executable, str(FAKE_GITLEAKS)),
             timeouts=timeouts,
         )

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.scope import ScopeCheck, in_scope
+from forja.checks.scope import ScopeCheck, disposable, in_scope
 from forja.core.adapters import FileClass
 from forja.core.gates import Approved, GateInput, Rejected
 from forja.languages.python import PythonAdapter
@@ -174,16 +174,39 @@ def test_declared_files_must_be_the_changed_ones() -> None:
 def test_ignored_files_are_hidden_unless_they_are_what_tools_leave_behind() -> None:
     changes = modified(
         "src/a.py",
-        ignored=("a.local", "src/__pycache__/a.cpython-312.pyc", "x.pyc", "y.pyo", ".ruff_cache/z"),
+        ignored=("a.local", "src/__pycache__/a.cpython-312.pyc", "stray.pyc", ".ruff_cache/z"),
     )
 
-    assert described(evaluate(changes)) == ["a file git ignores was added [a.local]"]
+    assert described(evaluate(changes)) == [
+        "a file git ignores was added [a.local]",
+        "a file git ignores was added [stray.pyc]",
+    ]
 
 
-def test_a_windows_path_in_the_ignored_list_is_disposable_too() -> None:
-    changes = modified("src/a.py", ignored=("src\\__pycache__\\a.pyc",))
-
-    assert evaluate(changes) == Approved()
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("src/__pycache__/a.cpython-312.pyc", True),
+        ("src\\__pycache__\\a.cpython-312.pyc", True),
+        ("src/__pycache__/a.cpython-312.opt-1.pyo", True),
+        (".pytest_cache/v/cache/lastfailed", True),
+        (".ruff_cache/0.1/data", True),
+        (".mypy_cache/3.12/x.json", True),
+        (".hypothesis/examples/x", True),
+        ("stray.pyc", False),
+        ("src/stray.pyo", False),
+        ("src/__pycache__/evil.py", False),
+        ("src/__pycache__/evil.pyi", False),
+        (".ruff_cache/hook.pth", False),
+        (".ruff_cache/native.so", False),
+        (".ruff_cache/native.pyd", False),
+        ("__pycache__", False),
+        ("a.local", False),
+        ("not__pycache__/x.txt", False),
+    ],
+)
+def test_only_what_a_tool_caches_is_disposable(path: str, expected: bool) -> None:
+    assert disposable(path) is expected
 
 
 PATCH = (
@@ -209,3 +232,39 @@ def test_findings_are_gathered_from_every_rule_at_once() -> None:
     changes = modified("src/a.py", "src/b.py", lines=999, patch=PATCH, ignored=("c.local",))
 
     assert len(described(evaluate(changes, max_files=1, declared=("src/q.py",)))) == 6
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "x = 1  # noqa: E501",
+        "x = 1  # NOQA",
+        "# ruff: noqa",
+        "# fmt: off",
+        "# fmt:on",
+        "x = 1  # fmt: skip",
+        "# yapf: disable",
+        "# yapf:enable",
+        'KEY = "x"  # gitleaks:allow',
+        "def f():  # lizard forgives",
+        "def f():  # lizard forgive",
+        "# lizard: ignore",
+        "# GENERATED CODE",
+        "# generated   code",
+        "x = 1  # nosem",
+        "x = 1  # nosemgrep",
+    ],
+)
+def test_every_comment_that_switches_a_tool_off_is_found(marker: str) -> None:
+    patch = ("--- a/src/a.py", "+++ b/src/a.py", "@@ -0,0 +1 @@", f"+{marker}")
+
+    assert described(evaluate(modified("src/a.py", patch=patch))) == [
+        "a comment that silences a tool was added [src/a.py]"
+    ]
+
+
+@pytest.mark.parametrize("fine", ["x = 1  # a normal comment", "# format the output", "y = 'fmt'"])
+def test_an_ordinary_comment_is_not_a_silencer(fine: str) -> None:
+    patch = ("--- a/src/a.py", "+++ b/src/a.py", "@@ -0,0 +1 @@", f"+{fine}")
+
+    assert evaluate(modified("src/a.py", patch=patch)) == Approved()
