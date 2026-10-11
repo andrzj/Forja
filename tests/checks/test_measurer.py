@@ -188,11 +188,11 @@ def test_a_renamed_file_keeps_the_violations_it_already_had(
     tmp_path: Path,
 ) -> None:
     scene = Scene(repo, tmp_path / "scene")
-    scene.write("src/sample/mod.py", "import os\n\n\n" + SAMPLE["src/sample/mod.py"])
+    scene.write("src/sample/other.py", "import os\n\n\n" + SAMPLE["src/sample/other.py"])
     repo.sh("commit", "-am", "an old violation")
 
-    repo.sh("mv", "src/sample/mod.py", "src/sample/moved.py")
-    outcome = judge(scene, scope=("src/sample/mod.py", "src/sample/moved.py"))
+    repo.sh("mv", "src/sample/other.py", "src/sample/renamed.py")
+    outcome = judge(scene, scope=("src/sample/other.py", "src/sample/renamed.py"))
 
     assert outcome.verdict is Verdict.PASSED
 
