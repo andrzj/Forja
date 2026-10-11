@@ -201,7 +201,7 @@ class RunState:
             )
 
         resumable_origin = machine.is_resumable(origin)
-        previous = target.stack[-1] if resumable_origin and target.stack else None
+        previous = target.stack[-1] if target.stack else None
         machine.validate(origin, destination, previous=previous)
 
         stack = list(target.stack)

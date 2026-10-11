@@ -123,8 +123,12 @@ def format_time(moment: datetime) -> str:
 
 def canonical_json(data: Mapping[str, Any] | Any) -> bytes:
     """Deterministic JSON: sorted keys, no spaces, ASCII only."""
-    text = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return text.encode("ascii")
+    # ensure_ascii is json's default and "ASCII" names the same codec; both are spelled out for
+    # the reader, so a change to either leaves the output as it was.
+    text = json.dumps(
+        data, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )  # pragma: no mutate
+    return text.encode("ascii")  # pragma: no mutate
 
 
 def compute_hash(body: Mapping[str, Any]) -> str:

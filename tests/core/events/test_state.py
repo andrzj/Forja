@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.core.events import EventLog, InvalidEvent, RunState
+from forja.core.process import ProcessIdentity
 from forja.core.states import (
     AttemptState,
     ExecutionState,
@@ -272,3 +273,136 @@ def test_the_effect_that_closed_an_operation_can_be_read_back(log: EventLog) -> 
     assert log.state.effect_of("op1") == {"reconciled": "redo"}
     assert log.state.open_operations == {}
     assert log.state.effect_of("never-used") is None
+
+
+# -- what the state remembers and how it says no -----------------------------------------------
+
+
+def test_children_are_found_by_their_level_and_by_their_parent(log: EventLog) -> None:
+    create_run(log)
+    create_task(log, "t1")
+    create_task(log, "t2")
+    log.append_transition(Level.STAGE, "s1", None, StageState.PENDING, parent_id="t1")
+    log.append_transition(Level.STAGE, "s2", None, StageState.PENDING, parent_id="t2")
+
+    assert log.state.children_of(Level.STAGE, "t1") == ["s1"]
+    assert log.state.children_of(Level.TASK, RUN) == ["t1", "t2"]
+    assert log.state.children_of(Level.STAGE, RUN) == []
+
+
+def test_asking_for_a_target_that_does_not_exist_says_which(log: EventLog) -> None:
+    create_run(log)
+
+    with pytest.raises(KeyError) as info:
+        log.state.state_of(Level.TASK, "t9")
+
+    assert info.value.args == ("unknown task 't9'",)
+
+
+def test_the_payload_a_target_was_created_with_can_be_read_back(log: EventLog) -> None:
+    log.append_transition(Level.EXECUTION, RUN, None, E.PREPARING, payload={"goal": "refactor"})
+
+    assert log.state.transition_payload(Level.EXECUTION, RUN, E.PREPARING) == {"goal": "refactor"}
+
+
+def start(log: EventLog, **payload: object) -> None:
+    create_run(log)
+    log.append_intent(Level.EXECUTION, RUN, "call_agent_cli", "op1")
+    log.append_progress(
+        Level.EXECUTION,
+        RUN,
+        "process_started",
+        operation="call_agent_cli",
+        operation_id="op1",
+        payload=payload,  # type: ignore[arg-type]
+    )
+
+
+def test_a_started_process_is_remembered_with_or_without_a_creation_token(
+    log: EventLog,
+) -> None:
+    start(log, pid=7, creation_token=None)
+
+    assert log.state.leftover_processes() == [ProcessIdentity(7, None)]
+
+
+def test_a_started_process_with_a_pid_or_token_of_the_wrong_type_is_not_remembered(
+    tmp_path: Path,
+) -> None:
+    for payload in ({"pid": "abc", "creation_token": None}, {"pid": 7, "creation_token": "x"}):
+        with open_log(tmp_path / f"{len(payload)}{payload['pid']}.jsonl") as log:
+            start(log, **payload)
+
+            assert log.state.leftover_processes() == []
+
+
+def test_only_a_process_started_event_can_name_a_process(log: EventLog) -> None:
+    create_run(log)
+    log.append_intent(Level.EXECUTION, RUN, "call_agent_cli", "op1")
+
+    log.append_progress(
+        Level.EXECUTION,
+        RUN,
+        "output",
+        operation="call_agent_cli",
+        operation_id="op1",
+        payload={"pid": 99, "creation_token": 5},
+    )
+
+    assert log.state.leftover_processes() == []
+
+
+def rejected(state: RunState, event: object) -> str:
+    with pytest.raises(InvalidEvent) as info:
+        state.validate(event)  # type: ignore[arg-type]
+    return str(info.value)
+
+
+def test_an_event_that_does_not_follow_the_last_one_is_refused_in_words(log: EventLog) -> None:
+    create_run(log)
+
+    assert rejected(log.state, build_event(log.state, prev="f" * 64)) == (
+        "prev does not match the hash of the previous event"
+    )
+
+
+def test_a_transition_from_a_state_the_level_does_not_have_is_refused_in_words(
+    log: EventLog,
+) -> None:
+    create_run(log)
+    create_task(log, "t1")
+    event = build_event(
+        log.state,
+        "transition",
+        level="task",
+        target_id="t1",
+        from_state="bogus",
+        to_state="in_progress",
+        parent_id=None,
+        payload={},
+    )
+
+    assert rejected(log.state, event) == "'bogus' is not a task state"
+
+
+def test_the_execution_cannot_have_a_parent(log: EventLog) -> None:
+    event = build_event(
+        log.state,
+        "transition",
+        target_id=RUN,
+        from_state=None,
+        to_state="preparing",
+        parent_id="somewhere",
+        payload={},
+    )
+
+    assert rejected(log.state, event) == "the execution is the run itself and has no parent"
+
+
+def test_a_process_started_event_needs_an_open_operation(log: EventLog) -> None:
+    create_run(log)
+    event = build_event(
+        log.state, payload={"kind": "process_started", "pid": 1}, operation="x", operation_id="x1"
+    )
+
+    assert rejected(log.state, event) == "process_started needs an open operation"
