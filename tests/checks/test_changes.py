@@ -224,3 +224,15 @@ def test_the_parent_commits_text_is_read_by_the_old_path_and_written_elsewhere(
 
     assert contents == {"a.py": "one\ntwo\n"}
     assert (tmp_path / "out" / "a.py").read_text(encoding="utf-8") == "one\ntwo\n"
+
+
+def test_the_names_of_ignored_files_are_unquoted_like_the_others(repo: Repo) -> None:  # noqa: F811
+    (repo.path / ".gitignore").write_text("*.local\n", encoding="utf-8")
+    (repo.path / "kept.py").write_text("one\n", encoding="utf-8")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "start")
+    (repo.path / "café.local").write_text("h\n", encoding="utf-8")
+
+    changes = asyncio.run(read_changes(repo.git))
+
+    assert changes.ignored == ("café.local",)

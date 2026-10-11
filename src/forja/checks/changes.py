@@ -64,7 +64,12 @@ async def read_changes(git: Git) -> Changes:
     numstat = await git.lines("diff", "--cached", "--numstat", "-M", "HEAD")
     patch = await git.lines("diff", "--cached", "-U0", "--no-color", "HEAD")
     ignored = await git.lines("ls-files", "--others", "--ignored", "--exclude-standard")
-    return Changes(parse_status(status), count_lines(numstat), tuple(patch), tuple(ignored))
+    return Changes(
+        parse_status(status),
+        count_lines(numstat),
+        tuple(patch),
+        tuple(unquote(path) for path in ignored),
+    )
 
 
 def unquote(name: str) -> str:
