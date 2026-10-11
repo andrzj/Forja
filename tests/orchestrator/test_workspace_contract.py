@@ -26,7 +26,6 @@ from forja.testing import MemoryRepo, MemoryWorkspace
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.harness import RUN, make_workspace, minimal_env
 
-pytestmark = pytest.mark.integration
 
 MESSAGE = CommitMessage(
     "refactor: make it simpler", "Split the long function.", "fake-cli 1.0", "0.0.0+abc"
@@ -109,7 +108,7 @@ def git_backend(root: Path, template: Path) -> Backend:
     )
 
 
-@pytest.fixture(params=["memory", "git"])
+@pytest.fixture(params=["memory", pytest.param("git", marks=pytest.mark.integration)])
 def backend(request: pytest.FixtureRequest, tmp_path: Path, template: Path) -> Backend:
     if request.param == "memory":
         return memory_backend(tmp_path)

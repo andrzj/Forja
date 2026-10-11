@@ -49,6 +49,7 @@ source_paths = [
     "src/forja/orchestrator/",
     "src/forja/checks/",
     "src/forja/languages/",
+    "src/forja/testing/",
 ]
 pytest_add_cli_args_test_selection = ["tests/"]
 timeout_multiplier = 4
