@@ -15,24 +15,29 @@ SUPPRESSIONS = re.compile(
     r"|lizard\s+forgive|#\s*lizard|generated\s+code|nosem",
     re.IGNORECASE,
 )
-# Directories tools write their caches to, and what could still be code inside them.
-CACHE_DIRECTORIES = frozenset(
-    {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".hypothesis"}
-)
-CODE_SUFFIXES = (".py", ".pyi", ".pth", ".so", ".pyd")
+# Directories the tools write their caches to. The compiled files of Python are not here: the
+# adapter sends them outside the worktree, so any that turn up inside it are suspect.
+TOOL_CACHES = frozenset({".pytest_cache", ".ruff_cache", ".mypy_cache", ".hypothesis"})
+CODE_SUFFIXES = (".py", ".pyi", ".pyw", ".pyz", ".pth", ".so", ".pyd", ".dll", ".zip")
 COMPILED_SUFFIXES = (".pyc", ".pyo")
+# What the interpreter names a cache file (PEP 3147): module.cpython-312.pyc, never importable
+# as a module because of the dots in the name.
+CACHE_NAME = re.compile(r"[^.]+\.[a-z0-9]+-\d+(?:\.opt-[12])?\.py[co]")
 
 
 def disposable(path: str) -> bool:
-    """Whether an ignored file is only a tool's cache. A compiled file anywhere but in
-    ``__pycache__`` is importable without its source, so it is not a cache."""
+    """Whether an ignored file is only a tool's cache and cannot be run or imported."""
     parts = path.replace("\\", "/").split("/")
-    name, directories = parts[-1], parts[:-1]
+    name, directories = parts[-1].lower(), parts[:-1]
+    if name.endswith(COMPILED_SUFFIXES):
+        return (
+            bool(directories)
+            and directories[-1] == "__pycache__"
+            and bool(CACHE_NAME.fullmatch(name))
+        )
     if name.endswith(CODE_SUFFIXES):
         return False
-    if name.endswith(COMPILED_SUFFIXES):
-        return bool(directories) and directories[-1] == "__pycache__"
-    return any(directory in CACHE_DIRECTORIES for directory in directories)
+    return any(directory in TOOL_CACHES for directory in directories)
 
 
 def in_scope(path: str, scope: tuple[str, ...]) -> bool:
