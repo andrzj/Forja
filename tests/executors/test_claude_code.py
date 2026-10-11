@@ -81,14 +81,14 @@ def test_only_the_users_settings_are_read_and_hooks_are_off(tmp_path: Path) -> N
     setup = adapter.permission_setup(Producer.IMPLEMENTER, RolePermissions(True))
     settings = json.loads(setup.files["claude-settings.json"])
     assert settings["disableAllHooks"] is True
-    assert {"Read(../**)", "Edit(../**)", "Write(~/**)"} <= set(settings["permissions"]["deny"])
+    assert "Edit(./.forja-agent/claude-settings.json)" in settings["permissions"]["deny"]
 
 
 def test_an_editing_role_can_read_and_edit_but_not_run_commands(tmp_path: Path) -> None:
     argv = plan_of(tmp_path)
 
     assert argv[argv.index("--tools") + 1] == "Read,Glob,Grep,Edit,Write"
-    assert argv[argv.index("--allowedTools") + 1] == "Read,Glob,Grep,Edit,Write"
+    assert argv[argv.index("--allowedTools") + 1] == "Read(./**),Glob,Grep,Edit(./**),Write(./**)"
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
 
 
@@ -204,3 +204,21 @@ def test_the_cli_is_found_by_name_and_has_a_minimum_version() -> None:
     assert adapter.discovery.executable_names == ("claude",)
     assert adapter.discovery.min_version == "2.0.0"
     assert adapter.enforces_permissions
+
+
+def test_the_real_stream_of_a_file_written_is_read_as_the_edit_and_the_tokens() -> None:
+    """Recorded from the real CLI by the live test (paths and the account removed)."""
+    fixture = FIXTURE.with_name("claude_write_probe.jsonl")
+
+    activities = [adapter.parse_event(text) for text in fixture.read_text("utf-8").splitlines()]
+
+    assert [type(a).__name__ for a in activities] == [
+        "NoneType",  # init
+        "FileEditActivity",
+        "NoneType",  # rate_limit_event
+        "NoneType",  # the tool result
+        "TextActivity",
+        "UsageActivity",
+    ]
+    assert activities[1] == FileEditActivity("/work/probe.txt", 1, 0)
+    assert activities[5] == UsageActivity(4 + 329, 223)  # what the cache gave back is not counted

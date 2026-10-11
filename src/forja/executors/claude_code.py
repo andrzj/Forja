@@ -35,11 +35,10 @@ NAME = "claude-code"
 SETTINGS_FILE = "claude-settings.json"
 # Hooks of the user's profile would otherwise run inside every agent call and add their output to
 # what the agent reads.
-# Best effort, and the CLI's own rules: the file tools may not reach above the working copy or into
-# the home directory. What keeps the CLI inside the copy for good is the isolation level (1e).
-OUTSIDE = tuple(
-    f"{tool}({where})" for tool in ("Read", "Edit", "Write") for where in ("../**", "~/**")
-)
+# Best effort, and the CLI's own rules: the file tools may not reach above the working copy. The
+# home directory cannot be denied as a whole, since the copy lives under it. What keeps the CLI
+# inside the copy for good is the isolation level (1e).
+OUTSIDE = tuple(f"{tool}(../**)" for tool in ("Read", "Edit", "Write"))
 # ... and not its own instructions and permissions, which sit inside the copy. Changing them
 # is also checked for when the work comes back.
 OWN = tuple(
@@ -47,9 +46,16 @@ OWN = tuple(
     for tool in ("Edit", "Write")
     for name in (SETTINGS_FILE, "package.md")
 )
-SETTINGS = {"disableAllHooks": True, "permissions": {"deny": [*OUTSIDE, *OWN]}}
+SETTINGS = {"disableAllHooks": True, "permissions": {"deny": list(OWN)}}
 
 READ_TOOLS = ("Read", "Glob", "Grep")
+
+
+def _scoped(tool: str) -> str:
+    """Allowed only for paths under the working directory; anything else is refused (dontAsk)."""
+    return f"{tool}(./**)" if tool in ("Read", "Edit", "Write") else tool
+
+
 EDIT_TOOLS = ("Edit", "Write")
 
 # The CLI's own configuration, as the user set it up. The variables a host application sets
@@ -118,7 +124,7 @@ class ClaudeCodeAdapter:
 
     def permission_setup(self, role: Producer, permissions: RolePermissions) -> PermissionSetup:
         tools = [*READ_TOOLS, *(EDIT_TOOLS if permissions.can_edit_files else ())]
-        allowed = list(tools)
+        allowed = [_scoped(tool) for tool in tools]
         if permissions.allowed_commands:
             tools.append("Bash")
             allowed += [f"Bash({command} *)" for command in permissions.allowed_commands]
