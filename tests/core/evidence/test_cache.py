@@ -1,3 +1,5 @@
+import hashlib
+import logging
 from pathlib import Path
 
 import pytest
@@ -126,3 +128,32 @@ def test_the_cache_answers_the_reconciliation_of_a_tool_run(
     cache.put(evidence())
 
     assert reconcile_run_tool(cache, key()).decision is Decision.ALREADY_DONE
+
+
+def test_the_key_is_the_sha256_of_exactly_these_named_parts() -> None:
+    # Spelled out on purpose: changing a name, the order of the parts or the form changes every
+    # key, so evidence stored by an older Forja would stop being found.
+    canonical = (
+        b'{"commit":"' + b"c" * 40 + b'","config_hash":"cfg-9f2","platform":"windows-AMD64",'
+        b'"scope":["src/a.py","src/b.py"],"tool":"lizard","tool_version":"1.17.10",'
+        b'"toolchain":"python","toolchain_version":"3.12.4"}'
+    )
+
+    assert key() == hashlib.sha256(canonical).hexdigest()
+
+
+def test_damaged_evidence_is_explained_in_the_list_and_in_the_log(
+    stores: tuple[ToolRunStore, EvidenceStore],
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    store = stores[1]
+    EvidenceCache(store).put(evidence(id="ev-bad"))
+    (tmp_path / "run" / "evidence" / "ev-bad.json").write_bytes(b"garbage")
+
+    with caplog.at_level(logging.WARNING, logger="forja.evidence"):
+        reopened = EvidenceCache(store)
+
+    (evidence_id, reason) = reopened.damaged[0]
+    assert evidence_id == "ev-bad" and "ev-bad" in reason and reason != "None"
+    assert caplog.messages == [f"evidence ev-bad left out of the cache: {reason}"]

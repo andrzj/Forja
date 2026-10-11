@@ -60,7 +60,8 @@ def _file_sha256(path: Path) -> str | None:
         return None
     digest = hashlib.sha256()
     with path.open("rb") as handle:
-        while chunk := handle.read(_CHUNK):
+        # Reading in chunks only bounds memory; the digest is the same either way.
+        while chunk := handle.read(_CHUNK):  # pragma: no mutate
             digest.update(chunk)
     return digest.hexdigest()
 

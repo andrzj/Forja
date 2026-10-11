@@ -279,3 +279,48 @@ def test_evidence_store_returns_evidence_objects(
     evidences.put(evidence())
 
     assert isinstance(evidences.get("ev1"), Evidence)
+
+
+def test_a_tool_run_records_where_it_ran_and_where_its_log_is(
+    runs: ToolRunStore, tmp_path: Path
+) -> None:
+    process_spec = spec("print('x')")
+    result, _ = run_to_end(process_spec, tmp_path / "where.log")
+
+    runs.record("run1", "op1", process_spec, result)
+
+    run = runs.get("run1")
+    assert run.cwd == str(process_spec.cwd)
+    assert run.log_path == str(tmp_path / "where.log")
+
+
+def test_the_evidence_store_passes_its_options_on_to_the_record_store(tmp_path: Path) -> None:
+    written: list[Path] = []
+
+    def spy(path: Path, data: bytes) -> None:
+        written.append(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    runs = ToolRunStore(tmp_path / "run")
+    record_run(runs, tmp_path)
+    EvidenceStore(tmp_path / "run", runs, write=spy).put(evidence(id="ev1"))
+
+    assert [p.name for p in written] == ["ev1.json"]
+
+
+def test_the_evidence_store_converts_older_records_with_the_upgraders_it_was_given(
+    tmp_path: Path,
+) -> None:
+    runs = ToolRunStore(tmp_path / "run")
+    record_run(runs, tmp_path)
+    EvidenceStore(tmp_path / "run", runs).put(evidence(id="ev1"))
+    path = tmp_path / "run" / "evidence" / "ev1.json"
+    path.write_text(path.read_text().replace('"schema_version":1', '"schema_version":0'))
+
+    def upgrade(record: dict[str, Any]) -> dict[str, Any]:
+        return record
+
+    assert EvidenceStore(tmp_path / "run", runs, upgraders={0: upgrade}).get("ev1").id == "ev1"
+    with pytest.raises(UnsupportedRecordVersion):
+        EvidenceStore(tmp_path / "run", runs).get("ev1")
