@@ -9,12 +9,13 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import TracebackType
 from typing import Protocol
 
 from forja.core.adapters.executor import ErrorActivity
 from forja.core.events import LogEventSink, OpenOperation
 from forja.core.gates import PipelineOutcome
-from forja.core.gitguard import GitWatch
+from forja.core.gitguard.snapshot import Difference
 from forja.core.idempotency import Reconciliation
 from forja.core.locking import IndexLockReport
 from forja.core.process import EventSink
@@ -111,6 +112,21 @@ class AgentRunner(Protocol):
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 
 
+class Watch(Protocol):
+    """A block around the agent's call that says afterwards what changed in git."""
+
+    differences: list[Difference]
+
+    async def __aenter__(self) -> "Watch": ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+
 class Workspace(Protocol):
     """Git, seen as steps the journal can run once and a way to settle them after a crash."""
 
@@ -125,7 +141,7 @@ class Workspace(Protocol):
 
     async def recover(self) -> IndexLockReport: ...
 
-    def watch(self) -> GitWatch: ...
+    def watch(self) -> Watch: ...
 
     def create_run_branch(self, base_commit: str) -> Step: ...
 
