@@ -74,7 +74,9 @@ class ScopeCheck:
                 seen.add(path)
                 kind = self.classify(path)
                 if kind is not FileClass.PRODUCTION:
-                    message = f"a {kind.value} file may not change in a refactoring"
+                    message = (
+                        f"only production files may change in a refactoring (this is {kind.value})"
+                    )
                     findings.append(Finding(message=message, target=path))
                 elif not in_scope(path, self.task.scope):
                     findings.append(Finding(message="outside the task scope", target=path))

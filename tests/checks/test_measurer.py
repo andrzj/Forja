@@ -86,7 +86,9 @@ def test_tests_are_frozen_in_a_refactoring(scene: Scene) -> None:
 
     outcome = judge(scene, scope=("src/sample/mod.py", "tests"))
 
-    assert findings(outcome) == ["a test file may not change in a refactoring [tests/test_mod.py]"]
+    assert findings(outcome) == [
+        "only production files may change in a refactoring (this is test) [tests/test_mod.py]"
+    ]
 
 
 def test_the_size_of_the_change_is_limited(scene: Scene) -> None:

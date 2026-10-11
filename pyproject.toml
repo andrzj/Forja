@@ -39,7 +39,12 @@ strict = true
 files = ["src", "tests"]
 
 [tool.mutmut]
-source_paths = ["src/forja/core/", "src/forja/orchestrator/"]
+source_paths = [
+    "src/forja/core/",
+    "src/forja/orchestrator/",
+    "src/forja/checks/",
+    "src/forja/languages/",
+]
 pytest_add_cli_args_test_selection = ["tests/"]
 timeout_multiplier = 4
 # The three deselected tests fail on Linux today (see docs/estado.md) and are outside the
