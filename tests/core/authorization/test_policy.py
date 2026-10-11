@@ -91,19 +91,22 @@ def test_every_combination_is_decided_as_the_spec_says(
 def test_a_forbidden_action_stays_forbidden_whatever_is_granted() -> None:
     everything = Grants(push_run_branch=True)
     for action in (a for a in Action if CLASSIFICATION[a] is ActionClass.FORBIDDEN):
-        with pytest.raises(ActionForbidden, match="never allowed"):
+        with pytest.raises(ActionForbidden) as info:
             authorize(ActionRequest(action), everything, protected=PROTECTED, sensitive=SENSITIVE)
+        assert info.value.reason == "this action is never allowed"
+        assert str(info.value) == f"{action.value} is not allowed: this action is never allowed"
 
 
 def test_grants_default_to_nothing() -> None:
     assert Grants().push_run_branch is False
-    with pytest.raises(ActionForbidden, match="did not grant"):
+    with pytest.raises(ActionForbidden) as info:
         authorize(
             ActionRequest(Action.PUSH_RUN_BRANCH, "forja/run1"),
             Grants(),
             protected=PROTECTED,
             sensitive=SENSITIVE,
         )
+    assert info.value.reason == "the user did not grant it in the preparation"
 
 
 def test_a_push_is_refused_on_a_protected_branch_even_when_granted() -> None:
