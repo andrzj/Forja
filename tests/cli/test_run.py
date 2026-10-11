@@ -1,0 +1,193 @@
+"""A run with the screen and the keys: shown while it goes, stopped by ctrl+k, left resumable."""
+
+import asyncio
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+
+from forja.cli.run import Ended, ForcedExit, closing_lines, execute
+from forja.cli.session import Session
+from forja.core.states import ExecutionState, Level
+from forja.orchestrator.outcome import ExitCode
+from forja.orchestrator.phases import confirm_run
+from forja.orchestrator.ports import AgentResult, AttemptContext
+from forja.ui.theme import THEMES
+from forja.ui.view import View
+from tests.orchestrator.fakes import ScriptedAgent, ScriptedMeasurer, ScriptedPlanner
+from tests.orchestrator.harness import ISOLATION, RUN, MemoryWorld
+from tests.ui.support import model
+
+
+@dataclass
+class FakeSession:
+    """What ``execute`` and ``closing_lines`` read of a session."""
+
+    context: Any
+    view: Any
+    run_id: str
+    directory: Path
+
+
+@dataclass
+class Recorder:
+    started: list[View] = field(default_factory=list)
+    updates: list[View] = field(default_factory=list)
+    stopped: list[View] = field(default_factory=list)
+    theme: Any = THEMES["escuro"]
+
+    def start(self, view: View) -> None:
+        self.started.append(view)
+
+    def update(self, view: View) -> None:
+        self.updates.append(view)
+
+    def stop(self, view: View) -> None:
+        self.stopped.append(view)
+
+
+class Scripted:
+    """Keys given at chosen moments, the way a person would press them."""
+
+    def __init__(self, *presses: tuple[float, str]) -> None:
+        self._presses = presses
+
+    async def keys(self) -> AsyncIterator[str]:
+        for delay, key in self._presses:
+            await asyncio.sleep(delay)
+            yield key
+        await asyncio.sleep(3600)
+
+    def close(self) -> None:
+        pass
+
+
+@dataclass
+class Waiting(ScriptedAgent):
+    """In the middle of its call until it is cancelled; ``slow_exit`` makes cancelling take long."""
+
+    slow_exit: bool = False
+    began: asyncio.Event | None = None
+
+    async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> AgentResult:
+        if self.began is not None:
+            self.began.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            if self.slow_exit:
+                await asyncio.sleep(3600)
+            raise
+        raise AssertionError("unreachable")
+
+
+def make_session(world: MemoryWorld, agent: ScriptedAgent) -> tuple[FakeSession, Any]:
+    log = world.open()
+    confirm_run(log, world.config, ISOLATION)
+    view = model()
+    log.subscribe(view.apply)
+    ctx = world.context(log, measurer=ScriptedMeasurer(), agent=agent, planner=ScriptedPlanner())
+    return FakeSession(ctx, view, RUN, world.run_dir), log
+
+
+def test_a_run_that_ends_is_shown_from_start_to_stop_and_reports_the_delivery(
+    tmp_path: Path,
+) -> None:
+    world = MemoryWorld(tmp_path)
+    session, _ = make_session(world, ScriptedAgent())
+    screen = Recorder()
+
+    ended = asyncio.run(execute(cast(Session, session), screen, None, refresh=0.01))
+
+    assert not ended.interrupted
+    assert ended.outcome is not None
+    assert ended.outcome.exit_code is ExitCode.DELIVERED
+    assert len(screen.started) == 1
+    assert len(screen.stopped) == 1
+    assert screen.stopped[0].state == ExecutionState.DELIVERED
+    lines = closing_lines(cast(Session, session), ended)
+    assert any(line.startswith(f"Branch da entrega: forja-run/{RUN}") for line in lines)
+    assert any("resumo.md" in line for line in lines)
+    assert any("nada foi enviado" in line for line in lines)
+
+
+def run_with_keys(
+    tmp_path: Path, keys: Scripted, *, slow_exit: bool = False
+) -> tuple[Ended, FakeSession, Any, Recorder]:
+    world = MemoryWorld(tmp_path)
+    session, log = make_session(world, Waiting(slow_exit=slow_exit))
+    screen = Recorder()
+    ended = asyncio.run(execute(cast(Session, session), screen, keys, refresh=0.01))
+    return ended, session, log, screen
+
+
+@pytest.mark.parametrize("key", ["ctrl+k", "ctrl+c"])
+def test_one_press_stops_the_run_and_leaves_it_paused_and_resumable(
+    tmp_path: Path, key: str
+) -> None:
+    ended, session, log, screen = run_with_keys(tmp_path, Scripted((0.2, key)))
+
+    assert ended == Ended(None, True)
+    assert log.state.state_of(Level.EXECUTION, RUN) is ExecutionState.PAUSED
+    assert len(screen.stopped) == 1
+    lines = closing_lines(cast(Session, session), ended)
+    assert lines[0] == "Interrompida. Tudo foi salvo."
+    assert "retomar" in lines[1]
+
+
+def test_a_second_press_while_it_is_still_saving_leaves_at_once(tmp_path: Path) -> None:
+    with pytest.raises(ForcedExit):
+        run_with_keys(tmp_path, Scripted((0.2, "ctrl+k"), (0.1, "ctrl+k")), slow_exit=True)
+
+
+def test_a_signal_that_cancels_the_process_is_the_same_as_the_key(tmp_path: Path) -> None:
+    world = MemoryWorld(tmp_path)
+    began = asyncio.Event()
+    session, log = make_session(world, Waiting(began=began))
+    screen = Recorder()
+
+    async def scenario() -> Ended:
+        task = asyncio.create_task(execute(cast(Session, session), screen, None, refresh=0.01))
+        await began.wait()
+        task.cancel()
+        return await task
+
+    ended = asyncio.run(scenario())
+
+    assert ended == Ended(None, True)
+    assert log.state.state_of(Level.EXECUTION, RUN) is ExecutionState.PAUSED
+
+
+def test_the_key_t_changes_the_theme_and_other_keys_do_nothing(tmp_path: Path) -> None:
+    world = MemoryWorld(tmp_path)
+    session, _ = make_session(world, Waiting())
+    screen = Recorder()
+
+    async def scenario() -> None:
+        keys = Scripted((0.1, "t"), (0.1, "x"), (0.1, "t"), (0.1, "ctrl+k"))
+        await execute(cast(Session, session), screen, keys, refresh=0.01)
+
+    asyncio.run(scenario())
+
+    assert screen.theme.key == "claro"
+
+
+def test_the_screen_is_refreshed_while_the_run_goes_on(tmp_path: Path) -> None:
+    ended, _, _, screen = run_with_keys(tmp_path, Scripted((0.3, "ctrl+k")))
+
+    assert ended.interrupted
+    assert len(screen.updates) >= 3
+
+
+def test_a_paused_run_says_how_to_resume(tmp_path: Path) -> None:
+    world = MemoryWorld(tmp_path)
+    session, _ = make_session(world, ScriptedAgent())
+    ended = asyncio.run(execute(cast(Session, session), Recorder(), None, refresh=0.01))
+    paused = Ended(ended.outcome, False)
+    session.view.state = "paused"
+
+    lines = closing_lines(cast(Session, session), paused)
+
+    assert "retomar" in lines[-1]

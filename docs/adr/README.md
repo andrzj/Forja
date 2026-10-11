@@ -22,3 +22,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0014](0014-os-gates-leem-o-diff-da-tentativa-e-comparam-com-o-commit-pai.md) | Os gates leem o diff da tentativa e comparam com o commit pai | Aceito |
 | [0015](0015-git-em-memoria-para-testar-o-orquestrador.md) | Git em memória para testar o orquestrador | Aceito |
 | [0016](0016-claude-code-como-primeiro-executor.md) | Claude Code como primeiro executor e o runner de CLI | Aceito |
+| [0017](0017-o-comando-forja-guia-e-pergunta-pouco.md) | O comando `forja` guia, pergunta pouco e confirma uma vez | Aceito |
