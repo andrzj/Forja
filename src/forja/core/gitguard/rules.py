@@ -8,8 +8,6 @@ applied by ``GuardedGit``; this module only decides from the words of the comman
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from forja.core.authorization.branches import ProtectedBranches
-
 
 class GitCommandRefused(Exception):
     def __init__(self, args_: Sequence[str], reason: str) -> None:
@@ -40,7 +38,6 @@ VALUE_OPTIONS: dict[str, frozenset[str]] = {
             "--trailer",
         }
     ),
-    "push": frozenset({"-o", "--push-option", "--repo", "--receive-pack", "--exec"}),
     "worktree": frozenset({"-b", "-B", "--reason"}),
     "tag": frozenset({"-m", "--message", "-F", "--file", "-u", "--local-user"}),
     "notes": frozenset({"-m", "--message", "-F", "--file", "-C", "-c", "--ref"}),
@@ -80,7 +77,6 @@ WRITING = frozenset(
         "tag",
         "worktree",
         "merge",
-        "push",
         "fetch",
         "reset",
         "notes",
@@ -136,15 +132,12 @@ def _refuse_flags(args: Sequence[str], command: Command, forbidden: set[str], wh
         raise GitCommandRefused(args, f"{', '.join(hit)} {why}")
 
 
-def _push_destination(refspec: str) -> str:
-    destination = refspec.split(":", 1)[-1] if ":" in refspec else refspec
-    return destination.removeprefix("refs/heads/")
-
-
-def check(args: Sequence[str], protected: ProtectedBranches) -> Command:
+def check(args: Sequence[str]) -> Command:
     """Parse ``args`` and refuse what Forja must never do. Returns the parsed command."""
     command = parse(args)
     sub, flags, positionals = command.sub, command.flags, command.positionals
+    if sub == "push":
+        raise GitCommandRefused(args, "Forja never pushes; publishing is for the user")
     if sub not in ALLOWED:
         raise GitCommandRefused(args, f"subcommand {sub!r} is not allowed")
 
@@ -200,26 +193,7 @@ def check(args: Sequence[str], protected: ProtectedBranches) -> Command:
         _refuse_flags(args, command, {"--prune", "-p", "--prune-tags", "--update-head-ok"}, "")
     elif sub == "commit":
         pass  # --amend is judged against the state of the branch by GuardedGit
-    elif sub == "push":
-        _check_push(args, command, protected)
     return command
-
-
-def _check_push(args: Sequence[str], command: Command, protected: ProtectedBranches) -> None:
-    _refuse_flags(
-        args,
-        command,
-        {"-f", "--force", "--force-with-lease", "-d", "--delete", "--mirror", "--prune", "--all"},
-        "rewrites or deletes remote history",
-    )
-    refspecs = command.positionals[1:]  # the first positional is the remote
-    if len(command.positionals) < 2:
-        raise GitCommandRefused(args, "push needs a remote and an explicit branch")
-    for refspec in refspecs:
-        if refspec.startswith(("+", ":")) or "*" in refspec:
-            raise GitCommandRefused(args, f"refspec {refspec!r} forces, deletes or uses a wildcard")
-        if protected.is_protected(_push_destination(refspec)):
-            raise GitCommandRefused(args, f"{_push_destination(refspec)!r} is a protected branch")
 
 
 def writes(command: Command) -> bool:

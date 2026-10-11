@@ -171,7 +171,6 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 | Integração da tarefa | `Task-Id` | Ponta da branch da tarefa contida na branch da execução | Não | Registra efetivação se existir; senão, integra e roda o gate de integração |
 | Desfazer a integração | `Task-Id` | Ponta da branch da execução é o commit que ela tinha antes da integração | Sim | Move a branch da execução de volta a esse commit |
 | Remover worktree | Caminho | Ausência no disco e no `git worktree list` | Sim | `git worktree prune` |
-| Push da branch da execução | Nome da branch | Ref remota aponta para o commit esperado | Sim | Repete |
 
 **Transferência entre cópia de trabalho e worktree.** A transferência é por comparação de manifestos, não por patch textual. Antes e depois da chamada à CLI, a Forja registra o manifesto da cópia: caminho, hash do conteúdo, tipo e bit de execução de cada arquivo. A diferença entre os dois é a mudança; aplicá-la significa levar o worktree ao manifesto esperado, o que é verificável e seguro de repetir.
 
@@ -195,9 +194,9 @@ A autorização é uma política separada do fluxo da tarefa. A única decisão 
 
 | Classe | Ações |
 | --- | --- |
-| Decidida na preparação | Objetivo, CLI por papel, orçamento e push da branch |
+| Decidida na preparação | Objetivo, CLI por papel e orçamento |
 | Automática | Ler o repositório, criar e remover worktrees, executar adaptadores, enviar o pacote redigido, commit e integração na branch da execução |
-| Proibida | Push ou merge na branch principal, apagar branches, reescrever histórico publicado, enviar arquivos marcados como sensíveis, acesso do agente a segredos do repositório ou do ambiente |
+| Proibida | Push para qualquer remoto e de qualquer branch, merge na branch principal, apagar branches, reescrever histórico publicado, enviar arquivos marcados como sensíveis, acesso do agente a segredos do repositório ou do ambiente |
 
 **Fronteira de confiança.** O código executado pelo agente e o código do repositório (build, testes) são não confiáveis. A Forja distingue o que **impõe** na execução do que apenas **detecta** depois, e declara isso por nível de isolamento.
 
@@ -523,7 +522,7 @@ A medição de base extrai o grafo de dependências entre módulos. Ele funciona
 
 ## Git, worktrees e entrega
 
-Uma tarefa equivale a uma intenção; cada etapa aprovada equivale a um commit, e a tarefa é integrada inteira. A entrega de qualquer fluxo é a branch da execução, com o arquivo de resumo, para revisão humana; a Forja não abre pull request nem se integra a plataforma de hospedagem. Com o push concedido na preparação, a branch segue para o remoto; sem ele, fica local. Nada é integrado automaticamente na branch principal.
+Uma tarefa equivale a uma intenção; cada etapa aprovada equivale a um commit, e a tarefa é integrada inteira. A entrega de qualquer fluxo é a branch da execução, com o arquivo de resumo, para revisão humana; a Forja não abre pull request nem se integra a plataforma de hospedagem. A branch fica local: publicá-la é com o usuário, e a Forja só mostra, como texto, o comando `git push` que ele pode rodar. Nada é integrado automaticamente na branch principal.
 
 ### Commits atômicos
 
@@ -772,6 +771,7 @@ Conjunto fixo de repositórios de exemplo com problemas conhecidos, nas linguage
 ### Fora de escopo
 
 - Merge automático na branch principal: a decisão é sempre humana.
+- Push para qualquer remoto: publicar é sempre do usuário, nunca da Forja nem do agente.
 - Intervenção humana entre papéis durante a execução.
 - Chamada direta a APIs de modelos ou dependência de um gateway específico.
 - Sub-agentes nativos das CLIs.

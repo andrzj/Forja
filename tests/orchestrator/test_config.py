@@ -4,7 +4,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from forja.core.authorization import Grants
 from forja.core.confirmation import (
     Confirmation,
     ConfirmationError,
@@ -32,7 +31,6 @@ CONFIG = RunConfig(
     policy_version="0.0.0+0123456789ab",
 )
 CONFIRMATION = Confirmation(
-    Grants(push_run_branch=True),
     IsolationRecord(agent=IsolationLevel.WSL, repo_code=IsolationLevel.WSL),
 )
 

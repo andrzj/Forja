@@ -2,30 +2,10 @@
 
 import pytest
 
-from forja.core.authorization import ProtectedBranches
 from forja.core.gitguard import GitCommandRefused, check, parse
-
-PROTECTED = ProtectedBranches(frozenset({"main"}))
 
 REFUSED = [
     # remote history
-    ["push", "origin", "+feature"],
-    ["push", "--force", "origin", "feature"],
-    ["push", "-f", "origin", "feature"],
-    ["push", "--force-with-lease", "origin", "feature"],
-    ["push", "--force-with-lease=feature:abc", "origin", "feature"],
-    ["push", "origin", ":feature"],
-    ["push", "--delete", "origin", "feature"],
-    ["push", "-d", "origin", "feature"],
-    ["push", "origin", "feature:main"],
-    ["push", "origin", "HEAD:refs/heads/main"],
-    ["push", "origin", "main"],
-    ["push", "origin"],
-    ["push"],
-    ["push", "origin", "refs/heads/*:refs/heads/*"],
-    ["push", "--mirror", "origin"],
-    ["push", "--all", "origin"],
-    ["push", "-uf", "origin", "feature"],
     # branches and tags
     ["branch", "-D", "x"],
     ["branch", "-d", "x"],
@@ -106,10 +86,6 @@ ALLOWED = [
     ["tag", "v1"],
     ["tag", "-a", "v1", "-m", "message"],
     ["merge", "--no-ff", "-m", "m", "x"],
-    ["push", "origin", "feature"],
-    ["push", "-u", "origin", "feature"],
-    ["push", "origin", "HEAD:refs/heads/feature"],
-    ["push", "-o", "ci.skip", "origin", "feature"],
     ["fetch", "origin"],
     ["config", "--get", "user.name"],
     ["config", "--list"],
@@ -130,12 +106,12 @@ ALLOWED = [
 @pytest.mark.parametrize("args", REFUSED, ids=lambda a: " ".join(a) or "(nothing)")
 def test_what_forja_must_never_do_is_refused(args: list[str]) -> None:
     with pytest.raises(GitCommandRefused):
-        check(args, PROTECTED)
+        check(args)
 
 
 @pytest.mark.parametrize("args", ALLOWED, ids=lambda a: " ".join(a))
 def test_what_forja_needs_is_allowed(args: list[str]) -> None:
-    assert check(args, PROTECTED).sub == args[0]
+    assert check(args).sub == args[0]
 
 
 def test_a_message_that_looks_like_a_flag_is_not_a_flag() -> None:
@@ -147,24 +123,29 @@ def test_a_message_that_looks_like_a_flag_is_not_a_flag() -> None:
 
 def test_clusters_long_options_with_values_and_the_end_of_options_marker() -> None:
     assert parse(["commit", "-am", "msg"]).flags == {"-a", "-m"}
-    assert parse(["push", "--force-with-lease=x", "o", "b"]).flags == {"--force-with-lease"}
+    assert parse(["merge", "--strategy=ours", "x"]).flags == {"--strategy"}
     assert parse(["log", "--", "-f"]).positionals == ("-f",)
     assert parse(["worktree", "add", "-b", "new", "p"]).positionals == ("add", "p")
-    assert parse(["push", "-o", "opt", "origin", "b"]).positionals == ("origin", "b")
+    assert parse(["merge", "-s", "ours", "x"]).positionals == ("x",)
 
 
 def test_the_reason_is_in_the_message() -> None:
-    with pytest.raises(GitCommandRefused, match=r"git push --force origin x: --force .*history"):
-        check(["push", "--force", "origin", "x"], PROTECTED)
-    with pytest.raises(GitCommandRefused, match="'main' is a protected branch"):
-        check(["push", "origin", "main"], PROTECTED)
     with pytest.raises(GitCommandRefused, match="subcommand 'rebase' is not allowed"):
-        check(["rebase"], PROTECTED)
+        check(["rebase"])
 
 
-def test_protection_follows_the_configured_branches() -> None:
-    other = ProtectedBranches(frozenset({"trunk"}))
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["push"],
+        ["push", "origin", "feature"],
+        ["push", "-u", "origin", "forja-run/r1"],
+        ["push", "--force", "origin", "x"],
+        ["push", "origin", "main"],
+    ],
+)
+def test_forja_never_pushes_whatever_the_branch_or_the_flags(args: list[str]) -> None:
+    with pytest.raises(GitCommandRefused) as info:
+        check(args)
 
-    check(["push", "origin", "main"], other)
-    with pytest.raises(GitCommandRefused):
-        check(["push", "origin", "refs/heads/trunk"], other)
+    assert info.value.reason == "Forja never pushes; publishing is for the user"

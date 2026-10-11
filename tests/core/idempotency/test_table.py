@@ -17,7 +17,6 @@ REPEAT_SAFE = {
     "integrate_task": False,
     "rollback_integration": True,
     "remove_worktree": True,
-    "push_run_branch": True,
 }
 
 

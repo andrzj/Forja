@@ -15,6 +15,6 @@ Toda operação de git da Forja passa por uma fachada restrita (`GuardedGit`) co
 
 - No nível reduzido, a fotografia é a única defesa nesse caso, e o resumo da execução declara isso.
 - Com paralelismo (incremento 7), a fotografia terá de ignorar as refs das outras tarefas.
-- Só o push da branch da execução precisa de concessão do usuário; o resto das ações é automático ou proibido.
+- Nenhuma ação precisa de concessão: a Forja nunca faz push (ADR 0013), e o resto é automático ou proibido.
 
 Ver a especificação, seção "Contrato 3: autorização, isolamento e proteção do git".

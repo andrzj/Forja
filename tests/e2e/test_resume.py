@@ -22,7 +22,7 @@ from tests.e2e.world import World
 # Cuts just before an intent or an effect: the lines where a half-written event matters most.
 TORN_CUTS = (
     7, 8, 12, 13, 14, 15, 18, 21, 23, 24, 25, 26, 28, 29, 31, 32,
-    33, 34, 37, 40, 42, 43, 44, 45, 47, 48, 51, 52, 53, 54, 57, 58,
+    33, 34, 37, 40, 42, 43, 44, 45, 47, 48, 51, 52, 53, 54,
 )  # fmt: skip
 
 pytestmark = pytest.mark.slow
@@ -37,7 +37,6 @@ def test_an_uninterrupted_run_delivers_what_the_script_promises(
     assert fp["attempts"] == {"rejected": 1, "committed": 1}
     assert fp["open_operations"] == [] and fp["infra_failures"] == 0
     assert fp["worktrees"] == 1  # only the repository itself is left
-    assert fp["remote_tip_is_local_tip"] is True
     assert len(fp["evidence"]) == 2 and len(fp["blobs"]) == 1
 
 

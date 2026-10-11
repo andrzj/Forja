@@ -125,11 +125,3 @@ async def reconcile_integrate_task(git: Git, task_branch: str, run_branch: str) 
 async def reconcile_remove_worktree(git: Git, worktree: Path) -> Reconciliation:
     listed = _normalize(worktree) in await _listed_worktrees(git)
     return _verdict(not listed and not worktree.exists())
-
-
-async def reconcile_push_run_branch(git: Git, remote: str, branch: str) -> Reconciliation:
-    await _require_branch(git, branch)
-    (local,) = await git.lines("rev-parse", f"refs/heads/{branch}")
-    remote_lines = await git.lines("ls-remote", remote, f"refs/heads/{branch}")
-    remote_tip = remote_lines[0].split()[0] if remote_lines else None
-    return _verdict(remote_tip == local)

@@ -22,7 +22,6 @@ class OperationName(StrEnum):
     INTEGRATE_TASK = "integrate_task"
     ROLLBACK_INTEGRATION = "rollback_integration"
     REMOVE_WORKTREE = "remove_worktree"
-    PUSH_RUN_BRANCH = "push_run_branch"
 
 
 @dataclass(frozen=True)
@@ -118,13 +117,6 @@ _RULES = (
         "absent from disk and from the worktree list",
         True,
         "prune stale worktree records and remove again",
-    ),
-    OperationRule(
-        OperationName.PUSH_RUN_BRANCH,
-        "branch name",
-        "the remote ref points to the expected commit",
-        True,
-        "push again",
     ),
 )
 

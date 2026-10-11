@@ -174,7 +174,7 @@ def test_effect_closes_exactly_the_matching_intent(log: EventLog) -> None:
         log.append_effect(Level.EXECUTION, RUN, "run_tool", "op1")
     log.append_intent(Level.EXECUTION, RUN, "run_tool", "op1")
     with pytest.raises(InvalidEvent, match="does not match"):
-        log.append_effect(Level.EXECUTION, RUN, "push_run_branch", "op1")
+        log.append_effect(Level.EXECUTION, RUN, "integrate_task", "op1")
     assert set(log.state.open_operations) == {"op1"}
 
     log.append_effect(Level.EXECUTION, RUN, "run_tool", "op1")
@@ -255,7 +255,7 @@ def test_envelope_rules_run_id_sequence_and_chain() -> None:
 def test_an_open_operation_remembers_what_its_intent_said(log: EventLog) -> None:
     create_run(log)
 
-    log.append_intent(Level.EXECUTION, RUN, "push_run_branch", "op1", payload={"branch": "b"})
+    log.append_intent(Level.EXECUTION, RUN, "integrate_task", "op1", payload={"branch": "b"})
 
     (open_operation,) = log.state.open_operations.values()
     assert open_operation.payload == {"branch": "b"}
@@ -264,11 +264,9 @@ def test_an_open_operation_remembers_what_its_intent_said(log: EventLog) -> None
 
 def test_the_effect_that_closed_an_operation_can_be_read_back(log: EventLog) -> None:
     create_run(log)
-    log.append_intent(Level.EXECUTION, RUN, "push_run_branch", "op1")
+    log.append_intent(Level.EXECUTION, RUN, "integrate_task", "op1")
 
-    log.append_effect(
-        Level.EXECUTION, RUN, "push_run_branch", "op1", payload={"reconciled": "redo"}
-    )
+    log.append_effect(Level.EXECUTION, RUN, "integrate_task", "op1", payload={"reconciled": "redo"})
 
     assert log.state.effect_of("op1") == {"reconciled": "redo"}
     assert log.state.open_operations == {}

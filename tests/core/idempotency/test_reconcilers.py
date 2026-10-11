@@ -2,7 +2,6 @@
 
 import asyncio
 import shutil
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,6 @@ from forja.core.idempotency import (
     reconcile_integrate_task,
     reconcile_normalize_style,
     reconcile_prepare_workcopy,
-    reconcile_push_run_branch,
     reconcile_remove_worktree,
     reconcile_rollback_integration,
     reconcile_run_tool,
@@ -274,40 +272,6 @@ def test_remove_worktree_deleted_from_disk_but_still_registered_means_redo(
     shutil.rmtree(worktree)
 
     assert asyncio.run(reconcile_remove_worktree(repo.git, worktree)).decision is REDO
-
-
-def test_push_run_branch_remote_at_the_same_commit_is_already_done(
-    repo: Repo, new_remote: Callable[[], Path]
-) -> None:
-    remote = new_remote()
-    repo.sh("push", str(remote), "main")
-
-    assert asyncio.run(reconcile_push_run_branch(repo.git, str(remote), "main")).decision is DONE
-
-
-def test_push_run_branch_never_pushed_means_redo(
-    repo: Repo, new_remote: Callable[[], Path]
-) -> None:
-    remote = new_remote()
-
-    assert asyncio.run(reconcile_push_run_branch(repo.git, str(remote), "main")).decision is REDO
-
-
-def test_push_run_branch_remote_behind_local_means_redo(
-    repo: Repo, new_remote: Callable[[], Path]
-) -> None:
-    remote = new_remote()
-    repo.sh("push", str(remote), "main")
-    repo.commit("more.txt")
-
-    assert asyncio.run(reconcile_push_run_branch(repo.git, str(remote), "main")).decision is REDO
-
-
-def test_push_run_branch_cannot_be_verified_without_the_local_branch(
-    repo: Repo, new_remote: Callable[[], Path]
-) -> None:
-    with pytest.raises(ReconciliationError):
-        asyncio.run(reconcile_push_run_branch(repo.git, str(new_remote()), "missing"))
 
 
 def test_branch_names_carry_the_run_id() -> None:

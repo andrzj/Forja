@@ -18,3 +18,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0010](0010-chave-de-cache-sem-versao-de-politica-e-tipo-de-medicao.md) | Chave de cache sem versão de política nem tipo de medição | Aceito |
 | [0011](0011-a-retomada-fecha-as-operacoes-abertas-com-um-efeito.md) | A retomada fecha as operações abertas com um efeito | Proposto |
 | [0012](0012-nomes-das-branches.md) | Nomes das branches da execução e da tarefa | Aceito |
+| [0013](0013-a-forja-nunca-faz-push.md) | A Forja nunca faz push | Aceito |

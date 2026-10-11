@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import JsonValue
 
 from forja.core.authorization.actions import (
     BRANCH_ACTIONS,
@@ -9,17 +9,6 @@ from forja.core.authorization.actions import (
 )
 from forja.core.authorization.branches import ProtectedBranches
 from forja.core.isolation.sensitive import SensitivePaths
-
-
-class Grants(BaseModel):
-    """What the user allowed in the preparation. After the confirmation nothing is asked again."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    push_run_branch: bool = False
-
-
-_GRANT_OF = {Action.PUSH_RUN_BRANCH: "push_run_branch"}
 
 
 class ActionForbidden(Exception):
@@ -36,15 +25,14 @@ class ActionForbidden(Exception):
 
 def authorize(
     request: ActionRequest,
-    grants: Grants,
     *,
     protected: ProtectedBranches,
     sensitive: SensitivePaths,
 ) -> None:
     """Return normally if the action may happen, raise ``ActionForbidden`` if it may not.
 
-    A forbidden action stays forbidden whatever the grants say. Actions on a branch are refused on
-    a protected branch even when automatic or granted. Sending files is refused if any of them is
+    A forbidden action is always refused. Actions on a branch are refused on a protected branch,
+    even though they are automatic elsewhere. Sending files is refused if any of them is
     sensitive, a second line behind the redaction of the package.
     """
     action = request.action
@@ -63,6 +51,3 @@ def authorize(
             raise ActionForbidden(
                 action, f"sensitive files cannot be sent: {', '.join(sorted(sensitive_files))}"
             )
-
-    if CLASSIFICATION[action] is ActionClass.NEEDS_GRANT and not getattr(grants, _GRANT_OF[action]):
-        raise ActionForbidden(action, "the user did not grant it in the preparation")

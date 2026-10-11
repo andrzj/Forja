@@ -12,7 +12,6 @@ from forja.core.idempotency import (
     reconcile_create_attempt_worktree,
     reconcile_create_task_branch,
     reconcile_integrate_task,
-    reconcile_push_run_branch,
     reconcile_remove_worktree,
 )
 from tests.core.idempotency.conftest import Repo
@@ -65,7 +64,7 @@ def _publish(repo: Repo, guard: GuardedGit, new_remote: Callable[[], Path]) -> N
     repo.sh("checkout", "-b", "feature")
     repo.commit("a.txt")
     repo.commit("b.txt")
-    assert run(guard, "push", "origin", "feature").exit_code == 0
+    repo.sh("push", "origin", "feature")  # published by someone else, not through the guard
     assert "refs/remotes/origin/feature" in repo.sh("for-each-ref", "refs/remotes")
 
 
@@ -95,14 +94,16 @@ def test_a_detached_head_rewrites_no_named_history_even_at_a_published_commit(
     assert tip(repo, "feature") != tip(repo)  # the branch itself did not move
 
 
-def test_pushing_the_protected_branch_never_reaches_the_remote(
+def test_pushing_never_reaches_the_remote_whatever_the_branch(
     repo: Repo, guard: GuardedGit, new_remote: Callable[[], Path]
 ) -> None:
     remote = new_remote()
     repo.sh("remote", "add", "origin", str(remote))
+    repo.sh("branch", "forja-run/r1")
 
-    with pytest.raises(GitCommandRefused, match="protected"):
-        run(guard, "push", "origin", "main")
+    for branch in ("main", "forja-run/r1"):
+        with pytest.raises(GitCommandRefused, match="never pushes"):
+            run(guard, "push", "origin", branch)
 
     assert repo.sh("ls-remote", str(remote)) == ""
 
@@ -153,6 +154,5 @@ def test_every_reconciliation_of_the_idempotency_table_runs_through_the_guard(
         await reconcile_commit_stage(guard, "forja/r/t1", "s1")
         await reconcile_integrate_task(guard, "forja/r/t1", "main")
         await reconcile_remove_worktree(guard, worktree)
-        await reconcile_push_run_branch(guard, str(remote), "main")
 
     asyncio.run(all_of_them())

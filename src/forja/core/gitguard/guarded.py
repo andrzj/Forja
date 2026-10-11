@@ -36,7 +36,7 @@ class GuardedGit(Git):
         self._mutex_timeout = mutex_timeout
 
     async def run(self, *args: str) -> GitResult:
-        command = check(args, self._protected)
+        command = check(args)
         if self._mutex is None or self._mutex_timeout is None or not writes(command):
             return await self._guarded_run(args, command.sub, command.flags)
         async with self._mutex.hold(timeout=self._mutex_timeout):

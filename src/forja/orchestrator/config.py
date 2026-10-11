@@ -1,7 +1,7 @@
 """What an execution is asked to do, recorded in the event that confirms it.
 
 The preparation builds a ``RunConfig``; the orchestrator never sees the questions that led to it.
-Grants and isolation levels keep living in the core's ``Confirmation``; this adds the rest.
+The isolation levels keep living in the core's ``Confirmation``; this adds the rest.
 """
 
 from enum import StrEnum
@@ -53,7 +53,7 @@ class RunConfig(BaseModel):
 
 
 def confirmed_payload(config: RunConfig, confirmation: Confirmation) -> dict[str, JsonValue]:
-    """Payload for the ``preparing -> confirmed`` transition: grants, isolation and the config."""
+    """Payload for the ``preparing -> confirmed`` transition: isolation and the config."""
     payload = confirmation_payload(confirmation)
     payload["config"] = config.model_dump(mode="json")
     return payload

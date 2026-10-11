@@ -1,6 +1,6 @@
 # 0001. Sem PR: a entrega é a branch mais o resumo
 
-- Status: Aceito
+- Status: Aceito (a parte do push foi substituída pelo [ADR 0013](0013-a-forja-nunca-faz-push.md))
 - Data: 10/10/2026
 
 ## Contexto

@@ -31,7 +31,6 @@ from forja.core.idempotency import (
     reconcile_create_task_branch,
     reconcile_integrate_task,
     reconcile_prepare_workcopy,
-    reconcile_push_run_branch,
     reconcile_remove_worktree,
     reconcile_run_tool,
     task_branch_name,
@@ -143,8 +142,6 @@ def reconciler(world: World) -> Callable[[OpenOperation], Awaitable[Reconciliati
                 return await reconcile_integrate_task(git, p["task_branch"], p["run_branch"])
             case "remove_worktree":
                 return await reconcile_remove_worktree(git, Path(p["worktree"]))
-            case "push_run_branch":
-                return await reconcile_push_run_branch(git, "origin", p["branch"])
         raise AssertionError(f"no reconciler for {op.operation}")
 
     return reconcile
@@ -245,14 +242,6 @@ class Script:
         )
         self.enter(Level.TASK, TASK, TaskState.INTEGRATED)
         self.enter(Level.EXECUTION, RUN, ExecutionState.CLOSING)
-        self.operate(
-            "push_run_branch",
-            Level.EXECUTION,
-            RUN,
-            lambda: {"branch": RUN_BRANCH},
-            lambda: w.sh("push", "origin", RUN_BRANCH),
-            RUN,
-        )
         summary = self.store.put(
             artifact_type=ArtifactType.EXECUTION_SUMMARY,
             producer=Producer.FORJA,

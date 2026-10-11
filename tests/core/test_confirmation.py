@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from forja.core.authorization import Grants
 from forja.core.confirmation import (
     Confirmation,
     ConfirmationError,
@@ -16,7 +15,6 @@ from forja.core.states import ExecutionState, Level
 from tests.core.events.support import RUN, create_run, open_log
 
 CONFIRMATION = Confirmation(
-    Grants(push_run_branch=True),
     IsolationRecord(
         agent=IsolationLevel.WSL,
         repo_code=IsolationLevel.REDUCED,
@@ -41,7 +39,7 @@ def test_what_the_user_confirmed_is_found_again_when_the_run_is_resumed(tmp_path
         assert load_confirmation(resumed.state) == CONFIRMATION
 
 
-def test_a_run_that_was_not_confirmed_has_no_grants(tmp_path: Path) -> None:
+def test_a_run_that_was_not_confirmed_has_no_isolation(tmp_path: Path) -> None:
     with open_log(tmp_path / "events.jsonl") as log:
         with pytest.raises(ConfirmationError, match="never confirmed"):
             load_confirmation(log.state)
@@ -53,7 +51,7 @@ def test_a_run_that_was_not_confirmed_has_no_grants(tmp_path: Path) -> None:
 def test_a_damaged_confirmation_is_refused_not_guessed(tmp_path: Path) -> None:
     with open_log(tmp_path / "events.jsonl") as log:
         create_run(log)
-        confirm(log, {"grants": {"push_run_branch": "maybe"}, "isolation": {}})
+        confirm(log, {"isolation": {}})
 
         with pytest.raises(ConfirmationError, match="invalid"):
             load_confirmation(log.state)

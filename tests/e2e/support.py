@@ -11,7 +11,7 @@ from tests.e2e.driver import drive, reconciler
 from tests.e2e.world import World, expected_after_discarding_one_attempt, fingerprint
 
 # Lines the uninterrupted run writes; a test fails if the script grows past what is cut.
-TOTAL_LINES = 60
+TOTAL_LINES = 58
 
 
 class Counting:

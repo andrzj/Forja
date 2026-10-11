@@ -22,7 +22,6 @@ PROTECTED = ProtectedBranches(frozenset({"main"}))
         (["add", "-A"], True),
         (["commit", "-m", "x"], True),
         (["merge", "x"], True),
-        (["push", "origin", "feature"], True),
         (["fetch", "origin"], True),
         (["reset", "--hard"], True),
         (["checkout", "-b", "x"], True),
@@ -53,7 +52,7 @@ PROTECTED = ProtectedBranches(frozenset({"main"}))
     ids=lambda v: " ".join(v) if isinstance(v, list) else str(v),
 )
 def test_only_commands_that_write_take_the_mutex(args: list[str], expected: bool) -> None:
-    assert writes(check(args, PROTECTED)) is expected
+    assert writes(check(args)) is expected
 
 
 class RecordingMutex(GitMutex):

@@ -6,7 +6,7 @@ from forja.core.authorization.actions import (
     ActionRequest,
 )
 from forja.core.authorization.branches import ProtectedBranches, detect_protected_branches
-from forja.core.authorization.policy import ActionForbidden, Grants, authorize
+from forja.core.authorization.policy import ActionForbidden, authorize
 
 __all__ = [
     "BRANCH_ACTIONS",
@@ -15,7 +15,6 @@ __all__ = [
     "ActionClass",
     "ActionForbidden",
     "ActionRequest",
-    "Grants",
     "ProtectedBranches",
     "authorize",
     "detect_protected_branches",

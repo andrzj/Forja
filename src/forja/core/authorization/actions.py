@@ -14,8 +14,7 @@ class Action(StrEnum):
     SEND_PACKAGE = "send_package"
     COMMIT_TO_TASK_BRANCH = "commit_to_task_branch"
     INTEGRATE_INTO_RUN_BRANCH = "integrate_into_run_branch"
-    PUSH_RUN_BRANCH = "push_run_branch"
-    PUSH_PROTECTED_BRANCH = "push_protected_branch"
+    PUSH = "push"
     MERGE_INTO_PROTECTED_BRANCH = "merge_into_protected_branch"
     DELETE_BRANCH = "delete_branch"
     REWRITE_PUBLISHED_HISTORY = "rewrite_published_history"
@@ -25,11 +24,10 @@ class Action(StrEnum):
 
 class ActionClass(StrEnum):
     AUTOMATIC = "automatic"  # always allowed
-    NEEDS_GRANT = "needs_grant"  # allowed only if the user granted it in the preparation
     FORBIDDEN = "forbidden"  # never allowed, whatever the user said
 
 
-A, N, F = ActionClass.AUTOMATIC, ActionClass.NEEDS_GRANT, ActionClass.FORBIDDEN
+A, F = ActionClass.AUTOMATIC, ActionClass.FORBIDDEN
 
 CLASSIFICATION: Mapping[Action, ActionClass] = MappingProxyType(
     {
@@ -40,8 +38,7 @@ CLASSIFICATION: Mapping[Action, ActionClass] = MappingProxyType(
         Action.SEND_PACKAGE: A,
         Action.COMMIT_TO_TASK_BRANCH: A,
         Action.INTEGRATE_INTO_RUN_BRANCH: A,
-        Action.PUSH_RUN_BRANCH: N,
-        Action.PUSH_PROTECTED_BRANCH: F,
+        Action.PUSH: F,
         Action.MERGE_INTO_PROTECTED_BRANCH: F,
         Action.DELETE_BRANCH: F,
         Action.REWRITE_PUBLISHED_HISTORY: F,
@@ -51,9 +48,7 @@ CLASSIFICATION: Mapping[Action, ActionClass] = MappingProxyType(
 )
 
 # Actions that always concern one branch, which must then be named in the request.
-BRANCH_ACTIONS = frozenset(
-    {Action.COMMIT_TO_TASK_BRANCH, Action.INTEGRATE_INTO_RUN_BRANCH, Action.PUSH_RUN_BRANCH}
-)
+BRANCH_ACTIONS = frozenset({Action.COMMIT_TO_TASK_BRANCH, Action.INTEGRATE_INTO_RUN_BRANCH})
 
 
 @dataclass(frozen=True)

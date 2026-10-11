@@ -44,10 +44,6 @@ class World:
         return self.root / "repo"
 
     @property
-    def remote(self) -> Path:
-        return self.root / "remote.git"
-
-    @property
     def run_dir(self) -> Path:
         return self.root / "run"
 
@@ -123,8 +119,6 @@ def make_world(root: Path, template: Path) -> World:
     world = World(root)
     (root / "home").mkdir(parents=True)
     shutil.copytree(template, world.repo)
-    world.sh("init", "--bare", "-b", "main", str(world.remote), cwd=root)
-    world.sh("remote", "add", "origin", str(world.remote))
     return world
 
 
@@ -159,10 +153,6 @@ def fingerprint(world: World) -> dict[str, Any]:
             "task_tree": world.sh("rev-parse", f"forja/{RUN}/{TASK}^{{tree}}"),
             "commits": world.sh("rev-list", "--count", RUN_BRANCH),
             "worktrees": len(world.sh("worktree", "list", "--porcelain").split("\n\n")),
-            "remote_tip_is_local_tip": (
-                world.sh("ls-remote", "origin", f"refs/heads/{RUN_BRANCH}").split()[0]
-                == world.sh("rev-parse", RUN_BRANCH)
-            ),
             "evidence": _files(world.evidence_dir),
             "blobs": sorted(p.name for p in (world.store_dir / "blobs").glob("*")),
         }
