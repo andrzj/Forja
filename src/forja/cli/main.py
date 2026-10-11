@@ -18,7 +18,7 @@ from forja.cli.facade import run_facade
 from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
-from forja.cli.run import Ended, Renderer, closing_lines, execute
+from forja.cli.run import Ended, Renderer, closing_lines, execute, exit_code
 from forja.cli.session import Session, open_session
 from forja.cli.settings import (
     Execucao,
@@ -83,9 +83,7 @@ def _remember(prepared: Prepared, profile: Perfil, console: Console, home: Path)
 def _finish(session: Session, ended: Ended, console: Console) -> int:
     for line in closing_lines(session, ended):
         console.say(line)
-    if ended.outcome is None:
-        return int(ExitCode.INTERRUPTED)
-    return int(ended.outcome.exit_code)
+    return exit_code(session, ended)
 
 
 async def _run(session: Session, renderer: Renderer, console: Console) -> int:

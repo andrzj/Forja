@@ -18,8 +18,9 @@ nunca pode alterar o que o usuário ainda não salvou.
   `discarded` e **mostra** os comandos para remover as branches; a Forja não apaga nada.
 - Sem terminal (CI, `--config`), uma execução incompleta recusa a partida em vez de decidir sozinha.
 - `forja doctor` verifica e explica; não instala. A configuração da CLI do agente é do usuário.
-- Códigos de saída: 0 entregue, 1 falhou, 2 não pôde começar, 3 pausada com tudo salvo, 130
-  interrompida pelo usuário.
+- Códigos de saída: 0 entregue, 1 falhou, 2 não pôde começar, 3 pausada com tudo salvo, 4 entregue
+  sem nada integrado (todas as tarefas bloqueadas: a branch não tem mudanças), 130 interrompida
+  pelo usuário.
 
 ## Consequências
 

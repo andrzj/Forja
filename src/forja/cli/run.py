@@ -14,7 +14,7 @@ from typing import Protocol
 
 from forja.cli.keys import KeySource
 from forja.cli.session import Session
-from forja.orchestrator.outcome import Outcome
+from forja.orchestrator.outcome import ExitCode, Outcome
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator
 from forja.ui.theme import Theme, next_theme
 from forja.ui.view import View
@@ -118,6 +118,17 @@ async def _watch(
         elif key == "t" and hasattr(renderer, "theme"):
             themed: ThemedRenderer = renderer  # type: ignore[assignment]
             themed.theme = next_theme(themed.theme)
+
+
+def exit_code(session: Session, ended: Ended) -> int:
+    """The exit code of the process: the run's own, except a delivery with nothing in it."""
+    if ended.outcome is None:
+        return int(ExitCode.INTERRUPTED)
+    view = session.view.snapshot()
+    empty = bool(view.tasks_blocked) and not view.tasks_integrated
+    if ended.outcome.exit_code is ExitCode.DELIVERED and view.state == "delivered" and empty:
+        return int(ExitCode.NOTHING_INTEGRATED)
+    return int(ended.outcome.exit_code)
 
 
 def closing_lines(session: Session, ended: Ended) -> list[str]:

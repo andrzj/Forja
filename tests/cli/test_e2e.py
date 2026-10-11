@@ -170,6 +170,7 @@ def test_work_that_changes_the_behaviour_never_reaches_the_branch(
 ) -> None:
     result = whole_run(tmp_path, monkeypatch, capsys, WRONG)
 
+    assert result.code == 4, result.text
     assert "always" not in result.delivered(), result.text
     assert "0 de 1 tarefa(s) integrada(s); 1 bloqueada(s)" in result.text
     assert "Nenhuma tarefa foi integrada" in result.text
