@@ -22,7 +22,7 @@ A Forja é uma ferramenta de linha de comando, escrita em Python, que conduz CLI
 
 ## Modos de operação e experiência de uso
 
-O usuário executa um único comando, `forja`, é guiado na preparação, confirma uma vez e não interfere mais até o PR final.
+O usuário executa um único comando, `forja`, é guiado na preparação, confirma uma vez e não interfere mais até a entrega final.
 
 ### Objetivos de execução
 
@@ -40,15 +40,15 @@ Depois do primeiro commit, todo repositório é "existente": a criação a parti
 1. **Detecção automática:** repositório existente ou vazio, linguagens, toolchains e versões, CLIs instaladas e seu shell, terminal, disponibilidade do WSL e nível de isolamento, README, testes, espaço em disco.
 2. **Perguntas mínimas:** só o que não pode ser detectado — objetivo, entrada (descrição ou arquivo de especificação), CLI por papel (sugerindo diversidade de autor entre testes e implementação) e orçamento (tempo e tentativas).
 3. **Prova de vida** de cada CLI escolhida.
-4. **Resumo e confirmação única.** Esse é o ponto sem retorno: depois dele, a ferramenta não faz perguntas durante a execução. O que surgir sem evidência vira premissa declarada no PR.
+4. **Resumo e confirmação única.** Esse é o ponto sem retorno: depois dele, a ferramenta não faz perguntas durante a execução. O que surgir sem evidência vira premissa declarada no resumo da execução.
 
 **Momentos de interação.** Há apenas dois: a preparação guiada e uma nova invocação de `forja` depois de uma interrupção ou de uma parada bloqueante, quando a única pergunta é retomar ou descartar. Pausas por rede, disco ou falhas de infraestrutura são resolvidas sem perguntas: a execução aguarda e retoma sozinha, ou para com estado gravado.
 
-**Sem WSL.** A preparação avisa que o isolamento será reduzido, explica o que deixa de ser garantido e recomenda habilitar o WSL; se o terminal não for o Windows Terminal, recomenda usar o Git Bash como perfil dele. O usuário decide seguir ou não, e o nível usado é declarado no PR.
+**Sem WSL.** A preparação avisa que o isolamento será reduzido, explica o que deixa de ser garantido e recomenda habilitar o WSL; se o terminal não for o Windows Terminal, recomenda usar o Git Bash como perfil dele. O usuário decide seguir ou não, e o nível usado é declarado no resumo da execução.
 
 ### Execução autônoma
 
-Do ponto sem retorno até a entrega, a interface mostra progresso contínuo. Ao final, informa a branch ou o PR e o caminho do resumo.
+Do ponto sem retorno até a entrega, a interface mostra progresso contínuo. Ao final, informa a branch da entrega e o caminho do resumo.
 
 ### Detalhes de interface
 
@@ -149,11 +149,11 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 
 **Protocolo de subprocesso.** Toda execução externa (CLI de agente, build, testes, ferramentas, git) passa por um único executor de processos do núcleo, dono do ciclo de vida:
 
-1. **Início:** comando, diretório, variáveis de ambiente e tempo-limite declarados; processo criado dentro do Job Object da execução; evento de intenção gravado antes.
+1. **Início:** comando, diretório, variáveis de ambiente e tempo-limite declarados; processo criado dentro de um Job Object próprio da chamada, que encerra a árvore ao ser fechado; evento de intenção gravado antes.
 2. **Fluxo:** stdout e stderr lidos de forma assíncrona e convertidos em eventos; log bruto em arquivo.
 3. **Tempo-limite e cancelamento:** término gracioso, espera curta, encerramento da árvore inteira.
 4. **Encerramento:** código de saída, duração e referência ao log gravados como efetivação.
-5. **Recuperação:** na retomada, processos remanescentes da execução anterior são encerrados antes de qualquer reconciliação.
+5. **Recuperação:** na retomada, processos remanescentes da execução anterior são encerrados antes de qualquer reconciliação. Cada processo é identificado pelo PID e pelo horário de criação, gravados no evento de início; só se encerra o processo cuja identidade confere, para não atingir outro que reutilizou o PID.
 
 **Gravação.** Checksum por linha protege o JSONL contra corrupção; não torna nada idempotente. O protocolo de intenção e efetivação apenas detecta operações incompletas. O que garante a retomada correta é a tabela abaixo.
 
@@ -169,7 +169,6 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 | Integração da tarefa | `Task-Id` | Ponta da branch da tarefa contida na branch da execução | Não | Registra efetivação se existir; senão, integra e roda o gate de integração |
 | Remover worktree | Caminho | Ausência no disco e no `git worktree list` | Sim | `git worktree prune` |
 | Push da branch da execução | Nome da branch | Ref remota aponta para o commit esperado | Sim | Repete |
-| Criação do PR | Nome da branch | Consulta à plataforma | Não | Registra se existir; senão, cria |
 
 **Transferência entre cópia de trabalho e worktree.** A transferência é por comparação de manifestos, não por patch textual. Antes e depois da chamada à CLI, a Forja registra o manifesto da cópia: caminho, hash do conteúdo, tipo e bit de execução de cada arquivo. A diferença entre os dois é a mudança; aplicá-la significa levar o worktree ao manifesto esperado, o que é verificável e seguro de repetir.
 
@@ -193,7 +192,7 @@ A autorização é uma política separada do fluxo da tarefa. A única decisão 
 
 | Classe | Ações |
 | --- | --- |
-| Decidida na preparação | Objetivo, CLI por papel, orçamento, push da branch e criação do PR |
+| Decidida na preparação | Objetivo, CLI por papel, orçamento e push da branch |
 | Automática | Ler o repositório, criar e remover worktrees, executar adaptadores, enviar o pacote redigido, commit e integração na branch da execução |
 | Proibida | Push ou merge na branch principal, apagar branches, reescrever histórico publicado, enviar arquivos marcados como sensíveis, acesso do agente a segredos do repositório ou do ambiente |
 
@@ -217,9 +216,9 @@ A autorização é uma política separada do fluxo da tarefa. A única decisão 
 - **ambiente filtrado por lista de permissões**: a CLI recebe só as variáveis necessárias;
 - **o agente não trabalha num repositório**: a cópia não tem `.git`, e `GIT_CEILING_DIRECTORIES` impede que o git procure um repositório nos diretórios acima.
 
-O nível usado é detectado na preparação, exibido ao usuário, registrado nas evidências e declarado no PR. A garantia sobre dados sensíveis é restrita ao que o nível impõe.
+O nível usado é detectado na preparação, exibido ao usuário, registrado nas evidências e declarado no resumo da execução. A garantia sobre dados sensíveis é restrita ao que o nível impõe.
 
-**Proteção do git.** O gestor de git é o único dono do índice, das refs e do histórico. Em ambos os níveis, o agente trabalha numa cópia sem `.git`, então um comando `git` falha por construção. Além disso, antes e depois de cada chamada, o gestor compara HEAD, branch, índice e refs, incluindo as refs compartilhadas pelos worktrees. Qualquer diferença rejeita a tentativa. No nível reduzido, essa verificação é a única defesa contra um agente que chegue ao repositório principal por caminho absoluto, e o PR registra isso.
+**Proteção do git.** O gestor de git é o único dono do índice, das refs e do histórico, e usa uma fachada restrita: só os comandos de uma lista permitida, com regras para branches protegidas e para histórico já publicado. Em ambos os níveis, o agente trabalha numa cópia sem `.git`, então um comando `git` falha por construção; no ambiente do agente, `GIT_CEILING_DIRECTORIES` e um `GIT_DIR` apontando para um caminho inexistente reforçam isso. Além disso, antes e depois de cada chamada, o gestor fotografa e compara as refs (incluindo as compartilhadas pelos worktrees), o HEAD, a branch e o índice de cada worktree, o `.git/config` e os hooks. Qualquer diferença rejeita a tentativa. No nível reduzido, essa verificação é a única defesa contra um agente que chegue ao repositório principal por caminho absoluto, e o resumo da execução registra isso.
 
 **Credencial da CLI.** Nenhum segredo do repositório ou do ambiente chega ao agente. A credencial da própria CLI é outra coisa: é gerenciada pela CLI e pelo gateway ou provedor configurado nela, fora do escopo da Forja. A Forja não intermedia chamadas ao modelo nem cria proxy de credenciais. Em ambiente corporativo, essa credencial só serve para o gateway, que já faz autenticação, auditoria e cotas, e no nível WSL a rede de saída não permite levá-la a outro destino. A prova de vida confirma que a CLI, no ambiente em que vai rodar, está configurada e alcança o endpoint.
 
@@ -227,7 +226,7 @@ O nível usado é detectado na preparação, exibido ao usuário, registrado nas
 
 - **Nível WSL:** todas essas ferramentas rodam dentro da distribuição dedicada, sobre a cópia de trabalho ou uma cópia de medição. A Forja no Windows só manipula arquivos e git; nunca executa código do repositório.
 - **Caches de build** (Maven, Gradle, módulos Go, uv, pnpm, NuGet) são persistentes na distribuição, mas separados por repositório, para que um repositório não contamine o cache de outro.
-- **Projetos que só compilam no Windows** (por exemplo, .NET Framework legado): o adaptador declara a capacidade `requer_windows`, e o build desse repositório roda no nível reduzido, declarado no PR.
+- **Projetos que só compilam no Windows** (por exemplo, .NET Framework legado): o adaptador declara a capacidade `requer_windows`, e o build desse repositório roda no nível reduzido, declarado no resumo da execução.
 - **Nível reduzido:** tudo roda no Windows, com o mesmo usuário, como já declarado.
 
 ### Contrato 4: eventos, artefatos e evidências
@@ -256,8 +255,8 @@ Nenhuma informação é copiada entre formatos: o evento guarda o ID e o hash do
 | `criterios` | Especificador | Autor de testes, implementador, documentador |
 | `manifesto_testes` | Autor de testes | Implementador, gates |
 | `declaracao_mudanca` | Qualquer papel que edita arquivos | Verificador, documentador |
-| `registro_mudanca` | Documentador | PR, retomada de contexto em execuções futuras |
-| `resumo_execucao` | Fechamento | PR |
+| `registro_mudanca` | Documentador | Resumo da execução, retomada de contexto em execuções futuras |
+| `resumo_execucao` | Fechamento | Entrega (revisão humana) |
 
 A `declaracao_mudanca` é a forma concreta do contrato de saída do LLM: afirmações com evidência, ações e premissas. Uma ação não é um comando executado pela Forja; o agente edita arquivos diretamente, e a ação é uma declaração conferida contra o diff real. Arquivos declarados diferentes dos arquivos alterados reprovam a tentativa.
 
@@ -287,21 +286,22 @@ Todo gate é código, recebe entradas declaradas e devolve um de quatro resultad
 | --- | --- | --- |
 | `aprovado` | Critério atendido | Próximo gate |
 | `reprovado` | Critério violado, com motivo, números e localização | Tentativa rejeitada; motivo vai para a próxima tentativa |
-| `inconclusivo` | A medição não pôde ser feita (ferramenta travou, tempo-limite, construção de linguagem não suportada) | Conforme a política do gate: bloqueia a tarefa, ou segue e vira premissa no PR. Nunca é tratado como aprovação silenciosa nem conta como falha do agente |
-| nao\_aplicavel | O adaptador não declara a capacidade exigida, ou a métrica não tem definição para aquele ecossistema | Reportado no PR; não bloqueia nem vira premissa. Diferente de inconclusivo: não se esperava que funcionasse |
+| `inconclusivo` | A medição não pôde ser feita (ferramenta travou, tempo-limite, construção de linguagem não suportada) | Conforme a política do gate: bloqueia a tarefa, ou segue e vira premissa no resumo. Nunca é tratado como aprovação silenciosa nem conta como falha do agente |
+| nao\_aplicavel | O adaptador não declara a capacidade exigida, ou a métrica não tem definição para aquele ecossistema | Reportado no resumo; não bloqueia nem vira premissa. Diferente de inconclusivo: não se esperava que funcionasse |
 
-**Modo de operação por gate:**
+**Modo de operação por check.** O modo vale para cada *check*, a verificação individual de uma ferramenta ou detector; um gate agrupa checks, e um mesmo gate pode ter checks em modos diferentes.
+
 
 - `bloqueante`: o resultado decide a tentativa.
-- `observacao`: mede e reporta no PR, mas não bloqueia. Todo gate novo, ou com limiar ainda sem dados de calibração, começa neste modo e passa a bloqueante por decisão registrada na política.
+- `observacao`: mede e reporta no resumo, mas não bloqueia. Todo check novo, ou com limiar ainda sem dados de calibração, começa neste modo e passa a bloqueante por decisão registrada na política.
 
-**Combinação de modo e resultado.** Em `observacao`, nenhum resultado bloqueia. Em `bloqueante`, `reprovado` rejeita a tentativa, e a política para `inconclusivo` é um atributo obrigatório do gate, com dois valores: `bloquear` ou `premissa`. A configuração é validada na carga; um gate bloqueante sem essa política impede o início da execução.
+**Combinação de modo e resultado.** Em `observacao`, nenhum resultado bloqueia. Em `bloqueante`, `reprovado` rejeita a tentativa, e a política para `inconclusivo` é um atributo obrigatório do check, com dois valores: `bloquear` ou `premissa`. A configuração é validada na carga; um check bloqueante sem essa política impede o início da execução.
 
 **Padrões para detectores frágeis.** "Comentário que repete o código", "interface pública sem comentário" e os medidores de profundidade de módulo e *pass-through* começam em `observacao`, porque sua definição varia por linguagem e estilo e eles produzem falsos positivos. A lista de marcadores de texto gerado por IA é `bloqueante` por padrão, configurável por repositório.
 
-**Chave de cache:** hash do commit, ferramenta e versão, hash da configuração efetiva, toolchain e versão, plataforma e escopo medido. Uma evidência só é reaproveitada se a chave inteira coincidir.
+**Chave de cache:** hash do commit, ferramenta e versão, hash da configuração efetiva, toolchain e versão, plataforma e escopo medido. Uma evidência só é reaproveitada se a chave inteira coincidir. A versão das políticas e o tipo de medição não entram na chave; a evidência registra a versão da política que a julgou.
 
-**Políticas e configuração.** Predicados e lógica dos gates são implementados em código. O TOML configura apenas valores: limiares por linguagem, modo do gate, comandos e limites. Uma linguagem de regras só será considerada diante de um caso real que a justifique.
+**Políticas e configuração.** Predicados e lógica dos gates são implementados em código. O TOML configura apenas valores: limiares por linguagem (que pertencem à política, não ao adaptador), modo de cada check, comandos e limites. Uma linguagem de regras só será considerada diante de um caso real que a justifique.
 
 ## Papéis e contratos de artefatos
 
@@ -332,7 +332,7 @@ A configuração por papel define qual CLI executa cada um. Autor de testes e im
 ### Limites conhecidos
 
 - A escrita é controlada deterministicamente pelo gate de escopo, com os padrões de arquivo de teste e de produção de cada adaptador. A leitura só é orientada pelo pacote, não bloqueada.
-- Um eventual papel revisor feito por LLM só gera alertas para o PR; nunca aprova.
+- Um eventual papel revisor feito por LLM só gera alertas para o resumo; nunca aprova.
 
 ## Ciclo por tarefa e gates
 
@@ -346,7 +346,7 @@ Cada tarefa tem uma intenção, gera um commit por etapa aprovada, é integrada 
 4. **Avaliação de documentação** → README e documentos existentes, deriva. Gera as lacunas.
 5. **Planejamento** → fila de tarefas atômicas (ver *Planejamento, premissas e critérios de parada*).
 6. **Ciclo por tarefa** → papéis, gates, commits e registros de mudança.
-7. **Fechamento** → re-medição completa, README, ADRs, resumo da execução e PR.
+7. **Fechamento** → re-medição completa, README, ADRs e resumo da execução.
 
 ### Gates, em ordem
 
@@ -373,7 +373,7 @@ Depois de integrar a tarefa na branch da execução, um **gate de integração**
 
 - **Aprovada:** etapas commitadas na branch da tarefa, registro de mudança no commit docs: da mesma tarefa, e a tarefa integrada inteira na branch da execução.
 - **Rejeitada:** o worktree é descartado. A nova tentativa recebe o mesmo pacote mais o motivo exato: gate, números e localização.
-- **Bloqueada:** após N tentativas, sai da fila com as evidências de cada tentativa e vai para o PR. As demais tarefas seguem, exceto as dependentes.
+- **Bloqueada:** após N tentativas, sai da fila com as evidências de cada tentativa e vai para o resumo. As demais tarefas seguem, exceto as dependentes.
 
 Falhas de infraestrutura (rede, limite de taxa) não contam como tentativa: o limite de tentativas mede qualidade, não instabilidade. Gates inconclusivos seguem a política do contrato 5.
 
@@ -387,7 +387,6 @@ Cada linguagem é um adaptador que traduz as ferramentas nativas para o esquema 
 - **Comandos:** formatar, lint (com autofix), build, testes (com filtro por arquivo e por teste), cobertura, mutação (incremental quando disponível), E2E.
 - **Parsers:** saída de cada ferramenta → evidências normalizadas; progresso em tempo real para a interface.
 - **Classificação de arquivos:** padrões de produção, teste, fixture e documentação, usados pelo gate de escopo.
-- **Limiares calibrados por linguagem**, principalmente de mutação.
 - **Override por repositório:** arquivo de configuração da ferramenta com comandos fora do padrão. É lido por código e nunca enviado ao LLM.
 
 ### Ferramentas por linguagem
@@ -430,7 +429,7 @@ A Forja não chama modelos diretamente: invoca CLIs de agentes em modo headless.
 1. **Descoberta automática** no PATH (incluindo *shims* `.cmd` no Windows) e nos locais de instalação conhecidos de cada CLI, declarados no seu adaptador. Várias instalações → o usuário escolhe, vendo caminho e versão.
 2. **Indicação manual** quando a descoberta falha, validada na hora.
 3. **Precedência:** arquivo de execução ou flag → variável de ambiente (`FORJA_EXECUTOR_<NOME>`) → configuração do usuário → descoberta.
-4. **Configuração do usuário fica no perfil dele** (`%APPDATA%\forja\` ou `~/.config/forja/`), nunca no repositório.
+4. **Configuração do usuário fica no perfil dele** (`%APPDATA%\forja\` ou `~/.config/forja/`), nunca no repositório. Os dados das execuções (eventos, artefatos, locks) ficam em `%LOCALAPPDATA%\forja\` (ou `~/.local/share/forja/`), separados da configuração.
 
 ### Prova de vida
 
@@ -472,13 +471,13 @@ Testes são a principal prova da Forja, e por isso a estratégia ataca o maior r
 
 ### Níveis
 
-O especificador atribui um nível a cada critério: unitário, integração ou E2E. Sempre que um critério descreve um fluxo de ponta a ponta, o E2E correspondente é obrigatório. Se o especificador declarar o E2E inviável, com justificativa, isso vira premissa no PR.
+O especificador atribui um nível a cada critério: unitário, integração ou E2E. Sempre que um critério descreve um fluxo de ponta a ponta, o E2E correspondente é obrigatório. Se o especificador declarar o E2E inviável, com justificativa, isso vira premissa no resumo.
 
 ### E2E sem ambiente real
 
 - **Fakes antes de mocks:** implementações leves que funcionam (WireMock, WireMock.Net, `httptest`, respx/responses, msw; bancos em memória ou embarcados). Mocks só nas bordas.
 - **Rede desligada:** os E2E rodam sem acesso externo. Dependência de serviço real faz o teste falhar, o que prova mecanicamente o isolamento.
-- **Fakes honestos:** gerados ou validados a partir de contratos (OpenAPI, esquemas de mensagem) ou cobertos por teste de contrato (Pact). Sem contrato, a divergência possível vira premissa no PR.
+- **Fakes honestos:** gerados ou validados a partir de contratos (OpenAPI, esquemas de mensagem) ou cobertos por teste de contrato (Pact). Sem contrato, a divergência possível vira premissa no resumo.
 - **Determinismo:** relógio fake e sementes fixas.
 - **Sem dados reais:** fixtures vêm de geradores com semente, declarados no manifesto de testes. Um scanner verifica padrões de dados pessoais (CPF, e-mail, telefone). Exigência de LGPD.
 
@@ -512,7 +511,7 @@ Cada execução tem objetivos explícitos, por exemplo: nenhum hotspot acima do 
 ### Premissas e fatos registrados
 
 - Sem humano durante a execução, uma pergunta vira **premissa declarada**: o que foi assumido, por quê e que evidência faltou. Artefatos e commits dependentes ficam marcados.
-- O PR abre com a seção **Premissas assumidas**, cada uma com os commits afetados, para que o revisor rejeite só o que depende de uma premissa errada.
+- O resumo abre com a seção **Premissas assumidas**, cada uma com os commits afetados, para que o revisor rejeite só o que depende de uma premissa errada.
 - Quando um humano confirma ou corrige uma premissa na revisão, isso vira **fato registrado**, com autor e data, e entra nos pacotes de execuções futuras como evidência.
 
 ### Modelo arquitetural global
@@ -521,7 +520,7 @@ A medição de base extrai o grafo de dependências entre módulos. Ele funciona
 
 ## Git, worktrees e entrega
 
-Uma tarefa equivale a uma intenção; cada etapa aprovada equivale a um commit, e a tarefa é integrada inteira. A entrega de qualquer fluxo é uma branch com PR para revisão humana; nada é integrado automaticamente na branch principal.
+Uma tarefa equivale a uma intenção; cada etapa aprovada equivale a um commit, e a tarefa é integrada inteira. A entrega de qualquer fluxo é a branch da execução, com o arquivo de resumo, para revisão humana; a Forja não abre pull request nem se integra a plataforma de hospedagem. Com o push concedido na preparação, a branch segue para o remoto; sem ele, fica local. Nada é integrado automaticamente na branch principal.
 
 ### Commits atômicos
 
@@ -535,7 +534,7 @@ Todo commit carrega também `Stage-Id` e `Attempt-Id`, usados na reconciliação
 
 ### Worktrees
 
-Cada tarefa tem uma branch própria, criada a partir da ponta da branch da execução. Cada tentativa usa um worktree descartável criado a partir da ponta da branch da tarefa. O agente não trabalha no worktree: trabalha numa cópia sem `.git` (contrato 3), e a Forja aplica o diff resultante ao worktree. Aprovada, a etapa vira commit na branch da tarefa. Com todas as etapas commitadas, a tarefa é integrada inteira na branch da execução, depois do gate de integração. Worktrees de tentativas rejeitadas são removidos com `git worktree remove --force`.
+A branch da execução chama-se `forja-run/<execução>` e a de cada tarefa `forja/<execução>/<tarefa>`; os nomes diferem porque o git não aceita um ref e um diretório de refs com o mesmo nome. Cada tarefa tem uma branch própria, criada a partir da ponta da branch da execução. Cada tentativa usa um worktree descartável criado a partir da ponta da branch da tarefa. O agente não trabalha no worktree: trabalha numa cópia sem `.git` (contrato 3), e a Forja aplica o diff resultante ao worktree. Aprovada, a etapa vira commit na branch da tarefa. Com todas as etapas commitadas, a tarefa é integrada inteira na branch da execução, depois do gate de integração. Worktrees de tentativas rejeitadas são removidos com `git worktree remove --force`.
 
 - **Caminhos longos no Windows:** `core.longpaths=true` e worktrees num diretório raiz curto.
 - **Fins de linha:** `.gitattributes` coerente verificado na detecção e normalizado no commit `style:`.
@@ -543,7 +542,7 @@ Cada tarefa tem uma branch própria, criada a partir da ponta da branch da execu
 - **Paralelismo só com escopos disjuntos**, decidido deterministicamente. A versão inicial é sequencial.
 - **Operações de git serializadas** por mutex baseado em criação de diretório, pois os worktrees compartilham o mesmo `.git`.
 
-### Estrutura do PR
+### Estrutura do resumo de entrega
 
 1. Premissas assumidas, com os commits afetados.
 2. Tarefas bloqueadas, com as evidências de cada tentativa.
@@ -578,7 +577,7 @@ Gerado quando o detector identifica mudança arquitetural: dependência externa 
 
 ### Resumo da execução
 
-Agrega registros, tarefas rejeitadas e bloqueadas, premissas, custo e tempo por tarefa, e métricas antes e depois. É a base do texto do PR e não é commitado: fica no corpo do PR e no diretório da execução, para não gerar ruído no histórico.
+Agrega registros, tarefas rejeitadas e bloqueadas, premissas, custo e tempo por tarefa, e métricas antes e depois. É o texto da entrega e não é commitado: fica em `runs/<id>/resumo.md`, no diretório de dados da execução, para não gerar ruído no histórico.
 
 ### Deriva
 
@@ -607,7 +606,7 @@ Antes de qualquer envio, uma etapa determinística:
 
 Se a redação remover algo essencial para a tarefa, isso vira premissa declarada.
 
-A redação garante o que a Forja envia. O que a CLI consegue ler por conta própria depende do nível de isolamento (contrato 3): no nível WSL, só a cópia de trabalho; no nível reduzido, o restante do disco fica apenas monitorado, e o PR declara isso.
+A redação garante o que a Forja envia. O que a CLI consegue ler por conta própria depende do nível de isolamento (contrato 3): no nível WSL, só a cópia de trabalho; no nível reduzido, o restante do disco fica apenas monitorado, e o resumo declara isso. Ela também não mascara o conteúdo dos arquivos da cópia de trabalho, porque o agente gravaria o marcador no código real.
 
 ### O que o agente produz
 
@@ -629,7 +628,7 @@ A perda máxima em qualquer falha (Windows, rede, energia) é uma tentativa de t
 
 ### Gravação segura
 
-- **JSONL append-only** com `fsync` e checksum por linha. Na recuperação, uma linha final truncada é descartada e o fato é registrado.
+- **JSONL append-only** com `fsync` e checksum por linha. Na recuperação, uma linha final truncada é descartada e o fato é registrado. Os eventos não guardam conteúdo: o payload tem até 4 KiB e cada linha de saída é cortada em 1 KiB (o texto completo fica no log bruto). O `fsync` vale para todo evento, menos os de progresso.
 - **Escrita atômica** de artefatos: arquivo temporário, `fsync`, `os.replace` (atômico no NTFS no mesmo volume). Nova tentativa com espera curta quando antivírus ou indexador seguram o arquivo.
 
 ### Intenção, efeito, efetivação
@@ -652,13 +651,13 @@ Falhas de infraestrutura repetidas numa mesma etapa atingem um limite próprio d
 
 ### Particularidades do Windows
 
-- **Job Object** para todos os subprocessos: a árvore inteira encerra junto com a ferramenta. Na retomada, procura processos remanescentes da execução anterior.
+- **Job Object** próprio de cada chamada, para todos os subprocessos: a árvore inteira encerra junto com a ferramenta. Na retomada, procura processos remanescentes da execução anterior pela identidade gravada (PID e horário de criação).
 - **Sem suspensão** durante a execução (`SetThreadExecutionState`), liberada ao final.
 - **Espaço em disco** verificado no início e periodicamente; abaixo do limite, pausa.
 
 ### Exclusividade e retomada
 
-- Lock por repositório com PID, máquina e horário; lock órfão é detectado e assumido com segurança.
+- Lock por repositório com PID, máquina e horário; lock órfão é detectado e assumido com segurança. Há uma sessão da Forja por repositório: a segunda recebe recusa imediata ou espera com limite, conforme a política.
 - Configuração congelada no arquivo da execução; atualização de CLI dispara nova prova de vida, registrada como evidência.
 - Orçamento consumido persiste entre retomadas.
 - Medições em cache não são refeitas quando a chave completa do contrato 5 coincide.
@@ -719,7 +718,7 @@ A Forja mede a si mesma com o mesmo rigor que aplica ao código, e o ciclo só f
 | --- | --- |
 | Taxa de commits aceitos na revisão | Qualidade percebida pelo revisor |
 | Defeitos escapados após o merge | Qualidade real |
-| Tempo de revisão por PR | Custo humano da entrega |
+| Tempo de revisão por entrega | Custo humano da entrega |
 | Custo por tarefa aceita (tempo, tentativas, tokens quando a CLI ou o gateway informarem) | Eficiência |
 | Premissas confirmadas versus rejeitadas | Qualidade do julgamento sob incerteza |
 
@@ -731,7 +730,7 @@ Taxa de aceite, tentativas e custo por papel, por CLI e por tipo de tarefa; reje
 
 ### Coleta da revisão humana
 
-Após a revisão do PR, a Forja coleta deterministicamente: commits aceitos e rejeitados, premissas confirmadas ou corrigidas, comentários do revisor por commit. O resultado é agregado por papel, CLI, tipo de tarefa e gate, e alimenta a calibração dos limiares e a base de fatos registrados.
+Depois da revisão, a Forja coleta só o que o git mostra: após um `fetch`, quais commits da execução chegaram à branch principal e quais não, identificados por `Task-Id` e `Stage-Id`. Comentários do revisor e a confirmação ou correção de premissas não são lidos de nenhuma plataforma; podem entrar como um arquivo de texto que o usuário aponta, opcional. O resultado é agregado por papel, CLI, tipo de tarefa e gate, e alimenta a calibração dos limiares e a base de fatos registrados.
 
 ### Políticas versionadas
 
@@ -745,14 +744,16 @@ Conjunto fixo de repositórios de exemplo com problemas conhecidos, nas linguage
 
 | Termo | Definição |
 | --- | --- |
-| Execução | Uma invocação de `forja` do ponto sem retorno até o PR, com branch e diretório próprios |
+| Execução | Uma invocação de `forja` do ponto sem retorno até a entrega, com branch e diretório próprios |
 | Tarefa | Unidade de integração com uma intenção e escopo declarado; gera um commit por etapa aprovada e entra inteira na branch da execução |
 | Tentativa | Uma passagem de um papel por uma tarefa; rejeitada, é descartada |
 | Papel | Função atribuída a uma chamada de CLI: arqueólogo, especificador, autor de testes, implementador, documentador |
-| Gate | Verificação determinística que aprova ou reprova uma entrega |
+| Gate | Verificação determinística que aprova ou reprova uma entrega; agrupa checks |
+| Check | Verificação individual de uma ferramenta ou detector, com modo e política próprios |
+| Entrega | A branch da execução mais o arquivo de resumo; sem pull request nem integração com plataforma |
 | Pacote de evidências | Entrada enxuta e redigida enviada ao LLM: objetivo, escopo, evidências, políticas acionadas, critérios de aceite, ambiente e contrato de saída |
 | Evidência | Medição normalizada no esquema único, com ferramenta, versão e commit |
-| Premissa | O que um papel assumiu por falta de evidência, declarado e rastreado até o PR |
+| Premissa | O que um papel assumiu por falta de evidência, declarado e rastreado até a entrega |
 | Fato registrado | Premissa confirmada ou informação dada por humano, com autor e data |
 | Fachada | Comandos `forja agente …` usados pelos agentes |
 | Ponto sem retorno | A confirmação após a preparação guiada; daí em diante, sem perguntas |
@@ -760,7 +761,7 @@ Conjunto fixo de repositórios de exemplo com problemas conhecidos, nas linguage
 | Hotspot | Código com alta complexidade e alta frequência de mudança |
 | Efetivação | Evento gravado após uma operação externa concluir; com a intenção, detecta operações incompletas (não é confirmação humana) |
 | Inconclusivo | Resultado de gate quando a medição não pôde ser feita; tratado pela política do gate |
-| Modo observação | Gate que mede e reporta no PR sem bloquear, até ter dados de calibração |
+| Modo observação | Check que mede e reporta no resumo sem bloquear, até ter dados de calibração |
 | Etapa | Um papel dentro de uma tarefa; aprovada, gera um commit na branch da tarefa |
 | Nível de isolamento | WSL (padrão) ou reduzido; define o que é imposto na execução e o que é apenas detectado |
 | Não aplicável | Resultado de gate quando o adaptador não declara a capacidade exigida; não bloqueia |

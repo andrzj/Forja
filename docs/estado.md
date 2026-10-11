@@ -11,7 +11,7 @@ O incremento 0 (fundação) está quase completo. Há 1.771 testes passando e 5 
 1. ~~Teste de retomada ponta a ponta~~ — feito, em `tests/e2e/` (ver "Retomada").
 2. Rodar `mutmut` para medir se os testes pegam mutações de verdade. Nunca foi executado.
 3. README e ADRs, em português do Brasil.
-4. Atualizar a especificação (lista na seção "Divergências da spec").
+4. ~~Atualizar a especificação~~ — feito.
 
 ## Como trabalhar
 
@@ -100,15 +100,9 @@ Os testes ficam em `tests/core/`, espelhando os módulos. `tests/core/adapters/c
 
 - Uma varredura com o próprio redator sobre os 169 arquivos do primeiro commit só achou valores de teste deliberadamente falsos, em `tests/core/isolation`, `tests/core/process` e `tests/core/redaction`. Quando o gate de segredos real (gitleaks, incremento 1) existir, ele vai sinalizar esses mesmos arquivos e precisará de uma lista de exceções para eles.
 
-## Divergências da spec (a atualizar)
+## Divergências da spec
 
-1. Toda menção à criação de PR e à plataforma de PR (tabela de idempotência, estrutura do PR, glossário, questão aberta 5 do plano). O "PR" passa a ser a branch mais o arquivo de resumo.
-2. O resumo da execução fica em arquivo, não no corpo de um PR.
-3. Limiares por linguagem saem do contrato do adaptador e ficam na política.
-4. Modo e política por check, não por gate.
-5. Job Object por chamada, em vez de um por execução.
-6. Fachada de git restrita (`GuardedGit`), fotografia do git incluindo `.git/config` e hooks, e `GIT_DIR` inexistente no ambiente do agente.
-7. `NOT_VERIFIABLE` não existe como veredito de reconciliação; "não verificável" é propriedade da operação.
+Atualizadas em `Especificação.md` e `Plano de execução.md`: sem PR (a entrega é a branch `forja-run/<execução>` mais `runs/<id>/resumo.md`), limiares na política, modo por check, Job Object por chamada, fachada restrita de git com fotografia e `GIT_DIR` inexistente, sessão única por repositório, decisões de eventos, redação, chave de cache e diretório de dados. "Não verificável" já era propriedade da operação na spec; não mudou.
 
 ## Próximos passos
 

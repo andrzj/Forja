@@ -38,7 +38,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 
 **Escopo:** adaptador de Python; uma CLI; só o papel de implementador; objetivo de refatoração; normalização (`style:`); gates de escopo, segredos, lint com catraca, build, testes e complexidade; gestor de git com branch por tarefa, worktree por tentativa, commit por etapa, integração da tarefa inteira, trailers e verificação de HEAD, índice e refs antes e depois de cada chamada; agente em cópia de trabalho sem .git, com transferência por manifesto para o worktree; build, testes e demais ferramentas executados dentro do sandbox, com caches separados por repositório; isolamento do contrato 3 (distribuição WSL dedicada, com nível reduzido declarado quando não houver WSL) e Job Object; fachada `forja agente testar`; preparação guiada com descoberta e prova de vida; interface com progresso, atividade do agente e observação do worktree; retomada completa.
 
-**Pronto quando:** em três repositórios Python de exemplo, uma execução vai do comando ao PR sem intervenção; interrupções forçadas em qualquer passo retomam e chegam ao mesmo estado final; uma CLI que tenta usar git falha; sob WSL, ela não consegue ler arquivos fora da cópia de trabalho nem acessar rede fora da lista de permissões; sem WSL, a preparação avisa e o PR declara o nível reduzido; a própria Forja passa nos seus gates.
+**Pronto quando:** em três repositórios Python de exemplo, uma execução vai do comando à entrega sem intervenção; interrupções forçadas em qualquer passo retomam e chegam ao mesmo estado final; uma CLI que tenta usar git falha; sob WSL, ela não consegue ler arquivos fora da cópia de trabalho nem acessar rede fora da lista de permissões; sem WSL, a preparação avisa e o resumo declara o nível reduzido; a própria Forja passa nos seus gates.
 
 ### 2. Medição contra linha de base (ponto de decisão)
 
@@ -54,7 +54,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 
 ### 4. Documentação
 
-**Escopo:** papel de documentador como etapa final obrigatória de toda tarefa que altera código; registro de mudança por tarefa; avaliação e correção do README; ADR por regra; deriva; linter de voz para comentários, commits e documentação; resumo da execução e estrutura do PR.
+**Escopo:** papel de documentador como etapa final obrigatória de toda tarefa que altera código; registro de mudança por tarefa; avaliação e correção do README; ADR por regra; deriva; linter de voz para comentários, commits e documentação; resumo da execução e estrutura do resumo de entrega.
 
 **Pronto quando:** toda tarefa aprovada carrega seu registro no mesmo commit; um README com comando de build divergente é detectado e corrigido apenas na seção afetada.
 
@@ -66,7 +66,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 
 ### 6. Ideia, especificação e engenharia reversa
 
-**Escopo:** papéis de arqueólogo e especificador; rastreabilidade ideia → critério → teste; andaime determinístico por template; modo a partir de diretório vazio; premissas e fatos registrados completos; coleta do resultado da revisão do PR.
+**Escopo:** papéis de arqueólogo e especificador; rastreabilidade ideia → critério → teste; andaime determinístico por template; modo a partir de diretório vazio; premissas e fatos registrados completos; coleta do resultado da revisão a partir do git.
 
 **Pronto quando:** a partir de uma especificação de exemplo, a Forja entrega um projeto com testes que cobrem todos os critérios; a documentação de engenharia reversa separa fatos provados, fatos confirmados e premissas.
 
@@ -87,7 +87,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 | Mutação lenta em repositórios grandes | Execuções de muitas horas | Mutação incremental e restrita ao código tocado; cache pela chave completa |
 | Ferramentas de mutação imaturas em Go e Python | Falsos resultados | Limiares próprios; mutação como métrica informativa onde for frágil |
 | Fakes divergem dos serviços reais | E2E verdes com comportamento real quebrado | Fakes gerados ou validados por contrato; divergência possível declarada como premissa |
-| Restrições corporativas (containers, rede, instalação de ferramentas, WSL) | Isolamento ou ferramentas indisponíveis | WSL presumido como padrão; sem ele, aviso na preparação, nível reduzido com garantias declaradas e registro no PR |
+| Restrições corporativas (containers, rede, instalação de ferramentas, WSL) | Isolamento ou ferramentas indisponíveis | WSL presumido como padrão; sem ele, aviso na preparação, nível reduzido com garantias declaradas e registro no resumo |
 | Terminal do Git Bash (mintty) incompatível com interface rica | Experiência degradada | Detecção e aviso; recomendação de Windows Terminal; renderizador de texto simples |
 | Envio de código sensível ao provedor do modelo | Exposição de dados | Redação obrigatória do pacote; exclusões por configuração; auditoria do pacote enviado |
 | Agente altera o git (commit, reset, refs compartilhadas pelo worktree) | Estado da execução inconsistente; retomada incorreta | Agente em cópia sem .git; verificação de HEAD, índice e refs antes e depois de cada chamada, desde o incremento 1 |
@@ -107,8 +107,9 @@ Pontos que ainda não têm decisão e que a revisão deve ajudar a fechar:
 2. **Formato das políticas:** decidido: predicados em código e TOML apenas para valores. Falta definir o esquema desses valores por linguagem.
 3. **Isolamento na estação Windows:** decidido: WSL como padrão e nível reduzido com Git Bash no Windows Terminal quando não houver WSL. Falta confirmar se a política corporativa permite importar uma distribuição dedicada e controlar a rede de saída dentro dela.
 4. **Consumo de tokens:** nem todas as CLIs informam consumo de forma estruturada; definir se o custo será medido por tokens, tempo ou ambos. Fontes possíveis: a própria CLI ou os relatórios do gateway corporativo; a Forja não intermedia as chamadas ao modelo.
-5. **Plataforma de PR** usada para a coleta da revisão humana (GitHub, Azure DevOps, GitLab ou outra).
+5. ~~**Plataforma de PR**~~ — decidido: sem PR e sem integração com plataforma. A entrega é a branch da execução mais o resumo; a coleta da revisão usa só o que o git mostra.
 6. **Valores padrão:** número de tentativas por tarefa, limite de arquivos e linhas por tarefa, limite de tarefas por execução e orçamento de tempo.
 7. **Tamanho máximo do pacote** de evidências e critério de corte quando os hotspots excederem esse limite.
 8. **Conjunto de repositórios da suíte de avaliação:** quais projetos de exemplo, com quais defeitos plantados, em cada linguagem.
 9. **Nome e distribuição interna** da ferramenta.
+10. **Padrão do lock por repositório:** recusa imediata ou espera com limite quando houver outra sessão da Forja (recomendação: recusa no modo interativo, espera em CI). Fecha-se no incremento 1.
