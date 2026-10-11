@@ -174,7 +174,7 @@ def _rejections(state: RunState, task: str) -> list[str]:
         for attempt in state.children_of(Level.ATTEMPT, stage):
             payload = state.transition_payload(Level.ATTEMPT, attempt, AttemptState.REJECTED)
             if payload is not None:
-                lines.append(f"  - tentativa `{attempt}` rejeitada: {payload.get('reason', '')}")
+                lines.append(f"  - tentativa `{attempt}` rejeitada: {payload['reason']}")
     return lines
 
 

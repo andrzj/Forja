@@ -5,6 +5,7 @@ the arguments each port receives, and the words of the summary.
 """
 
 import asyncio
+import dataclasses
 import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -12,16 +13,35 @@ from typing import Any
 
 import pytest
 
+from forja.core.adapters.executor import ErrorActivity, ErrorKind
 from forja.core.artifacts.schemas import TaskOutcome, TaskOutcomeKind
 from forja.core.events import EventLog, LogUnusable, OpenOperation
+from forja.core.gates import (
+    CheckRun,
+    CheckSettings,
+    Effect,
+    Finding,
+    InconclusivePolicy,
+    Mode,
+    NotApplicable,
+    Rejected,
+)
 from forja.core.idempotency import Decision, Reconciliation, reconcile_call_agent_cli
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.budget import Meter, read_consumption
 from forja.orchestrator.config import Budget, confirmed_payload
+from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
-from forja.orchestrator.ports import AttemptContext, Baseline, PlannedTask, SinkFactory
+from forja.orchestrator.ports import (
+    AgentResult,
+    AttemptContext,
+    Baseline,
+    PlannedTask,
+    RunContext,
+    SinkFactory,
+)
 from forja.orchestrator.summary import Facts, render_summary, summary_body
-from forja.orchestrator.task_cycle import TaskCycle, _count
+from forja.orchestrator.task_cycle import REASON_LIMIT, TaskCycle, _count, describe_stop
 from forja.orchestrator.workspace_git import GitWorkspace
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.crash import Counting, CrashAfter, Interrupted
@@ -638,3 +658,69 @@ def test_a_task_never_started_is_cancelled_with_no_attempts(world: World) -> Non
     _, log = world.run(seconds_left=0.0)
 
     assert summary_body(log.state).tasks == (outcome_of("t1", TaskOutcomeKind.CANCELLED, 0, 0),)
+
+
+# -- small things -------------------------------------------------------------------------------
+
+
+def test_a_context_that_is_not_told_otherwise_takes_the_network_to_be_up() -> None:
+    defaults = {f.name: f.default for f in dataclasses.fields(RunContext)}
+
+    assert asyncio.run(defaults["network_is_up"]()) is True
+
+
+def test_a_stop_carries_its_reason_as_its_message() -> None:
+    assert str(StopRun("the agent cannot continue")) == "the agent cannot continue"
+
+
+def a_stop(result: Any) -> CheckRun:
+    settings = CheckSettings(Mode.BLOCKING, InconclusivePolicy.BLOCK)
+    return CheckRun("complexity", 8, settings, result, Effect.REJECT_ATTEMPT)
+
+
+def test_a_stop_by_several_findings_names_them_all() -> None:
+    result = Rejected(
+        findings=(
+            Finding(message="too long", target="a.py::f"),
+            Finding(message="deep", target="b.py"),
+        )
+    )
+
+    assert describe_stop(a_stop(result)) == "gate 8 (complexity): too long [a.py::f]; deep [b.py]"
+
+
+def test_a_stop_by_a_check_that_could_not_apply_says_so() -> None:
+    result = NotApplicable(missing_capability="lizard")
+
+    assert describe_stop(a_stop(result)) == "gate 8 (complexity): not_applicable"
+
+
+def test_what_the_agent_is_told_is_cut_to_the_limit() -> None:
+    result = Rejected(findings=(Finding(message="x" * 3000, target="a.py"),))
+
+    assert len(describe_stop(a_stop(result))) == REASON_LIMIT
+
+
+def test_the_detail_of_an_agent_error_is_cut_to_three_hundred_characters(world: World) -> None:
+    class Wordy(ScriptedAgent):
+        async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> Any:
+            await super().call(ctx, operation_id, sink)
+            return AgentResult(error=ErrorActivity("x" * 400, ErrorKind.BLOCKING))
+
+    _, log = world.run(agent=Wordy())
+
+    discarded = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.DISCARDED)
+    assert discarded is not None and discarded["detail"] == "x" * 300
+
+
+def test_waiting_for_the_network_is_noted_under_that_name(world: World) -> None:
+    world.network = [False, True]
+
+    _, log = world.run(agent=ScriptedAgent(errors={0: ErrorKind.PERSISTENT}))
+
+    kinds = [
+        json.loads(raw).get("payload", {}).get("kind")
+        for raw in log.path.read_bytes().split(b"\n")
+        if raw
+    ]
+    assert "waiting_for_network" in kinds
