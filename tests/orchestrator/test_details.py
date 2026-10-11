@@ -1,0 +1,462 @@
+"""The details a delivered run must get exactly right: names, ids, text, and what is passed on.
+
+Each test pins something the broader scenarios only exercise: the operation ids a resume depends on,
+the arguments each port receives, and the words of the summary.
+"""
+
+import asyncio
+import json
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from forja.core.events import EventLog
+from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
+from forja.orchestrator.budget import Meter, read_consumption
+from forja.orchestrator.config import Budget
+from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
+from forja.orchestrator.ports import AttemptContext, Baseline, PlannedTask, SinkFactory
+from forja.orchestrator.summary import Facts, render_summary
+from forja.orchestrator.task_cycle import TaskCycle, _count
+from forja.orchestrator.workspace_git import GitWorkspace
+from tests.core.idempotency.conftest import Repo
+from tests.orchestrator.crash import Interrupted
+from tests.orchestrator.fakes import (
+    PASSED,
+    PASSED_WITH_A_GAP,
+    REJECTED,
+    ScriptedAgent,
+    ScriptedMeasurer,
+    ScriptedPlanner,
+)
+from tests.orchestrator.harness import ISOLATION, RUN, TWO_TASKS, World
+
+
+@pytest.fixture
+def world(tmp_path: Path, repo: Repo, workspace: GitWorkspace) -> World:
+    return World(tmp_path, repo, workspace)
+
+
+def intents(log: EventLog) -> list[str]:
+    """The ids of the operations begun, in order."""
+    lines = [json.loads(raw) for raw in log.path.read_bytes().split(b"\n") if raw]
+    return [e["operation_id"] for e in lines if e["type"] == "intent"]
+
+
+# -- operation ids: the idempotency table is keyed by them ----------------------------------------
+
+
+def test_a_run_with_a_rejection_begins_these_operations_in_this_order(world: World) -> None:
+    _, log = world.run(measurer=ScriptedMeasurer(verdicts=(REJECTED, PASSED)))
+
+    assert intents(log) == [
+        f"create_run_branch:{RUN}",
+        "create_attempt_worktree:run",
+        f"normalize_style:{RUN}",
+        "create_task_branch:t1",
+        "create_attempt_worktree:t1-a1",
+        "prepare_workcopy:t1-a1",
+        "call_agent_cli:t1-a1",
+        "apply_diff:t1-a1",
+        "remove_worktree:t1-a1",
+        "create_attempt_worktree:t1-a2",
+        "prepare_workcopy:t1-a2",
+        "call_agent_cli:t1-a2",
+        "apply_diff:t1-a2",
+        "commit_stage:t1-a2",
+        "remove_worktree:t1-a2",
+        "integrate_task:t1",
+        "remove_worktree:run",
+    ]
+
+
+def test_a_rolled_back_integration_is_an_operation_of_the_task(world: World) -> None:
+    measurer = ScriptedMeasurer(integration_verdicts=(REJECTED,))
+
+    _, log = world.run(measurer=measurer)
+
+    assert intents(log)[-3:] == [
+        "integrate_task:t1",
+        "rollback_integration:t1",
+        "remove_worktree:run",
+    ]
+    blocked = log.state.transition_payload(Level.TASK, "t1", TaskState.BLOCKED)
+    assert blocked is not None and blocked["reason"] == "integration_gate"
+    assert blocked["detail"] == "gate 8 (complexity): too complex [src/a.py::f]"
+
+
+def test_the_delivery_cites_the_stored_summary(world: World) -> None:
+    _, log = world.run()
+
+    delivered = [
+        json.loads(raw)
+        for raw in log.path.read_bytes().split(b"\n")
+        if raw and json.loads(raw).get("to_state") == "delivered"
+    ]
+    assert len(delivered) == 1 and len(delivered[0]["refs"]) == 1
+    assert delivered[0]["refs"][0]["id"] == "summary"
+
+
+# -- what each port is handed ----------------------------------------------------------------------
+
+
+class Spy(ScriptedMeasurer):
+    """Remembers what it was given."""
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        self.baselines: list[tuple[Path, SinkFactory]] = []
+        self.judged_with: list[SinkFactory] = []
+        self.integrated: list[tuple[Path, SinkFactory]] = []
+
+    async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline:
+        self.baselines.append((worktree, sinks))
+        return await super().baseline(worktree, sinks)
+
+    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
+        self.judged_with.append(sinks)
+        return await super().judge(ctx, sinks)
+
+    async def integration(self, worktree: Path, sinks: SinkFactory) -> Any:
+        self.integrated.append((worktree, sinks))
+        return await super().integration(worktree, sinks)
+
+
+class SpyPlanner(ScriptedPlanner):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asked: list[tuple[Path, Baseline, Budget]] = []
+
+    async def plan(self, worktree: Path, baseline: Baseline, budget: Budget) -> Any:
+        self.asked.append((worktree, baseline, budget))
+        return await super().plan(worktree, baseline, budget)
+
+
+def test_the_measurer_and_the_planner_get_the_run_worktree_and_the_runs_sinks(
+    world: World,
+) -> None:
+    measurer, planner = Spy(metrics={"m": 1.0}), SpyPlanner()
+    budget = Budget(tasks=3)
+
+    _, log = world.run(measurer=measurer, planner=planner, budget=budget)
+
+    run_tree = world.workspace.run_worktree
+    ((tree, sinks), (final_tree, final_sinks)) = measurer.baselines
+    assert tree == final_tree == run_tree and callable(sinks) and callable(final_sinks)
+    assert measurer.judged_with and all(callable(s) for s in measurer.judged_with)
+    ((integrated_tree, integrated_sinks),) = measurer.integrated
+    assert integrated_tree == run_tree and callable(integrated_sinks)
+    ((planned_tree, baseline, planned_budget),) = planner.asked
+    assert planned_tree == run_tree
+    assert baseline == Baseline(True, (), {"m": 1.0})
+    assert planned_budget.tasks == 3
+
+
+def test_the_plan_does_not_measure_the_base_again(world: World) -> None:
+    measurer = Spy()
+
+    world.run(measurer=measurer)
+
+    assert (
+        len(measurer.baselines) == 2
+    )  # before the plan and after the work, not before the plan twice
+
+
+class Dying(ScriptedPlanner):
+    async def plan(self, worktree: Path, baseline: Baseline, budget: Budget) -> Any:
+        raise Interrupted("while planning")
+
+
+def test_a_run_reopened_while_planning_measures_the_base_again_for_the_planner(
+    world: World,
+) -> None:
+    with pytest.raises(Interrupted):
+        world.run(planner=Dying())
+    measurer, planner = Spy(metrics={"m": 3.0}), SpyPlanner()
+
+    outcome, _ = world.run(measurer=measurer, planner=planner, log=world.open())
+
+    assert outcome.state is ExecutionState.DELIVERED
+    ((tree, _), _final) = measurer.baselines
+    assert tree == world.workspace.run_worktree
+    ((_, baseline, _),) = planner.asked
+    assert baseline.metrics == {"m": 3.0}
+
+
+# -- task information ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(5, 5), (0, 0), (True, 0), ("7", 0), (None, 0), (2.5, 0)]
+)
+def test_only_a_real_integer_is_a_count(value: object, expected: int) -> None:
+    assert _count(value) == expected
+
+
+def test_the_task_info_is_what_the_planner_said(world: World) -> None:
+    planner = ScriptedPlanner((PlannedTask("do it", ("a.py", "b.py"), 3, 99),))
+    _, log = world.run(planner=planner)
+    cycle = TaskCycle(
+        world.context(log, measurer=ScriptedMeasurer(), agent=ScriptedAgent(), planner=planner)
+    )
+
+    info = cycle.info("t1")
+
+    assert (info.task_id, info.stage_id, info.intent) == ("t1", "t1-s", "do it")
+    assert (info.scope, info.max_files, info.max_lines) == (("a.py", "b.py"), 3, 99)
+
+
+def test_a_task_without_details_has_empty_ones(world: World) -> None:
+    _, log = world.run()
+    ctx = world.context(
+        log, measurer=ScriptedMeasurer(), agent=ScriptedAgent(), planner=ScriptedPlanner()
+    )
+    log.append_transition(Level.TASK, "bare", None, TaskState.PENDING, parent_id=RUN)
+
+    info = TaskCycle(ctx).info("bare")
+
+    assert (info.intent, info.scope, info.max_files, info.max_lines) == ("", (), 0, 0)
+
+
+# -- the sentences the agent and the reviewer read -------------------------------------------------
+
+
+def test_every_difference_git_shows_is_named_in_the_rejection(world: World) -> None:
+    repo = world.repo
+
+    def meddle() -> None:
+        repo.sh("branch", "one")
+        repo.sh("branch", "two")
+
+    _, log = world.run(agent=ScriptedAgent(meddle=meddle), budget=Budget(attempts_per_task=1))
+
+    payload = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.REJECTED)
+    assert payload is not None
+    reason = str(payload["reason"])
+    assert "one" in reason and "two" in reason
+    assert reason.count("; ") >= 1
+
+
+def test_the_agent_is_handed_a_sink_for_its_own_call(world: World) -> None:
+    sinks: list[object] = []
+
+    class Recording(ScriptedAgent):
+        async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> Any:
+            sinks.append(sink)
+            return await super().call(ctx, operation_id, sink)
+
+    world.run(agent=Recording())
+
+    (sink,) = sinks
+    assert (sink._level, sink._target_id, sink._operation) == (
+        Level.ATTEMPT,
+        "t1-a1",
+        "call_agent_cli",
+    )  # type: ignore[attr-defined]  # noqa: SLF001
+
+
+# -- the time budget between attempts --------------------------------------------------------------
+
+
+def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(world: World) -> None:
+    now = [0.0]
+
+    class Slow(ScriptedMeasurer):
+        async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
+            now[0] = 10_000.0  # the first attempt takes all the time there is
+            return await super().judge(ctx, sinks)
+
+    log = world.open()
+    confirm_run(log, world.config, ISOLATION)
+    ctx = world.context(
+        log, measurer=Slow(verdicts=(REJECTED,)), agent=ScriptedAgent(), planner=ScriptedPlanner()
+    )
+    ctx.meter = Meter(100.0, read_consumption(log.path), clock=lambda: now[0])
+
+    outcome = asyncio.run(Orchestrator(ctx).run())
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.state_of(Level.STAGE, "t1-s") is StageState.EXHAUSTED
+    exhausted = log.state.transition_payload(Level.STAGE, "t1-s", StageState.EXHAUSTED)
+    assert exhausted == {"reason": "time_budget_exhausted"}
+
+
+# -- resuming a task already settled ---------------------------------------------------------------
+
+
+def test_a_resume_skips_the_tasks_already_integrated_or_blocked_and_runs_the_rest(
+    world: World,
+) -> None:
+    starts: list[str] = []
+
+    def hook(point: str) -> None:
+        if point == "create_task_branch:after_intent":
+            starts.append(point)
+            if len(starts) == 2:  # the second task is about to begin
+                raise Interrupted(point)
+
+    measurer = ScriptedMeasurer(verdicts=(REJECTED, REJECTED, PASSED))
+    with pytest.raises(Interrupted):
+        world.run(
+            measurer=measurer,
+            planner=ScriptedPlanner(TWO_TASKS),
+            budget=Budget(attempts_per_task=2),
+            hook=hook,
+        )
+
+    outcome, log = world.run(
+        planner=ScriptedPlanner(TWO_TASKS), budget=Budget(attempts_per_task=2), log=world.open()
+    )
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.state_of(Level.TASK, "t1") is TaskState.BLOCKED
+    assert log.state.state_of(Level.TASK, "t2") is TaskState.INTEGRATED
+
+
+def test_a_run_left_in_a_middle_state_reports_that_state(world: World) -> None:
+    log = world.open()
+    log.append_transition(Level.EXECUTION, RUN, None, ExecutionState.PREPARING)
+
+    outcome, _ = world.run(log=log)
+
+    assert outcome.state is ExecutionState.PREPARING
+    assert outcome.message == "preparing"
+
+
+# -- the summary ----------------------------------------------------------------------------------
+
+
+class Moving(ScriptedMeasurer):
+    """Measures one thing before the work and another after it."""
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        self.calls = 0
+
+    async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline:
+        self.calls += 1
+        values: Mapping[str, float] = (
+            {"a": 1.0, "b": 2.5} if self.calls == 1 else {"b": 2.0, "c": 3.0}
+        )
+        return Baseline(True, (), values)
+
+
+def test_the_summary_says_everything_in_this_order(world: World) -> None:
+    measurer = Moving(verdicts=(PASSED_WITH_A_GAP, REJECTED, REJECTED, PASSED))
+    planner = ScriptedPlanner(
+        (*TWO_TASKS, PlannedTask("reduce the complexity of h", ("src/c.py",), 8, 400))
+    )
+
+    world.run(measurer=measurer, planner=planner, budget=Budget(attempts_per_task=2))
+
+    text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
+    base = world.config.base_commit[:12]
+    assert text == "\n".join(
+        [
+            f"# Resumo da execução {RUN}",
+            "",
+            f"Branch da entrega: `{world.workspace.run_branch}`, criada a partir de `{base}`.",
+            "",
+            "## Premissas assumidas",
+            "",
+            "- complexity: não foi possível medir; a tarefa `t1` seguiu (tentativa `t1-a1`).",
+            "",
+            "## Tarefas bloqueadas",
+            "",
+            "- `t2` (reduce the complexity of g): attempts_exhausted",
+            "  - tentativa `t2-a1` rejeitada: gate 8 (complexity): too complex [src/a.py::f]",
+            "  - tentativa `t2-a2` rejeitada: gate 8 (complexity): too complex [src/a.py::f]",
+            "",
+            "## Mudanças de comportamento",
+            "",
+            "Não se aplica nesta versão.",
+            "",
+            "## Refatorações",
+            "",
+            "- `t1`: reduce the complexity of f (1 tentativa(s), 0 rejeitada(s))",
+            "- `t3`: reduce the complexity of h (1 tentativa(s), 0 rejeitada(s))",
+            "",
+            "## Documentação",
+            "",
+            "Não se aplica nesta versão.",
+            "",
+            "## Métricas antes e depois",
+            "",
+            "| Métrica | Antes | Depois |",
+            "| --- | --- | --- |",
+            "| a | 1 | - |",
+            "| b | 2.5 | 2 |",
+            "| c | - | 3 |",
+            "",
+            "## Para publicar",
+            "",
+            "A Forja não faz push. Se aprovar o resultado: "
+            f"`git push -u <remoto> {world.workspace.run_branch}`.",
+            f"Este resumo fica em `{world.run_dir / SUMMARY_NAME}` e não vai para o histórico.",
+            "",
+        ]
+    )
+
+
+def test_an_empty_run_has_nothing_to_list(world: World) -> None:
+    world.run(planner=ScriptedPlanner(()), measurer=ScriptedMeasurer(metrics={}))
+
+    text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
+    assert "## Premissas assumidas\n\nNenhuma.\n" in text
+    assert "## Tarefas bloqueadas\n\nNenhuma.\n" in text
+    assert "## Refatorações\n\nNenhuma.\n" in text
+    assert "## Métricas antes e depois\n\nSem medições registradas.\n" in text
+
+
+def test_a_log_that_stops_in_the_middle_still_gives_the_facts_before_it(world: World) -> None:
+    _, log = world.run(measurer=ScriptedMeasurer(metrics={"m": 4.0}))
+    log.close()
+    with world.run_dir.joinpath("events.jsonl").open("ab") as raw:
+        raw.write(b"{not json}\n")
+        raw.write(json.dumps({"type": "progress", "payload": {"kind": "metrics"}}).encode() + b"\n")
+
+    from forja.orchestrator.summary import read_facts
+
+    facts = read_facts(world.run_dir / "events.jsonl")
+
+    assert facts.baseline == {"m": 4.0} and facts.final == {"m": 4.0}
+
+
+def test_a_blocked_task_with_no_reason_or_intent_is_still_listed(world: World) -> None:
+    _, log = world.run()
+    log.append_transition(Level.TASK, "odd", None, TaskState.PENDING, parent_id=RUN)
+    log.append_transition(Level.TASK, "odd", TaskState.PENDING, TaskState.IN_PROGRESS)
+    log.append_transition(Level.TASK, "odd", TaskState.IN_PROGRESS, TaskState.BLOCKED)
+
+    text = render_summary(log.state, Facts(), world.config, "branch", Path("x"))
+
+    assert "- `odd` (): motivo não registrado" in text
+
+
+def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: World) -> None:
+    _, log = world.run()
+    for check in ("c1", "c1", "c2"):
+        log.append_progress(
+            Level.EXECUTION, RUN, "premise", payload={"task": "t", "attempt": "a", "check": check}
+        )
+    log.append_progress(
+        Level.EXECUTION,
+        RUN,
+        "metrics",
+        payload={"phase": "baseline", "values": {"n": 1, "f": 1.5, "flag": True, "s": "x"}},
+    )
+    log.append_progress(
+        Level.EXECUTION, RUN, "metrics", payload={"phase": "final", "values": {"n": 2}}
+    )
+    log.close()
+
+    from forja.orchestrator.summary import Premise, read_facts
+
+    facts = read_facts(world.run_dir / "events.jsonl")
+
+    assert facts.premises == [Premise("t", "a", "c1"), Premise("t", "a", "c2")]
+    assert facts.baseline["n"] == 1.0 and facts.baseline["f"] == 1.5
+    assert "flag" not in facts.baseline and "s" not in facts.baseline
+    assert facts.final["n"] == 2.0

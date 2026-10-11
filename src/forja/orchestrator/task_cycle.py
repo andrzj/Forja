@@ -138,8 +138,8 @@ class TaskCycle:
         for attempt in reversed(state.children_of(Level.ATTEMPT, info.stage_id)):
             if state.state_of(Level.ATTEMPT, attempt) is AttemptState.REJECTED:
                 payload = state.transition_payload(Level.ATTEMPT, attempt, AttemptState.REJECTED)
-                reason = (payload or {}).get("reason")
-                return reason if isinstance(reason, str) else None
+                assert payload is not None  # _reject always says why
+                return str(payload["reason"])
         return None
 
     async def _work(self, ctx: AttemptContext) -> None:
@@ -219,11 +219,11 @@ class TaskCycle:
                 {"task": ctx.task.task_id, "attempt": attempt, "check": assumption.check_id},
             )
         stopper = outcome.stopped_by
-        if outcome.verdict is Verdict.PASSED:
+        if stopper is None:
             journal.enter(Level.ATTEMPT, attempt, AttemptState.APPROVED)
-        elif outcome.verdict is Verdict.REJECTED and stopper is not None:
+        elif outcome.verdict is Verdict.REJECTED:
             self._reject(attempt, describe_stop(stopper))
-        elif stopper is not None:
+        else:
             self._block(ctx.task, attempt, describe_stop(stopper))
 
     def _block(self, info: TaskInfo, attempt: str, detail: str) -> None:
@@ -245,7 +245,8 @@ class TaskCycle:
         run, journal = self._ctx, self._journal
         attempt, info = ctx.attempt_id, ctx.task
         validating = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.VALIDATING)
-        reason = str((validating or {}).get("reason", ""))
+        assert validating is not None  # _work records the agent's reason on the way in
+        reason = str(validating["reason"])
         message = CommitMessage.refactor(
             info.intent,
             reason,
@@ -355,19 +356,16 @@ class TaskCycle:
             )
             return
         outcome = await run.measurer.integration(run.workspace.run_worktree, run.sinks)
-        if outcome.verdict is Verdict.PASSED:
+        stopper = outcome.stopped_by
+        if stopper is None:
             journal.enter(Level.TASK, task, TaskState.INTEGRATED)
             return
         await journal.operate(
             "rollback_integration", Level.TASK, task, task, run.workspace.rollback_integration(task)
         )
-        stopper = outcome.stopped_by
         journal.enter(
             Level.TASK,
             task,
             TaskState.BLOCKED,
-            payload={
-                "reason": "integration_gate",
-                "detail": describe_stop(stopper) if stopper is not None else "",
-            },
+            payload={"reason": "integration_gate", "detail": describe_stop(stopper)},
         )

@@ -159,8 +159,8 @@ def _blocked(state: RunState) -> list[str]:
         if state.state_of(Level.TASK, task) is not TaskState.BLOCKED:
             continue
         payload = state.transition_payload(Level.TASK, task, TaskState.BLOCKED) or {}
-        intent = (state.transition_payload(Level.TASK, task, TaskState.PENDING) or {}).get("intent")
-        lines.append(f"- `{task}` ({intent}): {payload.get('reason', 'motivo não registrado')}")
+        reason = payload.get("reason", "motivo não registrado")
+        lines.append(f"- `{task}` ({_intent(state, task)}): {reason}")
         lines.extend(_rejections(state, task))
     return lines or ["Nenhuma."]
 
