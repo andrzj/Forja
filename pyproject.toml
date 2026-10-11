@@ -11,6 +11,9 @@ dependencies = ["pydantic>=2.7"]
 
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]
+mutation = [
+    "mutmut>=3.8.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/forja"]
@@ -29,3 +32,16 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+
+[tool.mutmut]
+source_paths = ["src/forja/core/"]
+pytest_add_cli_args_test_selection = ["tests/"]
+# The three deselected tests fail on Linux today (see docs/estado.md) and are outside the
+# modules under mutation; the self-scan reads source that mutmut rewrites; mutmut needs a green baseline run.
+pytest_add_cli_args = [
+    "-m", "not slow", "-p", "no:cacheprovider",
+    "--deselect", "tests/core/gitguard/test_snapshot.py::test_a_fetch_that_moves_remote_tracking_refs_is_a_change",
+    "--deselect", "tests/core/locking/test_index_locks.py::test_the_real_process_list_includes_this_process_and_no_invented_names",
+    "--deselect", "tests/core/redaction/test_secrets.py::test_forjas_own_source_is_clean",
+    "--deselect", "tests/core/locking/test_repository.py::test_the_repository_id_is_short_stable_and_shared_by_every_worktree",
+]

@@ -127,3 +127,41 @@ def test_machine_refuses_a_resumable_state_with_no_way_in() -> None:
             initial=_Tiny.A,
             resumable={_Tiny.B},
         )
+
+
+def test_a_machine_exposes_what_it_was_built_with() -> None:
+    # Built here, not at import: a fault in the constructor must show up in a test run.
+    machine = StateMachine(
+        Level.STAGE, _Tiny, {_Tiny.A: {_Tiny.B}, _Tiny.B: set()}, initial=_Tiny.B
+    )
+
+    assert machine.level is Level.STAGE
+    assert machine.state_type is _Tiny
+    assert machine.initial is _Tiny.B
+
+
+def test_the_error_for_a_state_of_another_level_names_both_types() -> None:
+    with pytest.raises(TypeError) as info:
+        EXECUTION_MACHINE.validate(TaskState.PENDING, ExecutionState.CONFIRMED)  # type: ignore[arg-type]
+
+    assert str(info.value) == "execution: expected ExecutionState, got TaskState"
+
+
+def test_the_error_for_a_table_with_missing_rows_lists_them_sorted() -> None:
+    with pytest.raises(ValueError) as info:
+        StateMachine(Level.TASK, _Tiny, {}, initial=_Tiny.A)
+
+    assert str(info.value) == "task: states without a table row: ['a', 'b']"
+
+
+def test_the_error_for_a_resumable_state_with_no_way_in_lists_it() -> None:
+    with pytest.raises(ValueError) as info:
+        StateMachine(
+            Level.TASK,
+            _Tiny,
+            {_Tiny.A: set(), _Tiny.B: set()},
+            initial=_Tiny.A,
+            resumable={_Tiny.B},
+        )
+
+    assert str(info.value) == "task: resumable states with no way in: ['b']"

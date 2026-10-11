@@ -9,7 +9,7 @@ O incremento 0 (fundação) está quase completo. Há 1.771 testes passando e 5 
 **Falta para fechar o incremento 0:**
 
 1. ~~Teste de retomada ponta a ponta~~ — feito, em `tests/e2e/` (ver "Retomada").
-2. Rodar `mutmut` para medir se os testes pegam mutações de verdade. Nunca foi executado.
+2. `mutmut`: meta de 100% de mutantes mortos nos módulos de contrato; piloto feito (ver "Mutação"). Falta o resto do escopo.
 3. ~~README e ADRs~~ — feitos (`README.md` e `docs/adr/`).
 4. ~~Atualizar a especificação~~ — feito.
 
@@ -25,6 +25,14 @@ Os comandos, as convenções e o mapa dos módulos estão no [README](../README.
 - Marcados `slow`; a suíte inteira leva cerca de 6 min. `TOTAL_LINES` e `TORN_CUTS` são conferidos contra uma execução de referência: se o roteiro crescer, o teste falha.
 - Nome de branch: `forja/<run>/<task>` impede que a branch da execução seja `forja/<run>` (conflito de ref). O roteiro usa `forja-run/<run>`; a spec precisa fixar o nome.
 - No roteiro, a evidência é um arquivo por chave de cache, não o `EvidenceStore`, e o gate é uma regra fixa. A integração com `GuardedGit` e `GatePipeline` fica para o incremento 1.
+
+## Mutação
+
+- O `mutmut` 3 não roda no Windows; roda no WSL (`Ubuntu-22.04`, com uv). O grupo de dependências é `mutation` (`uv sync --python 3.12 --group mutation` dentro do WSL). A configuração está em `[tool.mutmut]` no `pyproject.toml`.
+- Fluxo: copiar o projeto para `~/forja` no WSL (`rsync`, sem `.venv`, `.git` nem `mutants`), apagar `mutants/` e rodar `uv run mutmut run "forja.core.states*"`. Resultados: `uv run mutmut results --all true | grep forja.core.states`; um mutante: `uv run mutmut show <nome>`.
+- Escopo combinado: `states/`, `gates/`, `policy/`, `authorization/`, `evidence/`, `events/models.py`, `events/state.py`, `manifest.py`, `redaction/` (regras e PII). Fora: `process/`, `locking/`, `resume.py`, `idempotency/`, `gitguard/`. Meta: todos os mutantes mortos; mutante equivalente é registrado com o motivo.
+- Resultado: `states/` 70 de 70 mortos. Os objetos criados na importação (`EXECUTION_MACHINE` etc.) não sofrem mutação do construtor, porque o mutante só vale dentro de um teste; o teste que cobre o construtor precisa construir o objeto no corpo do teste.
+- Primeira execução da suíte no Linux (WSL): 1.666 passaram e 3 falharam, todas fora do escopo da mutação e ainda sem causa investigada: `tests/core/gitguard/test_snapshot.py::test_a_fetch_that_moves_remote_tracking_refs_is_a_change`, `tests/core/locking/test_index_locks.py::test_the_real_process_list_includes_this_process_and_no_invented_names` e `tests/core/locking/test_repository.py::test_the_repository_id_is_short_stable_and_shared_by_every_worktree`. Mais `redaction/test_secrets.py::test_forjas_own_source_is_clean`, que lê o código-fonte e não serve sob mutação. Os quatro estão em `--deselect` na configuração do `mutmut`.
 
 ## Estados persistidos (português da spec → inglês do código)
 
