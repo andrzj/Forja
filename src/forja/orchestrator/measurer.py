@@ -109,7 +109,7 @@ class PipelineMeasurer:
     def _read_base(self) -> tuple[frozenset[str], frozenset[str]]:
         """The unstable tests and the ones that passed, as the first measurement saw them."""
         try:
-            data = json.loads(self._base_file.read_text(encoding="utf-8"))  # pragma: no mutate
+            data = json.loads(self._base_file.read_text(encoding="utf-8"))
             return frozenset(map(str, data[UNSTABLE])), frozenset(map(str, data[PASSING]))
         except (OSError, ValueError, KeyError, TypeError):
             return frozenset(), frozenset()
@@ -133,7 +133,7 @@ class PipelineMeasurer:
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
         problems: list[str] = []
         try:
-            problems += await self._build_problems(tools, worktree)
+            problems += await self._build_problems(tools, worktree)  # empty
             first = await self._outcomes(tools, worktree)
             second = await self._outcomes(tools, worktree)
         except Undecided as stop:
@@ -154,7 +154,7 @@ class PipelineMeasurer:
     def _save_base(self, unstable: list[str], passing: list[str]) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
         document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
-        atomic_write_bytes(self._base_file, document.encode("utf-8"))  # pragma: no mutate
+        atomic_write_bytes(self._base_file, document.encode("utf-8"))
 
     async def _build_problems(self, tools: Tools, worktree: Path) -> list[str]:
         parsed = await measure(
@@ -203,7 +203,7 @@ class PipelineMeasurer:
         plan = lizard_plan(self._lizard, worktree, files)
         execution = await tools.run("complexity", plan)
         if not execution.finished or execution.result.exit_code != 0:
-            raise Undecided(execution.inconclusive("complexity"))
+            raise Undecided(execution.inconclusive("complexity"))  # not shown
         return parse_functions(execution.lines)
 
     # -- attempts and integration -------------------------------------------------------------

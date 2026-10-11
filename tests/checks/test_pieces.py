@@ -253,6 +253,7 @@ def test_a_scanner_that_fails_for_its_own_reasons_is_inconclusive(
     assert isinstance(result, Inconclusive)
     assert result.reason is InconclusiveReason.TOOL_FAILED
     assert result.detail == "secrets: gitleaks ended with 1"
+    assert len(result.tool_run_ids) == 1 and result.tool_run_ids[0].endswith(":secrets:1")
 
 
 REPORT = (

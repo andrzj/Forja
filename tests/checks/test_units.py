@@ -196,6 +196,24 @@ def test_a_row_the_parser_cannot_read_does_not_stop_the_rows_after_it() -> None:
     assert parse_functions(lines) == {("m.py", "b"): 4}
 
 
+def test_format_and_lint_leave_files_that_are_not_python_alone() -> None:
+    changes = Changes((Change(ChangeKind.MODIFIED, "README.md"),), 1, ())
+    root = Path(".")
+    for check in (
+        FormatCheck(None, None, root, changes),  # type: ignore[arg-type]
+        LintCheck(None, None, root, changes, {}),  # type: ignore[arg-type]
+    ):
+        assert asyncio.run(check.evaluate(data())) == Approved()
+
+
+def test_two_methods_with_one_name_keep_the_worse_whatever_the_order() -> None:
+    worse = '2,9,7,1,2,"a@1-2@m.py","m.py","a","a()",1,2'
+    milder = '2,3,7,1,2,"a@3-4@m.py","m.py","a","a()",3,4'
+
+    assert parse_functions([worse, milder]) == {("m.py", "a"): 9}
+    assert parse_functions([milder, worse]) == {("m.py", "a"): 9}
+
+
 def test_a_function_of_complexity_zero_is_kept_as_zero() -> None:
     assert parse_functions(['2,0,7,1,2,"a@1-2@m.py","m.py","a","a()",1,2']) == {("m.py", "a"): 0}
 

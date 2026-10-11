@@ -60,15 +60,11 @@ async def read_changes(git: Git) -> Changes:
     plain status of untracked files cannot.
     """
     await git.lines("add", "-A")
-    status = await git.lines(
-        "diff", "--cached", "--name-status", "-M", "HEAD"
-    )  # pragma: no mutate  (git's defaults say the same)
-    numstat = await git.lines(
-        "diff", "--cached", "--numstat", "-M", "HEAD"
-    )  # pragma: no mutate  (git's defaults say the same)
+    status = await git.lines("diff", "--cached", "--name-status", "-M", "HEAD")
+    numstat = await git.lines("diff", "--cached", "--numstat", "-M", "HEAD")
     patch = await git.lines(
         "diff", "--cached", "-U0", "--no-color", "HEAD"
-    )  # pragma: no mutate  (git's defaults say the same)
+    )  # git's defaults say the same
     ignored = await git.lines("ls-files", "--others", "--ignored", "--exclude-standard")
     return Changes(
         parse_status(status),
@@ -95,9 +91,9 @@ def unquote(name: str) -> str:
             raw.append(simple[body[index + 1]])
             index += 2
         else:
-            raw += body[index].encode("utf-8")  # pragma: no mutate
+            raw += body[index].encode("utf-8")
             index += 1
-    return raw.decode("utf-8", errors="replace")  # pragma: no mutate
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_status(lines: list[str]) -> tuple[Change, ...]:
@@ -140,7 +136,7 @@ def added_lines(patch: tuple[str, ...]) -> list[AddedLine]:
     """
     found: list[AddedLine] = []
     path: str | None = None
-    new_line = owed = 0  # pragma: no mutate  (set by the first hunk before it is read)
+    new_line = owed = 0  # set by the first hunk before it is read
     for line in patch:
         if owed:
             if line.startswith("+"):
@@ -174,4 +170,4 @@ def write_files(contents: dict[str, str], destination: Path) -> None:
     for relative, text in contents.items():
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8", newline="\n")  # pragma: no mutate
+        target.write_text(text, encoding="utf-8", newline="\n")

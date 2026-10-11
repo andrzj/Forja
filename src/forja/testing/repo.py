@@ -117,7 +117,9 @@ class MemoryRepo:
 def read_tree(directory: Path) -> dict[str, str]:
     """The text files under ``directory``, by relative path with forward slashes."""
     return {
-        path.relative_to(directory).as_posix(): path.read_text(encoding="utf-8")
+        path.relative_to(directory).as_posix(): path.read_text(
+            encoding="utf-8"
+        )  # Linux defaults to utf-8; Windows tests catch it
         for path in sorted(directory.rglob("*"))
         if path.is_file()
     }
@@ -132,5 +134,7 @@ def write_tree(directory: Path, tree: Tree) -> None:
     for relative, text in tree.items():
         target = directory / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8", newline="\n")
+        target.write_text(
+            text, encoding="utf-8", newline="\n"
+        )  # Linux defaults; Windows tests catch it
     directory.mkdir(parents=True, exist_ok=True)

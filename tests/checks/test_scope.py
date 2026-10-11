@@ -265,6 +265,14 @@ def test_findings_are_gathered_from_every_rule_at_once() -> None:
         "# generated   code",
         "x = 1  # nosem",
         "x = 1  # nosemgrep",
+        "if x:  # pragma: no cover",
+        "x = 1  # pragma:no mutate",
+        "if x:  # pragma: no branch",
+        "x: int = ''  # type: ignore[assignment]",
+        "x = 1  # pyright: ignore",
+        "# mypy: ignore-errors",
+        "x = 1  # pylint: disable=invalid-name",
+        "x = 1  # nosec",
     ],
 )
 def test_every_comment_that_switches_a_tool_off_is_found(marker: str) -> None:

@@ -86,6 +86,19 @@ def test_what_the_run_leaves_in_git_is_one_branch_with_one_merge_per_task(
     assert memory.worktrees == {}
 
 
+def test_the_run_branch_starts_at_the_commit_the_run_was_configured_with(
+    world: MemoryWorld,
+) -> None:
+    memory = world.memory
+    later = memory.commit({"base.txt": "later\n"}, "later", parents=(memory.base,))
+    memory.advance("main", later)
+
+    world.run(planner=ScriptedPlanner(TWO_TASKS))
+
+    assert memory.base in memory.ancestors(memory.branches[world.workspace.run_branch])
+    assert later.sha not in memory.ancestors(memory.branches[world.workspace.run_branch])
+
+
 def test_the_run_branch_holds_the_agents_work_and_the_formatters(world: MemoryWorld) -> None:
     world.run()
 

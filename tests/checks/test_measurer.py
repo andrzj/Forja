@@ -19,7 +19,7 @@ from forja.core.gates.pipeline import PipelineOutcome
 from forja.core.idempotency import Decision, Reconciliation
 from forja.core.states import Level
 from forja.orchestrator.ports import Baseline
-from tests.checks.support import BLOCKING, SAMPLE, Scene, deep
+from tests.checks.support import BLOCKING, RUN, SAMPLE, Scene, deep
 from tests.core.idempotency.conftest import Repo
 
 MOD = SAMPLE["src/sample/mod.py"]
@@ -680,3 +680,27 @@ def test_a_lizard_that_cannot_start_leaves_a_gap_that_says_so(scene: Scene) -> N
 
     assert isinstance(gap.result, Inconclusive)
     assert gap.result.detail == "complexity: no-such-lizard-anywhere could not start"
+
+
+def test_the_logs_of_the_tools_are_kept_under_tools_and_the_run(scene: Scene) -> None:
+    base_of(scene)
+
+    logs = sorted(p.name for p in (scene.work / "run" / "tools" / RUN).glob("*.log"))
+    assert logs and all(name.startswith("run_tool-") for name in logs)
+
+
+def test_the_base_file_makes_the_directories_above_it(scene: Scene) -> None:
+    scene.measurer._workdir = scene.work / "a" / "b"  # noqa: SLF001
+
+    scene.measurer._save_base([], [])  # noqa: SLF001
+
+    assert (scene.work / "a" / "b" / "base.json").is_file()
+
+
+def test_a_lizard_that_exits_badly_leaves_the_complexity_out_of_the_numbers(scene: Scene) -> None:
+    scene.measurer._lizard = (*scene.measurer._lizard[:2], "nonsense")  # noqa: SLF001
+
+    measured = base_of(scene)
+
+    assert measured.ok
+    assert "max_ccn" not in measured.metrics and "functions" not in measured.metrics

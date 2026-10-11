@@ -207,6 +207,21 @@ def test_git_is_asked_for_status_size_patch_and_ignored_files(repo: Repo) -> Non
     assert changes.ignored == ("hidden.local",)
 
 
+def test_renames_are_found_even_when_the_user_turned_detection_off(repo: Repo) -> None:  # noqa: F811
+    (repo.path / "old.py").write_text("a\nb\nc\nd\ne\nf\n", encoding="utf-8")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "start")
+    repo.sh("config", "diff.renames", "false")
+    repo.sh("mv", "old.py", "moved.py")
+
+    changes = asyncio.run(read_changes(repo.git))
+
+    assert [(c.kind.value, c.path, c.old_path) for c in changes.files] == [
+        ("R", "moved.py", "old.py")
+    ]
+    assert changes.lines == 0
+
+
 def test_the_parent_commits_text_is_read_by_the_old_path_and_written_elsewhere(
     repo: Repo,  # noqa: F811
     tmp_path,  # noqa: ANN001

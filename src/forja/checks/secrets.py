@@ -49,9 +49,8 @@ class SecretsCheck:
             return Approved()
         self.reports.mkdir(parents=True, exist_ok=True)
         scanned, report = self.reports / "added.txt", self.reports / "gitleaks.json"
-        atomic_write_bytes(
-            scanned, "\n".join(line.text for line in added).encode("utf-8")
-        )  # pragma: no mutate
+        text = "\n".join(line.text for line in added).encode("utf-8")
+        atomic_write_bytes(scanned, text)
         report.unlink(missing_ok=True)
         plan = CommandPlan(
             (
@@ -88,7 +87,7 @@ class SecretsCheck:
     @staticmethod
     def _findings(report: Path, added: list[AddedLine]) -> list[Finding]:
         try:
-            leaks = json.loads(report.read_text(encoding="utf-8"))  # pragma: no mutate
+            leaks = json.loads(report.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return [UNPLACED]
         if not isinstance(leaks, list):

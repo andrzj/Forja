@@ -185,6 +185,19 @@ def test_the_policy_commands_replace_the_adapters_for_that_operation(
     assert one(scene, "tests").command == (*command,)
 
 
+def test_the_policy_commands_for_lint_also_run_on_the_parents_version(
+    repo: Repo, tmp_path: Path
+) -> None:
+    command = [sys.executable, FAKE_TOOLS, "ruff", "check", "--the-repositorys-own"]
+    scene = Scene(repo, tmp_path / "scene", values={"lint": {"commands": {"lint": command}}})
+    edit_mod(scene, "X = 1\n")
+
+    judge(scene)
+
+    assert one(scene, "lint").command == (*command,)
+    assert one(scene, "lint_before").command == (*command,)
+
+
 # -- the base --------------------------------------------------------------------------------------
 
 
