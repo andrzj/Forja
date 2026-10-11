@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,9 +21,10 @@ from forja.core.adapters import (
 )
 from forja.core.evidence import TargetKind
 from forja.languages.python import PythonAdapter
+from forja.languages.python.adapter import default_cache_dir
 from tests.core.adapters.conformance import language_problems
 
-ADAPTER = PythonAdapter(python=("py",), ruff=("rf",))
+ADAPTER = PythonAdapter(python=("py",), ruff=("rf",), cache_dir=Path("cache-for-tests"))
 
 
 @pytest.fixture
@@ -105,9 +107,11 @@ def argv(operation: Operation, project: Path, **options: object) -> tuple[str, .
 
 
 def test_format_checks_or_rewrites_the_files_it_is_given(project: Path) -> None:
-    assert argv(Operation.FORMAT, project) == ("rf", "format", "--no-cache", "--force-exclude", ".")
+    assert argv(Operation.FORMAT, project) == (
+        "rf", "format", "--no-cache", "--force-exclude", "--", ".",
+    )  # fmt: skip
     assert argv(Operation.FORMAT, project, files=("a.py",), check_only=True) == (
-        "rf", "format", "--check", "--no-cache", "--force-exclude", "a.py",
+        "rf", "format", "--check", "--no-cache", "--force-exclude", "--", "a.py",
     )  # fmt: skip
 
 
@@ -115,7 +119,7 @@ def test_lint_reads_the_concise_format_and_the_fix_only_touches_what_is_safe(pro
     options = ("--output-format=concise", "--no-cache", "--force-exclude")
 
     assert argv(Operation.LINT, project, files=("a.py", "b.py")) == (
-        "rf", "check", *options, "a.py", "b.py",
+        "rf", "check", *options, "--", "a.py", "b.py",
     )  # fmt: skip
     assert argv(Operation.LINT_FIX, project) == (
         "rf",
@@ -123,6 +127,7 @@ def test_lint_reads_the_concise_format_and_the_fix_only_touches_what_is_safe(pro
         "--fix",
         "--exit-zero",
         *options,
+        "--",
         ".",
     )
 
@@ -131,7 +136,7 @@ def test_build_compiles_everything_but_other_peoples_code(project: Path) -> None
     command = argv(Operation.BUILD, project)
 
     assert command[:5] == ("py", "-m", "compileall", "-q", "-x")
-    assert command[6:] == (".",)
+    assert command[6:] == ("--", ".")
 
 
 def test_tests_run_in_the_repositorys_python_and_can_be_limited_to_files(project: Path) -> None:
@@ -141,7 +146,7 @@ def test_tests_run_in_the_repositorys_python_and_can_be_limited_to_files(project
     assert everything == (
         "py", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no",
     )  # fmt: skip
-    assert one_file == (*everything, "tests/test_a.py")
+    assert one_file == (*everything, "--", "tests/test_a.py")
 
 
 def test_a_plan_runs_in_the_project_leaves_no_bytecode_behind_and_hashes_the_configuration(
@@ -152,7 +157,7 @@ def test_a_plan_runs_in_the_project_leaves_no_bytecode_behind_and_hashes_the_con
     assert isinstance(plan, CommandPlan)
     assert plan.cwd == project
     assert plan.env_set["NO_COLOR"] == "1"
-    assert Path(plan.env_set["PYTHONPYCACHEPREFIX"]).is_absolute()
+    assert plan.env_set["PYTHONPYCACHEPREFIX"] == "cache-for-tests"
     assert "pyproject.toml" in plan.config_files and "ruff.toml" in plan.config_files
 
 
@@ -466,3 +471,30 @@ def test_the_real_tools_report_their_versions(sample: Path) -> None:
         )
         assert word in (done.stdout + done.stderr).lower()
     assert sys.executable in REAL.plan(Operation.TEST, OperationRequest(root=sample)).argv  # type: ignore[union-attr]
+
+
+# -- what a path may not do ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "operation", [Operation.FORMAT, Operation.LINT, Operation.LINT_FIX, Operation.BUILD]
+)
+def test_a_path_that_looks_like_an_option_stays_a_path(operation: Operation, project: Path) -> None:
+    command = argv(operation, project, files=("--config=evil.toml",))
+
+    assert command[-2:] == ("--", "--config=evil.toml")
+
+
+def test_test_files_come_after_the_end_of_options(project: Path) -> None:
+    command = argv(Operation.TEST, project, test_files=("-pevil",))
+
+    assert command[-2:] == ("--", "-pevil")
+
+
+def test_compiled_files_go_to_the_users_own_cache_unless_told_otherwise(project: Path) -> None:
+    plan = PythonAdapter().plan(Operation.BUILD, OperationRequest(root=project))
+
+    assert isinstance(plan, CommandPlan)
+    cache = Path(plan.env_set["PYTHONPYCACHEPREFIX"])
+    assert cache == default_cache_dir() and cache.parts[-2:] == ("forja", "pycache")
+    assert not cache.is_relative_to(Path(tempfile.gettempdir()))

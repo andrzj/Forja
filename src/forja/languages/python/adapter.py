@@ -5,8 +5,8 @@ is a parameter, because ruff comes from Forja's own environment while pytest mus
 repository's, with its dependencies.
 """
 
+import os
 import sys
-import tempfile
 from pathlib import Path
 
 from forja.core.adapters import (
@@ -41,6 +41,13 @@ _PYTHON_VERSION = r"Python (\S+)"
 _PYTEST_VERSION = r"pytest (\S+)"
 
 
+def default_cache_dir() -> Path:
+    """Where compiled files go: the user's own cache, never a directory others can write to."""
+    base = os.environ.get("LOCALAPPDATA") if sys.platform == "win32" else None
+    root = Path(base) if base else Path.home() / ".cache"
+    return root / "forja" / "pycache"
+
+
 class PythonAdapter:
     contract_version = CONTRACT_VERSION
     language = "python"
@@ -54,9 +61,11 @@ class PythonAdapter:
         *,
         python: tuple[str, ...] = (sys.executable,),
         ruff: tuple[str, ...] = (sys.executable, "-m", "ruff"),
+        cache_dir: Path | None = None,
     ) -> None:
         self._python = python
         self._ruff = ruff
+        self._cache = str(cache_dir or default_cache_dir())
 
     # -- finding and classifying ---------------------------------------------------------------
 
@@ -105,9 +114,17 @@ class PythonAdapter:
         match operation:
             case Operation.FORMAT:
                 check = ("--check",) if request.check_only else ()
-                argv = (*self._ruff, "format", *check, "--no-cache", "--force-exclude", *targets)
+                argv = (
+                    *self._ruff,
+                    "format",
+                    *check,
+                    "--no-cache",
+                    "--force-exclude",
+                    "--",
+                    *targets,
+                )
             case Operation.LINT:
-                argv = (*self._ruff, "check", *self._ruff_options(), *targets)
+                argv = (*self._ruff, "check", *self._ruff_options(), "--", *targets)
             case Operation.LINT_FIX:
                 argv = (
                     *self._ruff,
@@ -115,6 +132,7 @@ class PythonAdapter:
                     "--fix",
                     "--exit-zero",
                     *self._ruff_options(),
+                    "--",
                     *targets,
                 )
             case Operation.BUILD:
@@ -125,6 +143,7 @@ class PythonAdapter:
                     "-q",
                     "-x",
                     SKIPPED_DIRECTORIES,
+                    "--",
                     *targets,
                 )
             case Operation.TEST if request.tests:
@@ -133,7 +152,7 @@ class PythonAdapter:
                 argv = (
                     *self._python,
                     *("-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no"),
-                    *request.test_files,
+                    *(("--", *request.test_files) if request.test_files else ()),
                 )
             case _:
                 return NotSupported(operation.value, "the Python adapter does not offer it")
@@ -143,14 +162,14 @@ class PythonAdapter:
     def _ruff_options() -> tuple[str, ...]:
         return ("--output-format=concise", "--no-cache", "--force-exclude")
 
-    @staticmethod
-    def _plan(root: Path, argv: tuple[str, ...], config_files: tuple[str, ...] = ()) -> CommandPlan:
-        # Compiled files go to one place outside the worktree, so a run leaves nothing in the diff.
-        cache = str(Path(tempfile.gettempdir()) / "forja-pycache")
+    def _plan(
+        self, root: Path, argv: tuple[str, ...], config_files: tuple[str, ...] = ()
+    ) -> CommandPlan:
+        # Compiled files go to one private place outside the worktree: nothing lands in the diff.
         return CommandPlan(
             argv,
             root,
-            env_set={"NO_COLOR": "1", "PYTHONPYCACHEPREFIX": cache},
+            env_set={"NO_COLOR": "1", "PYTHONPYCACHEPREFIX": self._cache},
             config_files=config_files,
         )
 
