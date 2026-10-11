@@ -1,0 +1,135 @@
+"""The diary of an execution: moving targets between states and running operations exactly once.
+
+Every method looks at the log first and skips what it already records, so the same code runs the
+first time and after any interruption. Operation ids are ``<name>:<subject>``, with ``:<n>`` after
+an operation the resume decided to redo (``n`` counts the redos).
+"""
+
+import os
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+from pydantic import JsonValue
+
+from forja.core.events import EventLog, Ref
+from forja.core.idempotency import Decision
+from forja.core.states import Level
+from forja.orchestrator.budget import SESSION_ENDED, SESSION_STARTED
+
+Hook = Callable[[str], None]
+
+
+def _no_hook(_point: str) -> None:
+    return None
+
+
+@dataclass(frozen=True)
+class Step:
+    """One external operation: what its intent records and how it is done.
+
+    ``payload`` runs only if the step is going to run, because it may read the world as it is
+    right then (a commit to expect, a manifest to compare with). ``run`` must be safe to repeat
+    after a ``redo`` verdict.
+    """
+
+    payload: Callable[[], dict[str, JsonValue]]
+    run: Callable[[], Awaitable[None]]
+
+
+class HookPoint(StrEnum):
+    AFTER_INTENT = "after_intent"
+    BEFORE_EFFECT = "before_effect"
+
+
+class StillOpen(Exception):
+    """An operation is open in the log: the resume has not settled it yet."""
+
+
+class Journal:
+    """Writes to one run's log and never repeats what the log already says happened.
+
+    ``hook`` is called with ``<operation>:after_intent`` and ``<operation>:before_effect`` so a
+    test can stop the process at exactly those points.
+    """
+
+    def __init__(self, log: EventLog, *, hook: Hook = _no_hook) -> None:
+        self.log = log
+        self._hook = hook
+
+    @property
+    def run_id(self) -> str:
+        return self.log.state.run_id
+
+    # -- targets --------------------------------------------------------------------------------
+
+    def enter(
+        self,
+        level: Level,
+        target: str,
+        to: Any,
+        *,
+        parent: str | None = None,
+        payload: dict[str, JsonValue] | None = None,
+        refs: tuple[Ref, ...] = (),
+    ) -> bool:
+        """Move ``target`` into ``to`` unless the log shows it was there; True if it moved.
+
+        A state is entered at most once per target in the flows that use this; the paused and
+        failed states, which can be entered again, are moved with ``log.append_transition``.
+        """
+        state = self.log.state
+        if not state.has_target(level, target):
+            self.log.append_transition(
+                level, target, None, to, parent_id=parent, payload=payload, refs=refs
+            )
+            return True
+        if state.transition_payload(level, target, to) is None:
+            current = state.state_of(level, target)
+            self.log.append_transition(level, target, current, to, payload=payload, refs=refs)
+            return True
+        return False
+
+    # -- operations -----------------------------------------------------------------------------
+
+    def operation_id(self, name: str, subject: str) -> str | None:
+        """The id to run ``name`` on ``subject`` under, or ``None`` if it already happened."""
+        retry = 0
+        while True:
+            candidate = f"{name}:{subject}" + (f":{retry}" if retry else "")
+            effect = self.log.state.effect_of(candidate)
+            if effect is None:
+                if candidate in self.log.state.open_operations:
+                    raise StillOpen(f"{candidate} is still open; resume first")
+                return candidate
+            if effect.get("reconciled") != Decision.REDO.value:
+                return None
+            retry += 1
+
+    def done(self, name: str, subject: str) -> bool:
+        return self.operation_id(name, subject) is None
+
+    async def operate(self, name: str, level: Level, target: str, subject: str, step: Step) -> bool:
+        """Intent, work, effect. Returns False, doing nothing, if the log says it happened."""
+        op_id = self.operation_id(name, subject)
+        if op_id is None:
+            return False
+        self.log.append_intent(level, target, name, op_id, payload=step.payload())
+        self._hook(f"{name}:{HookPoint.AFTER_INTENT}")
+        await step.run()
+        self._hook(f"{name}:{HookPoint.BEFORE_EFFECT}")
+        self.log.append_effect(level, target, name, op_id)
+        return True
+
+    # -- notes ----------------------------------------------------------------------------------
+
+    def note(self, kind: str, payload: dict[str, JsonValue] | None = None) -> None:
+        """A display-only fact about the run as a whole (a phase skipped, a wait begun)."""
+        self.log.append_progress(Level.EXECUTION, self.run_id, kind, payload=payload)
+
+    def session_started(self) -> None:
+        self.note(SESSION_STARTED, {"pid": os.getpid()})
+
+    def session_ended(self, reason: str) -> None:
+        self.note(SESSION_ENDED, {"reason": reason})
