@@ -102,7 +102,7 @@ def test_commands_are_allowed_only_as_the_role_names_them(tmp_path: Path) -> Non
     argv = plan_of(tmp_path, allowed_commands=("forja agente testar",))
 
     assert argv[argv.index("--tools") + 1].endswith(",Bash")
-    assert argv[argv.index("--allowedTools") + 1].endswith(",Bash(forja agente testar *)")
+    assert argv[argv.index("--allowedTools") + 1].endswith(",Bash(forja agente testar)")
 
 
 def test_the_users_own_configuration_reaches_the_cli_but_a_hosts_does_not() -> None:

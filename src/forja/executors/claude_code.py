@@ -129,7 +129,8 @@ class ClaudeCodeAdapter:
         allowed = [_scoped(tool) for tool in tools if tool not in ("Glob", "Grep")]
         if permissions.allowed_commands:
             tools.append("Bash")
-            allowed += [f"Bash({command} *)" for command in permissions.allowed_commands]
+            # Exact commands only: a trailing `*` also matches `; anything else` (seen live).
+            allowed += [f"Bash({command})" for command in permissions.allowed_commands]
         return PermissionSetup(
             {SETTINGS_FILE: json.dumps(SETTINGS).encode("utf-8")},
             ("--tools", ",".join(tools), "--allowedTools", ",".join(allowed)),

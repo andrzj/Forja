@@ -238,7 +238,7 @@ async def _context(
         found = await measurer.functions(worktree, sinks)
         return {key: ccn for key, ccn in found.items() if in_scope(key[0], config.scope)}
 
-    commands = ("forja agente",) if locate_in_path("forja") else ()
+    commands = ("forja agente lint", "forja agente medir") if locate_in_path("forja") else ()
     agent = ExecutorAgentRunner(
         ClaudeCodeAdapter(),
         Path(config.implementer.path),
