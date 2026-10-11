@@ -23,3 +23,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0015](0015-git-em-memoria-para-testar-o-orquestrador.md) | Git em memória para testar o orquestrador | Aceito |
 | [0016](0016-claude-code-como-primeiro-executor.md) | Claude Code como primeiro executor e o runner de CLI | Aceito |
 | [0017](0017-o-comando-forja-guia-e-pergunta-pouco.md) | O comando `forja` guia, pergunta pouco e confirma uma vez | Aceito |
+| [0018](0018-a-forja-roda-no-ambiente-do-usuario-e-nao-cria-sandbox.md) | A Forja roda no ambiente do usuário e não cria sandbox | Aceito |

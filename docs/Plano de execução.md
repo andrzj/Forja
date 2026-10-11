@@ -36,9 +36,9 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 
 ### 1. Esqueleto ponta a ponta
 
-**Escopo:** adaptador de Python; uma CLI; só o papel de implementador; objetivo de refatoração; normalização (`style:`); gates de escopo, segredos, lint com catraca, build, testes e complexidade; gestor de git com branch por tarefa, worktree por tentativa, commit por etapa, integração da tarefa inteira, trailers e verificação de HEAD, índice e refs antes e depois de cada chamada; agente em cópia de trabalho sem .git, com transferência por manifesto para o worktree; build, testes e demais ferramentas executados dentro do sandbox, com caches separados por repositório; isolamento do contrato 3 (distribuição WSL dedicada, com nível reduzido declarado quando não houver WSL) e Job Object; fachada `forja agente testar`; preparação guiada com descoberta e prova de vida; interface com progresso, atividade do agente e observação do worktree; retomada completa.
+**Escopo:** adaptador de Python; uma CLI; só o papel de implementador; objetivo de refatoração; normalização (`style:`); gates de escopo, segredos, lint com catraca, build, testes e complexidade; gestor de git com branch por tarefa, worktree por tentativa, commit por etapa, integração da tarefa inteira, trailers e verificação de HEAD, índice e refs antes e depois de cada chamada; agente em cópia de trabalho sem .git, com transferência por manifesto para o worktree; build, testes e demais ferramentas executados dentro do sandbox, com caches separados por repositório; isolamento do contrato 3 como ambiente do usuário, declarado (ADR 0018), e Job Object; fachada `forja agente testar`; preparação guiada com descoberta e prova de vida; interface com progresso, atividade do agente e observação do worktree; retomada completa.
 
-**Pronto quando:** em três repositórios Python de exemplo, uma execução vai do comando à entrega sem intervenção; interrupções forçadas em qualquer passo retomam e chegam ao mesmo estado final; uma CLI que tenta usar git falha; sob WSL, ela não consegue ler arquivos fora da cópia de trabalho nem acessar rede fora da lista de permissões; sem WSL, a preparação avisa e o resumo declara o nível reduzido; a própria Forja passa nos seus gates.
+**Pronto quando:** em três repositórios Python de exemplo, uma execução vai do comando à entrega sem intervenção; interrupções forçadas em qualquer passo retomam e chegam ao mesmo estado final; uma CLI que tenta usar git falha; a preparação e o resumo declaram o que a Forja impõe e o que fica por conta do ambiente; a própria Forja passa nos seus gates.
 
 ### 2. Medição contra linha de base (ponto de decisão)
 
@@ -87,16 +87,15 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 | Mutação lenta em repositórios grandes | Execuções de muitas horas | Mutação incremental e restrita ao código tocado; cache pela chave completa |
 | Ferramentas de mutação imaturas em Go e Python | Falsos resultados | Limiares próprios; mutação como métrica informativa onde for frágil |
 | Fakes divergem dos serviços reais | E2E verdes com comportamento real quebrado | Fakes gerados ou validados por contrato; divergência possível declarada como premissa |
-| Restrições corporativas (containers, rede, instalação de ferramentas, WSL) | Isolamento ou ferramentas indisponíveis | WSL presumido como padrão; sem ele, aviso na preparação, nível reduzido com garantias declaradas e registro no resumo |
+| Restrições corporativas (containers, rede, instalação de ferramentas) | Ferramentas indisponíveis | A Forja não depende de WSL, Linux ou contêiner; o `doctor` aponta o que falta e a confirmação declara o que o ambiente deve garantir (ADR 0018) |
 | Terminal do Git Bash (mintty) incompatível com interface rica | Experiência degradada | Detecção e aviso; recomendação de Windows Terminal; renderizador de texto simples |
 | Envio de código sensível ao provedor do modelo | Exposição de dados | Redação obrigatória do pacote; exclusões por configuração; auditoria do pacote enviado |
 | Agente altera o git (commit, reset, refs compartilhadas pelo worktree) | Estado da execução inconsistente; retomada incorreta | Agente em cópia sem .git; verificação de HEAD, índice e refs antes e depois de cada chamada, desde o incremento 1 |
 | Ferramenta de medição falha ou não suporta o código | Aprovação silenciosa ou culpa indevida do agente | Resultado inconclusivo com política por gate (contrato 5) |
 | Evidência reaproveitada de outro contexto de medição | Gate decide com dado desatualizado | Chave de cache com commit, ferramenta, configuração, toolchain, plataforma e escopo |
-| CLI lê arquivos que não estavam no pacote | Dados sensíveis expostos ao provedor do modelo | Cópia de trabalho sem arquivos sensíveis; leitura restrita à cópia no nível WSL; limite declarado no nível reduzido |
+| CLI lê arquivos que não estavam no pacote | Dados sensíveis expostos ao provedor do modelo | Cópia de trabalho sem arquivos sensíveis; ferramentas de arquivo da CLI confinadas à cópia; o resto é declarado como do ambiente |
 | Falhas de infraestrutura repetem chamadas à CLI | Custo sem limite | Consumo por chamada; limite de falhas consecutivas por etapa; pausa da execução |
 | Evolução do formato de eventos e artefatos | Execuções antigas não retomam ou retomam errado | Versão de esquema; conversão na leitura; recusa explícita de versão desconhecida |
-| Política corporativa restringe a distribuição WSL ou o controle de rede dentro dela | Nível WSL indisponível | Verificar no incremento 1; nível reduzido como alternativa declarada |
 | Alterações do agente não representáveis no worktree (links simbólicos, nomes que diferem só em maiúsculas, caminhos longos) | Worktree inconsistente com a cópia | Transferência por manifesto; tentativa rejeitada com motivo explícito |
 
 ## Questões em aberto para a revisão
@@ -105,7 +104,7 @@ Pontos que ainda não têm decisão e que a revisão deve ajudar a fechar:
 
 1. **Limiares iniciais por linguagem:** CRAP, complexidade, cobertura e score de mutação para começar, antes de haver dados de calibração.
 2. **Formato das políticas:** decidido: predicados em código e TOML apenas para valores. Falta definir o esquema desses valores por linguagem.
-3. **Isolamento na estação Windows:** decidido: WSL como padrão e nível reduzido com Git Bash no Windows Terminal quando não houver WSL. Falta confirmar se a política corporativa permite importar uma distribuição dedicada e controlar a rede de saída dentro dela.
+3. **Isolamento:** decidido (ADR 0018): a Forja roda no ambiente do usuário e não cria sandbox; a infraestrutura e as permissões em volta são do usuário ou da empresa.
 4. **Consumo de tokens:** nem todas as CLIs informam consumo de forma estruturada; definir se o custo será medido por tokens, tempo ou ambos. Fontes possíveis: a própria CLI ou os relatórios do gateway corporativo; a Forja não intermedia as chamadas ao modelo.
 5. ~~**Plataforma de PR**~~ — decidido: sem PR e sem integração com plataforma. A entrega é a branch da execução mais o resumo; a coleta da revisão usa só o que o git mostra.
 6. **Valores padrão:** número de tentativas por tarefa, limite de arquivos e linhas por tarefa, limite de tarefas por execução e orçamento de tempo.

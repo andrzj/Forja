@@ -15,8 +15,19 @@ from pathlib import Path
 from forja.ui.glyphs import clean
 
 PYTHON_VARIABLE = "FORJA_AGENT_PYTHON"
-ISOLATED_VARIABLE = "FORJA_AGENT_ISOLATED"  # set only when the agent runs in a real sandbox
-SAFE_ENVIRONMENT = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "PATHEXT", "COMSPEC")
+SAFE_ENVIRONMENT = (
+    "PATH",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "PATHEXT",
+    "COMSPEC",
+    "HOME",
+    "USERPROFILE",
+    "LANG",
+    "LC_ALL",
+)  # fmt: skip  (no credentials: those stay with the CLI)
 TIMEOUT_SECONDS = 600
 TAIL_LINES = 80
 COMMANDS = {
@@ -48,11 +59,6 @@ def command_for(name: str, paths: list[str], environ: Mapping[str, str]) -> list
     own = [sys.executable, "-m"]
     match name:
         case "testar":
-            if environ.get(ISOLATED_VARIABLE) != "1":
-                raise Refused(
-                    "testar roda código do projeto, que pode ter sido escrito por você; só é "
-                    "permitido com isolamento real (incremento 1e). Use lint e medir."
-                )
             python = environ.get(PYTHON_VARIABLE) or sys.executable
             return [python, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *paths]
         case "lint":

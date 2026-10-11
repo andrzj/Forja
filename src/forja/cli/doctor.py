@@ -131,12 +131,10 @@ async def _agent_check(
 
 
 def terminal_note(platform: str, environ: Mapping[str, str]) -> str:
-    if platform == "win32" and environ.get("WSL_DISTRO_NAME") is None:
-        return (
-            "Windows: o isolamento forte (WSL) chega no incremento 1e; por enquanto o "
-            "isolamento é reduzido e o resumo da execução declara isso."
-        )
-    return ""
+    return (
+        "A Forja roda neste terminal e não cria sandbox: leitura fora da cópia e rede são "
+        "garantidas pelo seu ambiente."
+    )
 
 
 def render(checks: list[Check], note: str = "") -> list[str]:

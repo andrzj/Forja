@@ -51,6 +51,7 @@ class RunConfig(BaseModel):
     budget: Budget = Budget()
     forja_version: NonEmpty
     policy_version: NonEmpty
+    agent_runs_tests: bool = True  # the agent may call `forja agente testar` in its copy
     scope: tuple[str, ...] = ()  # only code under these paths is planned; empty is all of it
 
 

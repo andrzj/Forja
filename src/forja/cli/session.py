@@ -50,8 +50,8 @@ GIT_ENVIRONMENT = (
 NETWORK_PROBES_WITHOUT_A_PERSON = 60
 FORJA_VERSION = "0.0.0"
 POLICY_VERSION = "0.0.0+default"
-REDUCED = Confirmation(
-    IsolationRecord(agent=IsolationLevel.REDUCED, repo_code=IsolationLevel.REDUCED)
+IN_USER_ENVIRONMENT = Confirmation(
+    IsolationRecord(agent=IsolationLevel.ENVIRONMENT, repo_code=IsolationLevel.ENVIRONMENT)
 )
 
 
@@ -122,6 +122,7 @@ def new_config(
     executor_version: str,
     tokens: int,
     scope: tuple[str, ...] = (),
+    agent_runs_tests: bool = True,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
 
@@ -136,6 +137,7 @@ def new_config(
         forja_version=FORJA_VERSION,
         policy_version=POLICY_VERSION,
         scope=scope,
+        agent_runs_tests=agent_runs_tests,
     )
 
 
@@ -145,7 +147,7 @@ async def open_session(
     run_id: str | None = None,
     environ: Mapping[str, str] | None = None,
     interactive: bool = True,
-    isolation: Confirmation = REDUCED,
+    isolation: Confirmation = IN_USER_ENVIRONMENT,
     home: Path | None = None,
 ) -> Session:
     """Take the repository's lock and build everything a run needs.
@@ -188,7 +190,7 @@ async def open_session(
         objective="refatorar",
         repo=repo.name,
         branch=f"forja-run/{run_id}",
-        isolation="isolamento reduzido",
+        isolation="ambiente do usuário",
         token_limit=config.budget.tokens,
         attempts_max=config.budget.attempts_per_task,
     )
@@ -238,7 +240,11 @@ async def _context(
         found = await measurer.functions(worktree, sinks)
         return {key: ccn for key, ccn in found.items() if in_scope(key[0], config.scope)}
 
-    commands = ("forja agente lint", "forja agente medir") if locate_in_path("forja") else ()
+    commands: tuple[str, ...] = ()
+    if locate_in_path("forja"):
+        commands = ("forja agente lint", "forja agente medir")
+        if config.agent_runs_tests:
+            commands = (*commands, "forja agente testar")
     agent = ExecutorAgentRunner(
         ClaudeCodeAdapter(),
         Path(config.implementer.path),

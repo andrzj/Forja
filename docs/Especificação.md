@@ -37,14 +37,14 @@ Depois do primeiro commit, todo repositório é "existente": a criação a parti
 
 ### Preparação guiada
 
-1. **Detecção automática:** repositório existente ou vazio, linguagens, toolchains e versões, CLIs instaladas e seu shell, terminal, disponibilidade do WSL e nível de isolamento, README, testes, espaço em disco.
+1. **Detecção automática:** repositório existente ou vazio, linguagens, toolchains e versões, CLIs instaladas e seu shell, terminal, README, testes, espaço em disco.
 2. **Perguntas mínimas:** só o que não pode ser detectado — objetivo, entrada (descrição ou arquivo de especificação), CLI por papel (sugerindo diversidade de autor entre testes e implementação) e orçamento (tempo e tentativas).
 3. **Prova de vida** de cada CLI escolhida.
 4. **Resumo e confirmação única.** Esse é o ponto sem retorno: depois dele, a ferramenta não faz perguntas durante a execução. O que surgir sem evidência vira premissa declarada no resumo da execução.
 
 **Momentos de interação.** Há apenas dois: a preparação guiada e uma nova invocação de `forja` depois de uma interrupção ou de uma parada bloqueante, quando a única pergunta é retomar ou descartar. Pausas por rede, disco ou falhas de infraestrutura são resolvidas sem perguntas: a execução aguarda e retoma sozinha, ou para com estado gravado.
 
-**Sem WSL.** A preparação avisa que o isolamento será reduzido, explica o que deixa de ser garantido e recomenda habilitar o WSL; se o terminal não for o Windows Terminal, recomenda usar o Git Bash como perfil dele. O usuário decide seguir ou não, e o nível usado é declarado no resumo da execução.
+**Ambiente.** A confirmação diz que a Forja roda neste terminal, o que ela impõe e o que fica com o ambiente (ADR 0018). O usuário decide seguir ou não, e a mesma declaração vai para o resumo da execução.
 
 ### Execução autônoma
 
@@ -163,7 +163,7 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 | Normalização de estilo | Trailer `Stage-Id: normalize-<execução>` | Busca desse `Stage-Id` na branch da execução | Não | Registra efetivação se existir; senão, normaliza e commita de novo |
 | Criar branch da tarefa | ID da tarefa no nome | Ref existe | Sim | Recria se ausente |
 | Criar worktree da tentativa | ID da tentativa no caminho | `git worktree list` | Sim, após remover o parcial | Remove parcial e recria |
-| Preparar cópia de trabalho (WSL ou local) | ID da tentativa | Hash do conteúdo copiado | Sim | Apaga e recopia |
+| Preparar cópia de trabalho | ID da tentativa | Hash do conteúdo copiado | Sim | Apaga e recopia |
 | Chamada à CLI de agente | ID da tentativa | Não verificável | Não (custo e efeitos) | Descarta a tentativa; nova tentativa conta no limite de infraestrutura |
 | Aplicar diff ao worktree | Hash do diff | Conteúdo do worktree igual ao esperado | Sim | Restaura o worktree e reaplica |
 | Execução de ferramenta, medição ou gate | Chave de cache (contrato 5) | Evidência com a mesma chave existe | Sim | Reaproveita ou refaz |
@@ -182,7 +182,7 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 | Link simbólico criado pelo agente | Tentativa rejeitada: o link pode apontar para fora da cópia |
 | Permissões | Só o bit de execução, o único que o git registra |
 | Fim de linha | A cópia é gerada a partir do checkout com `.gitattributes`; mudança de fim de linha em linha não alterada reprova no gate de formatação |
-| Nomes que diferem apenas em maiúsculas | Tentativa rejeitada: o sistema de arquivos do WSL distingue, o NTFS não |
+| Nomes que diferem apenas em maiúsculas | Tentativa rejeitada: alguns sistemas de arquivos distinguem, outros (NTFS, APFS) não |
 | Caminho longo demais para o Windows | Tentativa rejeitada, com motivo explícito |
 | Conflito | Impossível por construção: o worktree é recém-criado e só a Forja escreve nele. O hash do worktree é verificado antes da aplicação; se mudou, a tentativa é descartada |
 
@@ -198,38 +198,28 @@ A autorização é uma política separada do fluxo da tarefa. A única decisão 
 | Automática | Ler o repositório, criar e remover worktrees, executar adaptadores, enviar o pacote redigido, commit e integração na branch da execução |
 | Proibida | Push para qualquer remoto e de qualquer branch, merge na branch principal, apagar branches, reescrever histórico publicado, enviar arquivos marcados como sensíveis, acesso do agente a segredos do repositório ou do ambiente |
 
-**Fronteira de confiança.** O código executado pelo agente e o código do repositório (build, testes) são não confiáveis. A Forja distingue o que **impõe** na execução do que apenas **detecta** depois, e declara isso por nível de isolamento.
+**Fronteira de confiança.** O código executado pelo agente e o código do repositório (build, testes) são não confiáveis. A Forja distingue o que **impõe** do que **apenas detecta** e do que **deixa ao ambiente**, e declara isso (ADR 0018).
 
-| Nível | Quando | Imposto na execução | Apenas detectado |
-| --- | --- | --- | --- |
-| **WSL (padrão)** | WSL disponível | Leitura restrita à cópia de trabalho; rede por lista de permissões; ausência de git e de segredos do repositório e do ambiente | — |
-| **Reduzido** | Sem WSL; Git Bash no Windows Terminal | Ambiente filtrado; arquivos sensíveis ausentes da cópia; ausência de `.git` na cópia; Job Object | Leitura fora da cópia, acesso à rede, uso de git em outro caminho |
+**Ambiente do usuário.** A Forja roda no terminal onde o usuário está e não cria sandbox. A infraestrutura e as permissões em volta (máquina, contêiner, máquina virtual, rede, credenciais) são responsabilidade do usuário ou da política da empresa. Nenhuma ferramenta usada pela Forja depende de WSL ou de Linux. Há um único nível, `environment`:
 
-**Nível WSL.** A Forja usa uma distribuição WSL dedicada, configurada na primeira preparação:
+| Garantia | Estado |
+| --- | --- |
+| Ambiente filtrado por lista de permissões para a CLI | Imposta |
+| Arquivos sensíveis ausentes da cópia de trabalho | Imposta |
+| Ausência de `.git` na cópia (e `GIT_CEILING_DIRECTORIES`, `GIT_DIR` inexistente) | Imposta |
+| Ferramentas de arquivo do agente confinadas à cópia | Imposta (pela CLI, verificado ao vivo) |
+| Processos que não sobrevivem à Forja (Job Object no Windows) | Imposta |
+| Uso de git em outro caminho | Detectada (fotografia antes e depois de cada chamada) |
+| Leitura fora da cópia por código executado, rede e segredos do ambiente | Do ambiente |
 
-- montagem automática dos discos do Windows desativada e interoperabilidade desativada, para que o agente não leia arquivos do Windows nem execute programas do Windows (como `git.exe` ou `cmd.exe`);
-- CLIs, toolchains e ferramentas instaladas dentro da distribuição, rodando em bash nativo;
-- o agente roda como usuário sem privilégios; a rede de saída é limitada por regras na distribuição, que esse usuário não pode alterar, a uma lista de permissões (endpoint configurado na CLI, como o gateway corporativo, e registros de pacotes);
-- a Forja e o git permanecem no Windows. Para cada tentativa, a Forja copia o conteúdo da tarefa para o sistema de arquivos da distribuição, sem `.git` e sem arquivos sensíveis, e recolhe as alterações ao final (transferência no contrato 2).
-
-**Nível reduzido.** Sem WSL, a preparação avisa que o isolamento será reduzido, explica o que deixa de ser garantido e recomenda habilitar o WSL. Se o terminal for o mintty, recomenda também o Git Bash como perfil do Windows Terminal. Ainda assim, três medidas são impostas:
-
-- **arquivos sensíveis não existem na cópia de trabalho**, porque o worktree é criado com sparse-checkout que os exclui, e a cópia é uma exportação filtrada desse worktree;
-- **ambiente filtrado por lista de permissões**: a CLI recebe só as variáveis necessárias;
-- **o agente não trabalha num repositório**: a cópia não tem `.git`, e `GIT_CEILING_DIRECTORIES` impede que o git procure um repositório nos diretórios acima.
-
-O nível usado é detectado na preparação, exibido ao usuário, registrado nas evidências e declarado no resumo da execução. A garantia sobre dados sensíveis é restrita ao que o nível impõe.
+Na preparação, a confirmação diz isso com todas as letras, o evento de confirmação registra o nível e o resumo da execução o declara. Quem precisa de contenção forte roda a Forja já dentro dela.
 
 **Proteção do git.** O gestor de git é o único dono do índice, das refs e do histórico, e usa uma fachada restrita: só os comandos de uma lista permitida, com regras para branches protegidas e para histórico já publicado. Em ambos os níveis, o agente trabalha numa cópia sem `.git`, então um comando `git` falha por construção; no ambiente do agente, `GIT_CEILING_DIRECTORIES` e um `GIT_DIR` apontando para um caminho inexistente reforçam isso. Além disso, antes e depois de cada chamada, o gestor fotografa e compara as refs (incluindo as compartilhadas pelos worktrees), o HEAD, a branch e o índice de cada worktree, o `.git/config` e os hooks. Qualquer diferença rejeita a tentativa. No nível reduzido, essa verificação é a única defesa contra um agente que chegue ao repositório principal por caminho absoluto, e o resumo da execução registra isso.
 
-**Credencial da CLI.** Nenhum segredo do repositório ou do ambiente chega ao agente. A credencial da própria CLI é outra coisa: é gerenciada pela CLI e pelo gateway ou provedor configurado nela, fora do escopo da Forja. A Forja não intermedia chamadas ao modelo nem cria proxy de credenciais. Em ambiente corporativo, essa credencial só serve para o gateway, que já faz autenticação, auditoria e cotas, e no nível WSL a rede de saída não permite levá-la a outro destino. A prova de vida confirma que a CLI, no ambiente em que vai rodar, está configurada e alcança o endpoint.
+**Credencial da CLI.** Nenhum segredo do repositório ou do ambiente chega ao agente. A credencial da própria CLI é outra coisa: é gerenciada pela CLI e pelo gateway ou provedor configurado nela, fora do escopo da Forja. A Forja não intermedia chamadas ao modelo nem cria proxy de credenciais. Em ambiente corporativo, essa credencial só serve para o gateway, que já faz autenticação, auditoria e cotas, e a rede de saída é do ambiente do usuário. A prova de vida confirma que a CLI, no ambiente em que vai rodar, está configurada e alcança o endpoint.
 
-**Onde o código do repositório executa.** Build, testes, lint, mutação, E2E e teste diferencial executam código do repositório e, portanto, código não confiável.
+**Onde o código do repositório executa.** Build, testes, lint, mutação, E2E e teste diferencial executam código do repositório e, portanto, código não confiável. Tudo roda no ambiente do usuário, com o mesmo usuário, como declarado. O agente só roda comandos pela fachada `forja agente` (`lint`, `medir`, `testar`), um comando exato por vez, com ambiente reduzido; `agente_roda_testes = false` no `execucao.toml` retira o `testar`. Caches de build são do ambiente do usuário.
 
-- **Nível WSL:** todas essas ferramentas rodam dentro da distribuição dedicada, sobre a cópia de trabalho ou uma cópia de medição. A Forja no Windows só manipula arquivos e git; nunca executa código do repositório.
-- **Caches de build** (Maven, Gradle, módulos Go, uv, pnpm, NuGet) são persistentes na distribuição, mas separados por repositório, para que um repositório não contamine o cache de outro.
-- **Projetos que só compilam no Windows** (por exemplo, .NET Framework legado): o adaptador declara a capacidade `requer_windows`, e o build desse repositório roda no nível reduzido, declarado no resumo da execução.
-- **Nível reduzido:** tudo roda no Windows, com o mesmo usuário, como já declarado.
 
 ### Contrato 4: eventos, artefatos e evidências
 
@@ -458,7 +448,7 @@ Comandos que falharam são registrados como métrica por papel e por CLI. A corr
 
 ### Isolamento
 
-A CLI roda no nível de isolamento detectado na preparação: WSL por padrão, com CLIs, toolchains e ferramentas dentro de uma distribuição dedicada, em bash nativo; sem WSL, Git Bash com isolamento reduzido e declarado. Todos os subprocessos ficam num Job Object do Windows para não sobreviverem à ferramenta. Os detalhes estão no contrato 3 e valem desde o primeiro incremento.
+A CLI roda no ambiente do usuário, no terminal onde ele está; a Forja não cria sandbox (ADR 0018) e declara o que impõe, o que detecta e o que fica com o ambiente. Todos os subprocessos ficam num Job Object do Windows para não sobreviverem à ferramenta. Os detalhes estão no contrato 3.
 
 ## Estratégia de testes
 
@@ -608,7 +598,7 @@ Antes de qualquer envio, uma etapa determinística:
 
 Se a redação remover algo essencial para a tarefa, isso vira premissa declarada.
 
-A redação garante o que a Forja envia. O que a CLI consegue ler por conta própria depende do nível de isolamento (contrato 3): no nível WSL, só a cópia de trabalho; no nível reduzido, o restante do disco fica apenas monitorado, e o resumo declara isso. Ela também não mascara o conteúdo dos arquivos da cópia de trabalho, porque o agente gravaria o marcador no código real.
+A redação garante o que a Forja envia. O que a CLI consegue ler por conta própria depende do ambiente em que o usuário roda a Forja (contrato 3): as ferramentas de arquivo dela ficam confinadas à cópia, e o resto é do ambiente, como o resumo declara. Ela também não mascara o conteúdo dos arquivos da cópia de trabalho, porque o agente gravaria o marcador no código real.
 
 ### O que o agente produz
 
@@ -765,7 +755,7 @@ Conjunto fixo de repositórios de exemplo com problemas conhecidos, nas linguage
 | Inconclusivo | Resultado de gate quando a medição não pôde ser feita; tratado pela política do gate |
 | Modo observação | Check que mede e reporta no resumo sem bloquear, até ter dados de calibração |
 | Etapa | Um papel dentro de uma tarefa; aprovada, gera um commit na branch da tarefa |
-| Nível de isolamento | WSL (padrão) ou reduzido; define o que é imposto na execução e o que é apenas detectado |
+| Nível de isolamento | `environment`; define o que a Forja impõe, o que apenas detecta e o que fica com o ambiente |
 | Não aplicável | Resultado de gate quando o adaptador não declara a capacidade exigida; não bloqueia |
 
 ### Fora de escopo

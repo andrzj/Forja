@@ -29,7 +29,9 @@ from tests.orchestrator.fakes import ScriptedAgent, ScriptedMeasurer, ScriptedPl
 
 RUN = "r1abcdef0123"
 IDENTITY = Identity("Forja (fake-cli)", "forja@localhost", "Dev Person", "dev@example.com")
-ISOLATION = Confirmation(IsolationRecord(agent=IsolationLevel.WSL, repo_code=IsolationLevel.WSL))
+ISOLATION = Confirmation(
+    IsolationRecord(agent=IsolationLevel.ENVIRONMENT, repo_code=IsolationLevel.ENVIRONMENT)
+)
 TWO_TASKS = (
     PlannedTask("reduce the complexity of f", ("src/a.py",), 8, 400),
     PlannedTask("reduce the complexity of g", ("src/b.py",), 8, 400),

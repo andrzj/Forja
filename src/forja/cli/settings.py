@@ -43,6 +43,7 @@ class Execucao(BaseModel):
     executavel: str = ""
     escopo: list[str] = Field(default_factory=list)
     tokens: int = Field(default=DEFAULT_TOKENS, ge=1)
+    agente_roda_testes: bool = True
     base: str = ""
     interface: Interface = Field(default_factory=Interface)
 

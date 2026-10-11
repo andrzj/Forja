@@ -148,14 +148,23 @@ def summary_of(
     detection: Detection, config: RunConfig, scope: tuple[str, ...], tokens: int
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
+    tests = (
+        "o agente pode rodar os testes do projeto na cópia dele (`agente_roda_testes = false` "
+        "no execucao.toml desliga)"
+        if config.agent_runs_tests
+        else "o agente não roda os testes; só edita e consulta lint e complexidade"
+    )
     return (
         f"Vou refatorar {detection.repo.name if detection.repo else ''} "
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
         f"  agente: {config.implementer.name} {config.implementer.version}",
         f"  onde: {where}",
         f"  limite: {tokens:,} tokens".replace(",", "."),
-        "  isolamento: reduzido (o agente roda no seu sistema; as ferramentas de arquivo dele "
-        "ficam confinadas à cópia; o resumo declara isso)",
+        "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
+        "são garantidas pelo seu ambiente",
+        "  a Forja impõe: ambiente filtrado para a CLI, cópia sem .git e sem arquivos sensíveis, "
+        "ferramentas de arquivo do agente confinadas à cópia, git conferido a cada chamada",
+        f"  testes: {tests}",
         "  entrega: uma branch nova `forja-run/…`; sua branch não é alterada e nada é enviado",
     )
 
@@ -178,9 +187,11 @@ async def prepare(
     version = await prove(name, choice, environ, probe_cache(profile_dir), console)
     scope = args.scope or tuple(saved.escopo if saved else ())
     tokens = saved.tokens if saved else 2_000_000
+    runs_tests = saved.agente_roda_testes if saved else True
     config = new_config(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
         executor_version=version, tokens=tokens, scope=scope,
+        agent_runs_tests=runs_tests,
     )  # fmt: skip
     lines = summary_of(detection, config, scope, tokens)
     execucao = Execucao(
@@ -188,6 +199,7 @@ async def prepare(
         executavel=str(choice.path),
         escopo=list(scope),
         tokens=tokens,
+        agente_roda_testes=runs_tests,
         interface=saved.interface if saved else profile.interface,
     )
     return Prepared(config, execucao, lines, (name, str(choice.path)) if offer else None)

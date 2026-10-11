@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from forja.cli.facade import (
-    ISOLATED_VARIABLE,
     PYTHON_VARIABLE,
     Refused,
     command_for,
@@ -48,13 +47,8 @@ def test_a_link_pointing_out_of_the_project_is_refused(tmp_path: Path) -> None:
         safe_paths(project, ["ponte"])
 
 
-def test_running_the_tests_is_refused_without_a_real_sandbox() -> None:
-    with pytest.raises(Refused, match="isolamento real"):
-        command_for("testar", [], {PYTHON_VARIABLE: "/p/python"})
-
-
-def test_the_tests_run_with_the_python_of_the_project_when_isolated() -> None:
-    environ = {PYTHON_VARIABLE: "/p/python", ISOLATED_VARIABLE: "1"}
+def test_the_tests_run_with_the_python_of_the_project() -> None:
+    environ = {PYTHON_VARIABLE: "/p/python"}
     command = command_for("testar", ["tests"], environ)
     assert command[:3] == ["/p/python", "-m", "pytest"]
     assert command[-1] == "tests"

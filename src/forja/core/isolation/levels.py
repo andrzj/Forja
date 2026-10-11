@@ -1,8 +1,10 @@
-"""Isolation levels and what each one really guarantees (contract 3).
+"""What the Forja guarantees about where code runs, and what it leaves to the environment.
 
-The table is data, transcribed from the spec, so the same source feeds the declaration made to the
-user, the evidence and the PR text. "Detected only" means the spec promises detection after the
-fact, not prevention; in this increment no detector exists, so those rows read "not verified".
+The Forja runs in the terminal where the person is. Building a sandbox is not its job: whoever
+runs it is responsible for the infrastructure and the permissions around it (a corporate machine,
+a container, a virtual machine, a plain workstation), and says so by choosing where to run. What
+the Forja itself imposes works on any system and needs nothing installed. The table is data, so
+the same source feeds the declaration made to the person, the evidence and the summary.
 """
 
 from collections.abc import Mapping
@@ -15,8 +17,7 @@ from forja.core.artifacts.models import NonEmpty
 
 
 class IsolationLevel(StrEnum):
-    WSL = "wsl"
-    REDUCED = "reduced"
+    ENVIRONMENT = "environment"  # the person's own environment; the Forja adds its own measures
 
 
 class Guarantee(StrEnum):
@@ -31,18 +32,17 @@ class Guarantee(StrEnum):
 
 
 class Status(StrEnum):
-    ENFORCED = "enforced"  # made impossible during the run
-    DETECTED_ONLY = "detected_only"  # only noticed afterwards; not verified yet
-    NOT_ENFORCED = "not_enforced"
+    ENFORCED = "enforced"  # made impossible by the Forja during the run
+    DETECTED_ONLY = "detected_only"  # only noticed afterwards by the Forja
+    ENVIRONMENT = "environment"  # up to the environment the person chose to run in
 
 
 G = Guarantee
 
-# Level -> guarantees enforced during the run.
+# Level -> guarantees the Forja makes impossible during the run.
 ENFORCED: Mapping[IsolationLevel, frozenset[Guarantee]] = MappingProxyType(
     {
-        IsolationLevel.WSL: frozenset(Guarantee),
-        IsolationLevel.REDUCED: frozenset(
+        IsolationLevel.ENVIRONMENT: frozenset(
             {
                 G.FILTERED_ENVIRONMENT,
                 G.SENSITIVE_FILES_ABSENT,
@@ -53,14 +53,9 @@ ENFORCED: Mapping[IsolationLevel, frozenset[Guarantee]] = MappingProxyType(
     }
 )
 
-# Level -> guarantees that are only detected afterwards.
+# Level -> guarantees the Forja only notices afterwards (git is snapshotted around every call).
 DETECTED_ONLY: Mapping[IsolationLevel, frozenset[Guarantee]] = MappingProxyType(
-    {
-        IsolationLevel.WSL: frozenset(),
-        IsolationLevel.REDUCED: frozenset(
-            {G.READ_RESTRICTED_TO_WORKCOPY, G.NETWORK_ALLOWLIST, G.NO_GIT_AVAILABLE}
-        ),
-    }
+    {IsolationLevel.ENVIRONMENT: frozenset({G.NO_GIT_AVAILABLE})}
 )
 
 
@@ -69,7 +64,7 @@ def status_of(level: IsolationLevel, guarantee: Guarantee) -> Status:
         return Status.ENFORCED
     if guarantee in DETECTED_ONLY[level]:
         return Status.DETECTED_ONLY
-    return Status.NOT_ENFORCED
+    return Status.ENVIRONMENT
 
 
 class Context(StrEnum):
@@ -78,11 +73,7 @@ class Context(StrEnum):
 
 
 class IsolationRecord(BaseModel):
-    """The levels in force for this run, recorded when the user confirms.
-
-    The two contexts usually match; they differ when a repository can only build on Windows, so
-    its tools run reduced while the agent stays in WSL.
-    """
+    """The level in force for this run, recorded when the person confirms."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -94,12 +85,8 @@ class IsolationRecord(BaseModel):
         return self.agent if context is Context.AGENT else self.repo_code
 
     def declaration(self) -> dict[Context, dict[Guarantee, Status]]:
-        """Every guarantee with its status, per context: the text of the PR declaration."""
+        """Every guarantee with its status, per context: the text of the declaration."""
         return {
             context: {g: status_of(self.level_of(context), g) for g in Guarantee}
             for context in Context
         }
-
-    @property
-    def is_reduced(self) -> bool:
-        return IsolationLevel.REDUCED in (self.agent, self.repo_code)

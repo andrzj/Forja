@@ -165,5 +165,3 @@ def test_the_real_cli_may_run_the_facade_and_nothing_else(tmp_path: Path) -> Non
     assert not (copy / "injected.txt").exists(), "a second command rode along with the facade"
     assert not (tmp_path / "escaped.txt").exists(), "it ran a command that is not the facade"
     assert not (tmp_path / "escaped2.txt").exists(), "a chained command wrote above the copy"
-    testar = copy / AGENT_DIR / "testar.txt"
-    assert not testar.exists() or "isolamento real" in testar.read_text("utf-8", "ignore")

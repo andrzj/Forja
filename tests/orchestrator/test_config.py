@@ -32,7 +32,7 @@ CONFIG = RunConfig(
     policy_version="0.0.0+0123456789ab",
 )
 CONFIRMATION = Confirmation(
-    IsolationRecord(agent=IsolationLevel.WSL, repo_code=IsolationLevel.WSL),
+    IsolationRecord(agent=IsolationLevel.ENVIRONMENT, repo_code=IsolationLevel.ENVIRONMENT),
 )
 
 
@@ -139,4 +139,4 @@ def test_the_exit_code_follows_the_state_the_run_was_left_in(
 
 
 def test_the_codes_are_the_ones_the_users_scripts_can_rely_on() -> None:
-    assert [int(c) for c in ExitCode] == [0, 1, 2, 3, 130]
+    assert [int(c) for c in ExitCode] == [0, 1, 2, 3, 4, 130]

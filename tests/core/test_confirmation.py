@@ -16,8 +16,8 @@ from tests.core.events.support import RUN, create_run, open_log
 
 CONFIRMATION = Confirmation(
     IsolationRecord(
-        agent=IsolationLevel.WSL,
-        repo_code=IsolationLevel.REDUCED,
+        agent=IsolationLevel.ENVIRONMENT,
+        repo_code=IsolationLevel.ENVIRONMENT,
         notes=("only builds on Windows",),
     ),
 )
