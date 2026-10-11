@@ -10,16 +10,21 @@ import pytest
 from forja.core.idempotency import (
     Decision,
     ReconciliationError,
+    normalize_stage_id,
     reconcile_apply_diff,
     reconcile_call_agent_cli,
     reconcile_commit_stage,
     reconcile_create_attempt_worktree,
+    reconcile_create_run_branch,
     reconcile_create_task_branch,
     reconcile_integrate_task,
+    reconcile_normalize_style,
     reconcile_prepare_workcopy,
     reconcile_push_run_branch,
     reconcile_remove_worktree,
+    reconcile_rollback_integration,
     reconcile_run_tool,
+    run_branch_name,
     task_branch_name,
 )
 from forja.core.manifest import build_manifest
@@ -303,3 +308,82 @@ def test_push_run_branch_cannot_be_verified_without_the_local_branch(
 ) -> None:
     with pytest.raises(ReconciliationError):
         asyncio.run(reconcile_push_run_branch(repo.git, str(new_remote()), "missing"))
+
+
+def test_branch_names_carry_the_run_id() -> None:
+    assert run_branch_name("r1") == "forja-run/r1"
+    assert normalize_stage_id("r1") == "normalize-r1"
+    assert run_branch_name("r1") != task_branch_name("r1", "t1").rsplit("/", 1)[0]
+
+
+def test_create_run_branch_exists_means_already_done(repo: Repo) -> None:
+    repo.sh("branch", run_branch_name("r1"))
+
+    assert (
+        asyncio.run(reconcile_create_run_branch(repo.git, run_branch_name("r1"))).decision is DONE
+    )
+
+
+def test_create_run_branch_missing_means_redo(repo: Repo) -> None:
+    result = asyncio.run(reconcile_create_run_branch(repo.git, run_branch_name("r1")))
+
+    assert result.decision is REDO
+
+
+def test_create_run_branch_ignores_a_tag_with_the_same_name(repo: Repo) -> None:
+    repo.sh("tag", "forja-run-r1")
+
+    assert asyncio.run(reconcile_create_run_branch(repo.git, "forja-run-r1")).decision is REDO
+
+
+def test_normalize_style_with_the_trailer_of_this_run_on_its_branch_is_already_done(
+    repo: Repo,
+) -> None:
+    branch = run_branch_name("r1")
+    repo.sh("checkout", "-b", branch)
+    _commit_with_trailers(repo, "x.txt", normalize_stage_id("r1"))
+
+    result = asyncio.run(reconcile_normalize_style(repo.git, branch, normalize_stage_id("r1")))
+
+    assert result.decision is DONE
+
+
+def test_normalize_style_of_another_run_does_not_count(repo: Repo) -> None:
+    branch = run_branch_name("r2")
+    repo.sh("checkout", "-b", branch)
+    _commit_with_trailers(repo, "x.txt", normalize_stage_id("r1"))
+
+    result = asyncio.run(reconcile_normalize_style(repo.git, branch, normalize_stage_id("r2")))
+
+    assert result.decision is REDO
+
+
+def test_normalize_style_cannot_be_verified_without_the_run_branch(repo: Repo) -> None:
+    with pytest.raises(ReconciliationError):
+        asyncio.run(
+            reconcile_normalize_style(repo.git, run_branch_name("r1"), normalize_stage_id("r1"))
+        )
+
+
+def test_rollback_integration_with_the_tip_back_where_it_was_is_already_done(repo: Repo) -> None:
+    before = repo.sh("rev-parse", "HEAD")
+    repo.sh("checkout", "-b", run_branch_name("r1"))
+
+    result = asyncio.run(reconcile_rollback_integration(repo.git, run_branch_name("r1"), before))
+
+    assert result.decision is DONE
+
+
+def test_rollback_integration_with_the_integration_still_in_place_means_redo(repo: Repo) -> None:
+    before = repo.sh("rev-parse", "HEAD")
+    repo.sh("checkout", "-b", run_branch_name("r1"))
+    repo.commit("integrated.txt")
+
+    result = asyncio.run(reconcile_rollback_integration(repo.git, run_branch_name("r1"), before))
+
+    assert result.decision is REDO
+
+
+def test_rollback_integration_cannot_be_verified_without_the_run_branch(repo: Repo) -> None:
+    with pytest.raises(ReconciliationError):
+        asyncio.run(reconcile_rollback_integration(repo.git, run_branch_name("r1"), "a" * 40))

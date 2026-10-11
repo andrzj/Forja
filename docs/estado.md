@@ -23,7 +23,7 @@ Pedaços combinados: 1a orquestrador, 1b Python e gates, 1c gestor de git, 1d ex
 
 - **1a, bloco 1 (feito):** `forja/orchestrator/` com `config.py` (`RunConfig`, orçamento padrão, config dentro do evento de confirmação), `budget.py` (consumo lido dos eventos, `Meter`, tentativas de qualidade e falhas de infraestrutura seguidas), `operations.py` (`Journal`: `enter` e `operate` que não repetem o que o log já mostra, `Step`, ids com sufixo de `redo`) e `outcome.py` (códigos de saída 0, 1, 2, 3 e 130).
 - **Falta no 1a:** portas, `GitWorkspace`, fluxo das fases, ciclo da tarefa, resumo e teste de retomada com o orquestrador real.
-- **Lacuna que o 1a vai exigir:** três operações externas fora da tabela de idempotência (criar a branch da execução, o commit `style:` da normalização e desfazer a integração quando o gate de integração falha). Cada uma precisa de linha na tabela, reconciliador e teste antes de entrar.
+- **Tabela de idempotência com 13 operações (feito):** `create_run_branch`, `normalize_style` (trailer `Stage-Id: normalize-<execução>`) e `rollback_integration` entraram na tabela do código e da spec, com reconciliador e testes. A branch da execução é `forja-run/<execução>` (`run_branch_name`).
 
 ## Retomada
 

@@ -5,6 +5,8 @@ from tests.core.idempotency import test_reconcilers
 
 # Transcribed by hand from the "safe to repeat?" column of the spec table.
 REPEAT_SAFE = {
+    "create_run_branch": True,
+    "normalize_style": False,
     "create_task_branch": True,
     "create_attempt_worktree": True,
     "prepare_workcopy": True,
@@ -13,6 +15,7 @@ REPEAT_SAFE = {
     "run_tool": True,
     "commit_stage": False,
     "integrate_task": False,
+    "rollback_integration": True,
     "remove_worktree": True,
     "push_run_branch": True,
 }

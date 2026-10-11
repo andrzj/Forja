@@ -10,6 +10,8 @@ from types import MappingProxyType
 
 
 class OperationName(StrEnum):
+    CREATE_RUN_BRANCH = "create_run_branch"
+    NORMALIZE_STYLE = "normalize_style"
     CREATE_TASK_BRANCH = "create_task_branch"
     CREATE_ATTEMPT_WORKTREE = "create_attempt_worktree"
     PREPARE_WORKCOPY = "prepare_workcopy"
@@ -18,6 +20,7 @@ class OperationName(StrEnum):
     RUN_TOOL = "run_tool"
     COMMIT_STAGE = "commit_stage"
     INTEGRATE_TASK = "integrate_task"
+    ROLLBACK_INTEGRATION = "rollback_integration"
     REMOVE_WORKTREE = "remove_worktree"
     PUSH_RUN_BRANCH = "push_run_branch"
 
@@ -32,6 +35,20 @@ class OperationRule:
 
 
 _RULES = (
+    OperationRule(
+        OperationName.CREATE_RUN_BRANCH,
+        "run id in the branch name",
+        "the ref exists",
+        True,
+        "recreate if missing",
+    ),
+    OperationRule(
+        OperationName.NORMALIZE_STYLE,
+        "Stage-Id trailer normalize-<run id>",
+        "a commit with that Stage-Id is on the run branch",
+        False,
+        "record the effect if it exists; otherwise normalize and commit again",
+    ),
     OperationRule(
         OperationName.CREATE_TASK_BRANCH,
         "task id in the branch name",
@@ -87,6 +104,13 @@ _RULES = (
         "the task branch tip is contained in the run branch",
         False,
         "record the effect if it exists; otherwise integrate and run the integration gate",
+    ),
+    OperationRule(
+        OperationName.ROLLBACK_INTEGRATION,
+        "task id",
+        "the run branch tip is the commit it had before the integration",
+        True,
+        "move the run branch back to that commit",
     ),
     OperationRule(
         OperationName.REMOVE_WORKTREE,

@@ -38,6 +38,32 @@ async def reconcile_create_task_branch(git: Git, branch: str) -> Reconciliation:
     return _verdict(await git.succeeds("show-ref", "--verify", "--quiet", f"refs/heads/{branch}"))
 
 
+def run_branch_name(run_id: str) -> str:
+    return f"forja-run/{run_id}"
+
+
+def normalize_stage_id(run_id: str) -> str:
+    return f"normalize-{run_id}"
+
+
+async def reconcile_create_run_branch(git: Git, branch: str) -> Reconciliation:
+    """Same rule as a task branch: the ref exists or it does not."""
+    return await reconcile_create_task_branch(git, branch)
+
+
+async def reconcile_normalize_style(git: Git, run_branch: str, stage_id: str) -> Reconciliation:
+    """Same rule as a stage commit: the trailer says whether the normalization was committed."""
+    return await reconcile_commit_stage(git, run_branch, stage_id)
+
+
+async def reconcile_rollback_integration(
+    git: Git, run_branch: str, expected_tip: str
+) -> Reconciliation:
+    await _require_branch(git, run_branch)
+    (tip,) = await git.lines("rev-parse", f"refs/heads/{run_branch}")
+    return _verdict(tip == expected_tip)
+
+
 async def _listed_worktrees(git: Git) -> dict[str, str]:
     """Map of normalized worktree path to its HEAD commit."""
     found: dict[str, str] = {}

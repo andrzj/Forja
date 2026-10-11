@@ -159,6 +159,8 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 
 | Operação | Identificador | Como verificar se já aconteceu | Seguro repetir? | Reconciliação |
 | --- | --- | --- | --- | --- |
+| Criar branch da execução | ID da execução no nome (`forja-run/<execução>`) | Ref existe | Sim | Recria se ausente |
+| Normalização de estilo | Trailer `Stage-Id: normalize-<execução>` | Busca desse `Stage-Id` na branch da execução | Não | Registra efetivação se existir; senão, normaliza e commita de novo |
 | Criar branch da tarefa | ID da tarefa no nome | Ref existe | Sim | Recria se ausente |
 | Criar worktree da tentativa | ID da tentativa no caminho | `git worktree list` | Sim, após remover o parcial | Remove parcial e recria |
 | Preparar cópia de trabalho (WSL ou local) | ID da tentativa | Hash do conteúdo copiado | Sim | Apaga e recopia |
@@ -167,6 +169,7 @@ Uma tentativa `rejeitada` gera a próxima tentativa da mesma etapa com o motivo 
 | Execução de ferramenta, medição ou gate | Chave de cache (contrato 5) | Evidência com a mesma chave existe | Sim | Reaproveita ou refaz |
 | Commit da etapa | Trailers `Task-Id`, `Stage-Id`, `Attempt-Id` | Busca de `Stage-Id` na branch da tarefa | Não | Registra efetivação se existir; senão, refaz o commit |
 | Integração da tarefa | `Task-Id` | Ponta da branch da tarefa contida na branch da execução | Não | Registra efetivação se existir; senão, integra e roda o gate de integração |
+| Desfazer a integração | `Task-Id` | Ponta da branch da execução é o commit que ela tinha antes da integração | Sim | Move a branch da execução de volta a esse commit |
 | Remover worktree | Caminho | Ausência no disco e no `git worktree list` | Sim | `git worktree prune` |
 | Push da branch da execução | Nome da branch | Ref remota aponta para o commit esperado | Sim | Repete |
 
