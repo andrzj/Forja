@@ -57,6 +57,21 @@ def test_a_blocked_task_counts_as_done() -> None:
     assert view.snapshot().tasks_done == 1
 
 
+def test_integrated_and_blocked_tasks_are_told_apart() -> None:
+    view = model()
+    for number, final in (
+        (1, TaskState.INTEGRATED),
+        (2, TaskState.BLOCKED),
+        (3, TaskState.BLOCKED),
+    ):
+        view.apply(transition(Level.TASK, f"t{number}", TaskState.PENDING, payload={"intent": "x"}))
+        view.apply(transition(Level.TASK, f"t{number}", final))
+
+    snapshot = view.snapshot()
+
+    assert (snapshot.tasks_done, snapshot.tasks_integrated, snapshot.tasks_blocked) == (3, 1, 2)
+
+
 def test_a_new_attempt_has_its_number_and_clean_gates() -> None:
     view = model()
     view.apply(tool("intent", "run_tool:t1-a1:lint:1"))

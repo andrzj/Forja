@@ -161,6 +161,8 @@ def test_a_whole_run_delivers_a_branch_and_leaves_the_users_branch_alone(
     assert run("rev-parse", "HEAD", cwd=result.repo) == result.before, "the user's branch moved"
     assert run("status", "--porcelain", cwd=result.repo) == ""
     assert "NAMES" in result.delivered()
+    assert "Nenhuma tarefa foi integrada" not in result.text
+    assert "bloqueada" not in result.text
 
 
 def test_work_that_changes_the_behaviour_never_reaches_the_branch(
@@ -169,5 +171,8 @@ def test_work_that_changes_the_behaviour_never_reaches_the_branch(
     result = whole_run(tmp_path, monkeypatch, capsys, WRONG)
 
     assert "always" not in result.delivered(), result.text
+    assert "0 de 1 tarefa(s) integrada(s); 1 bloqueada(s)" in result.text
+    assert "Nenhuma tarefa foi integrada" in result.text
+    assert "0 integrada(s), 1 bloqueada(s)" in result.text  # the last line of the screen
     assert run("rev-parse", "HEAD", cwd=result.repo) == result.before
     assert run("status", "--porcelain", cwd=result.repo) == ""

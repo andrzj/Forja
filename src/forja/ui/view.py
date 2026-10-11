@@ -62,6 +62,8 @@ class View:
     tokens_used: int
     tokens_limit: int
     elapsed: float
+    tasks_integrated: int = 0
+    tasks_blocked: int = 0
 
     @property
     def tokens_fraction(self) -> float:
@@ -244,6 +246,8 @@ class ViewModel:
             tokens_used=self.tokens_used,
             tokens_limit=self.token_limit,
             elapsed=self.seconds_before + (self.clock() - self._started),
+            tasks_integrated=sum(1 for s in self.tasks.values() if s == TaskState.INTEGRATED),
+            tasks_blocked=sum(1 for s in self.tasks.values() if s == TaskState.BLOCKED),
         )
 
 

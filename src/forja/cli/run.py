@@ -132,6 +132,13 @@ def closing_lines(session: Session, ended: Ended) -> list[str]:
     assert ended.outcome is not None
     lines = [ended.outcome.message]
     if view.state == "delivered":
+        if view.tasks_blocked:
+            lines.append(
+                f"{view.tasks_integrated} de {view.tasks_total} tarefa(s) integrada(s); "
+                f"{view.tasks_blocked} bloqueada(s), com o motivo no resumo."
+            )
+        if not view.tasks_integrated:
+            lines.append("Nenhuma tarefa foi integrada: a branch não tem mudanças.")
         lines += [
             f"Branch da entrega: {branch} (sua branch não foi alterada; nada foi enviado).",
             f"Resumo: {session.directory / SUMMARY_NAME}",

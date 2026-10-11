@@ -66,4 +66,6 @@ class PlainRenderer:
     def stop(self, view: View) -> None:
         self.update(view)
         done = f"{view.tasks_done}/{view.tasks_total} tarefas"
+        if view.tasks_blocked:
+            done += f" ({view.tasks_integrated} integrada(s), {view.tasks_blocked} bloqueada(s))"
         self._line(view, f"fim: {view.state}; {done}; tokens {percent_text(view.tokens_fraction)}")
