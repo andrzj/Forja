@@ -1,13 +1,24 @@
 """Gate 1: the attempt touched only what the task allowed, and not too much of it."""
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from forja.checks.base import rejected
-from forja.checks.changes import Changes
+from forja.checks.changes import Changes, added_lines
 from forja.core.adapters import FileClass
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.orchestrator.ports import TaskInfo
+
+SUPPRESSIONS = re.compile(
+    r"noqa|ruff:\s*noqa|fmt:\s*(?:off|on|skip)|gitleaks:allow|lizard\s+forgives|nosemgrep",
+    re.IGNORECASE,
+)
+# what tools leave behind that git is right to ignore
+DISPOSABLE = (
+    "__pycache__/", ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".hypothesis/",
+)  # fmt: skip
+DISPOSABLE_SUFFIXES = (".pyc", ".pyo")
 
 
 def in_scope(path: str, scope: tuple[str, ...]) -> bool:
@@ -44,7 +55,13 @@ class ScopeCheck:
         changes = self.changes
         if not changes.files:
             return rejected([Finding(message="the attempt changed nothing", target="diff")])
-        findings = [*self._forbidden(), *self._too_big(data), *self._undeclared()]
+        findings = [
+            *self._forbidden(),
+            *self._hidden(),
+            *self._suppressions(),
+            *self._too_big(data),
+            *self._undeclared(),
+        ]
         return rejected(findings) if findings else Approved()
 
     def _forbidden(self) -> list[Finding]:
@@ -62,6 +79,28 @@ class ScopeCheck:
                 elif not in_scope(path, self.task.scope):
                     findings.append(Finding(message="outside the task scope", target=path))
         return findings
+
+    def _hidden(self) -> list[Finding]:
+        """Files the ignore rules hide from the commit but not from the build and tests."""
+        return [
+            Finding(message="a file git ignores was added", target=path)
+            for path in self.changes.ignored
+            if not (
+                any(part in path.replace("\\", "/") for part in DISPOSABLE)
+                or path.endswith(DISPOSABLE_SUFFIXES)
+            )
+        ]
+
+    def _suppressions(self) -> list[Finding]:
+        """A comment that tells a tool to look away is the tool being switched off."""
+        return [
+            Finding(
+                message="a comment that silences a tool was added",
+                target=line.path or "diff",
+            )
+            for line in added_lines(self.changes.patch)
+            if SUPPRESSIONS.search(line.text)
+        ]
 
     def _too_big(self, data: GateInput) -> list[Finding]:
         findings = []

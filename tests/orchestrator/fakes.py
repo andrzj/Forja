@@ -152,7 +152,7 @@ class ScriptedAgent:
             verdict = "good" if ctx.previous_rejection else "bad"
             files = {f"src/{ctx.task.task_id}.py": verdict + "\n"}
         if self.edits:
-            files = self.edits[min(number, len(self.edits)) - 1]
+            files = self.edits[min(number, len(self.edits) - 1)]
         spec = ProcessSpec(
             [sys.executable, str(AGENT_SCRIPT), json.dumps(files), str(self.pause)],
             workcopy_of(ctx),

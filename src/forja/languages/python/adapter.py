@@ -124,7 +124,14 @@ class PythonAdapter:
                     *targets,
                 )
             case Operation.LINT:
-                argv = (*self._ruff, "check", *self._ruff_options(), "--", *targets)
+                argv = (
+                    *self._ruff,
+                    "check",
+                    "--ignore-noqa",
+                    *self._ruff_options(),
+                    "--",
+                    *targets,
+                )
             case Operation.LINT_FIX:
                 argv = (
                     *self._ruff,

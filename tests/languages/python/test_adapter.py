@@ -119,7 +119,7 @@ def test_lint_reads_the_concise_format_and_the_fix_only_touches_what_is_safe(pro
     options = ("--output-format=concise", "--no-cache", "--force-exclude")
 
     assert argv(Operation.LINT, project, files=("a.py", "b.py")) == (
-        "rf", "check", *options, "--", "a.py", "b.py",
+        "rf", "check", "--ignore-noqa", *options, "--", "a.py", "b.py",
     )  # fmt: skip
     assert argv(Operation.LINT_FIX, project) == (
         "rf",

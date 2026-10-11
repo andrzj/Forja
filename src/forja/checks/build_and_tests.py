@@ -51,7 +51,7 @@ class TestsCheck:
     adapter: LanguageAdapter
     worktree: Path
     quarantine: frozenset[str] = frozenset()
-    base_tests: int = 0  # how many tests the base had; losing them all is a failure
+    passing: frozenset[str] = frozenset()  # tests that passed on the base, both times
     id: str = "tests"
     gate: int = 5
     requires: frozenset[str] = frozenset()
@@ -65,15 +65,20 @@ class TestsCheck:
         parsed = await measure(
             self.tools, self.adapter, Operation.TEST, "tests", request, overrides
         )
-        if any(d.measurement == "test.collected" for d in parsed.drafts):
-            if self.base_tests == 0:
-                return Approved()
-            return rejected([Finding(message="no test was collected", target="tests")])
+        outcomes = {
+            d.target.id: str(d.value) for d in parsed.drafts if d.measurement == "test.outcome"
+        }
         findings = [
-            Finding(message=f"test {draft.value}", target=draft.target.id)
-            for draft in parsed.drafts
-            if draft.measurement == "test.outcome"
-            and draft.value in FAILED
-            and draft.target.id not in self.quarantine
+            Finding(message=f"test {outcome}", target=test)
+            for test, outcome in sorted(outcomes.items())
+            if outcome in FAILED and test not in self.quarantine
+        ]
+        # a test that vanished, was skipped or deleted is a failure nobody reported
+        findings += [
+            Finding(
+                message="a test that passed on the base is missing or did not pass", target=test
+            )
+            for test in sorted(self.passing - self.quarantine)
+            if outcomes.get(test) != "passed" and test not in {f.target for f in findings}
         ]
         return rejected(findings) if findings else Approved()

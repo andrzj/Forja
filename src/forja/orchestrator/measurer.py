@@ -42,6 +42,7 @@ from forja.orchestrator.ports import AttemptContext, Baseline, SinkFactory
 
 BASE_FILE = "base.json"
 UNSTABLE = "unstable"
+PASSING = "passing"
 
 
 class GitAt(Protocol):
@@ -105,13 +106,13 @@ class PipelineMeasurer:
     def _base_file(self) -> Path:
         return self._workdir / BASE_FILE
 
-    def _read_base(self) -> tuple[frozenset[str], int]:
-        """The unstable tests and the number of tests the base had, as the first measurement saw."""
+    def _read_base(self) -> tuple[frozenset[str], frozenset[str]]:
+        """The unstable tests and the ones that passed, as the first measurement saw them."""
         try:
             data = json.loads(self._base_file.read_text(encoding="utf-8"))
-            return frozenset(str(t) for t in data[UNSTABLE]), int(data["tests"])
+            return frozenset(map(str, data[UNSTABLE])), frozenset(map(str, data[PASSING]))
         except (OSError, ValueError, KeyError, TypeError):
-            return frozenset(), 0
+            return frozenset(), frozenset()
 
     # -- normalization -------------------------------------------------------------------------
 
@@ -143,13 +144,16 @@ class PipelineMeasurer:
         unstable = sorted(t for t in first.keys() | second.keys() if first.get(t) != second.get(t))
         problems += [f"tests: {t} fails on the base" for t in sorted(failing)]
         if not self._base_file.exists():
-            self._save_base(unstable, len(first))
+            stable = sorted(
+                t for t, o in first.items() if o == "passed" and second.get(t) == "passed"
+            )
+            self._save_base(unstable, stable)
         metrics = await self._metrics(tools, worktree, len(first), len(unstable))
         return Baseline(not problems, tuple(problems), metrics)
 
-    def _save_base(self, unstable: list[str], tests: int) -> None:
+    def _save_base(self, unstable: list[str], passing: list[str]) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
-        document = json.dumps({UNSTABLE: unstable, "tests": tests}, sort_keys=True)
+        document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
         atomic_write_bytes(self._base_file, document.encode("utf-8"))
 
     async def _build_problems(self, tools: Tools, worktree: Path) -> list[str]:
@@ -212,7 +216,7 @@ class PipelineMeasurer:
         production = tuple(
             p for p in changes.current(SOURCE_SUFFIXES) if self._classify(p) is FileClass.PRODUCTION
         )
-        unstable, base_tests = self._read_base()
+        unstable, passing = self._read_base()
         adapter, worktree = self._adapter, ctx.worktree
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
@@ -222,7 +226,7 @@ class PipelineMeasurer:
             FormatCheck(tools, adapter, worktree, changes),
             LintCheck(tools, adapter, worktree, changes, before),
             BuildCheck(tools, adapter, worktree),
-            TestsCheck(tools, adapter, worktree, unstable, base_tests),
+            TestsCheck(tools, adapter, worktree, unstable, passing),
             ComplexityCheck(tools, worktree, changes, production, before, self._lizard),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
@@ -232,10 +236,10 @@ class PipelineMeasurer:
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome:
         git = self._git.at(worktree)
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
-        unstable, base_tests = self._read_base()
+        unstable, passing = self._read_base()
         checks: list[Check] = [
             BuildCheck(tools, self._adapter, worktree),
-            TestsCheck(tools, self._adapter, worktree, unstable, base_tests),
+            TestsCheck(tools, self._adapter, worktree, unstable, passing),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, "integration", "integration", "integration")

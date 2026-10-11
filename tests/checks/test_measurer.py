@@ -4,6 +4,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from forja.core.events import OpenOperation
 from forja.core.gates import CheckSettings, Effect, InconclusiveReason, Mode, Verdict
 from forja.core.gates.models import Inconclusive, Rejected
@@ -229,7 +231,13 @@ def test_a_test_the_base_showed_to_be_unstable_does_not_reprove(scene: Scene) ->
     scene.write("src/sample/mod.py", "def add(a: int, b: int) -> int:\n    return a - b\n")
     (scene.work / "run").mkdir(parents=True)
     (scene.work / "run" / "base.json").write_text(
-        json.dumps({"unstable": ["tests/test_mod.py::test_add"], "tests": 1}), encoding="utf-8"
+        json.dumps(
+            {
+                "unstable": ["tests/test_mod.py::test_add"],
+                "passing": ["tests/test_mod.py::test_add"],
+            }
+        ),
+        encoding="utf-8",
     )
 
     assert (judge(scene)).verdict is Verdict.PASSED
@@ -365,7 +373,10 @@ def test_a_test_that_changes_its_mind_between_two_runs_goes_to_quarantine(
     assert measured.ok
     assert measured.metrics["unstable_tests"] == 1.0
     saved = json.loads((scene.work / "run" / "base.json").read_text(encoding="utf-8"))
-    assert saved == {"unstable": ["tests/test_flaky.py::test_flaky"], "tests": 2}
+    assert saved == {
+        "unstable": ["tests/test_flaky.py::test_flaky"],
+        "passing": ["tests/test_mod.py::test_add"],
+    }
 
 
 def test_the_second_measurement_does_not_rewrite_what_the_first_found(scene: Scene) -> None:
@@ -410,3 +421,92 @@ def test_a_tool_run_is_reconciled_by_running_it_again(scene: Scene) -> None:
     decision = reconcile(scene, operation)
 
     assert decision.decision is Decision.REDO
+
+
+# -- what an attempt may not use to get past a gate ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "x = 1  # noqa: E501",
+        "x = 1  # NOQA",
+        "# ruff: noqa",
+        "# fmt: off",
+        "x = 1  # fmt: skip",
+        'KEY = "x"  # gitleaks:allow',
+        "def f():  # lizard forgives",
+        "x = 1  # nosemgrep",
+    ],
+)
+def test_a_comment_that_tells_a_tool_to_look_away_is_rejected(scene: Scene, marker: str) -> None:
+    scene.write("src/sample/mod.py", SAMPLE["src/sample/mod.py"] + f"\n\n{marker}\n")
+
+    outcome = judge(scene)
+
+    assert ran(outcome) == ["scope"]
+    assert findings(outcome) == ["a comment that silences a tool was added [src/sample/mod.py]"]
+
+
+def test_a_file_the_ignore_rules_hide_is_rejected_because_the_tests_would_still_see_it(
+    scene: Scene,
+) -> None:
+    scene.write(".gitignore", "*.local\n")
+    scene.repo.sh("add", ".gitignore")
+    scene.repo.sh("commit", "-m", "ignore local files")
+    scene.write("src/sample/hidden.local", "secret helper\n")
+    scene.write("src/sample/mod.py", SAMPLE["src/sample/mod.py"] + "\n\nX = 1\n")
+
+    outcome = judge(scene)
+
+    assert findings(outcome) == ["a file git ignores was added [src/sample/hidden.local]"]
+
+
+def test_what_tools_leave_behind_is_not_a_hidden_file(scene: Scene) -> None:
+    scene.write(".gitignore", "__pycache__/\n*.pyc\n.ruff_cache/\n")
+    scene.repo.sh("add", ".gitignore")
+    scene.repo.sh("commit", "-m", "ignore caches")
+    scene.write("src/sample/__pycache__/mod.cpython-312.pyc", "compiled")
+    scene.write("src/sample/stray.pyc", "compiled")
+    scene.write(".ruff_cache/note", "cache")
+    scene.write("src/sample/mod.py", SAMPLE["src/sample/mod.py"] + "\n\nX = 1\n")
+
+    assert judge(scene).verdict is Verdict.PASSED
+
+
+def test_a_test_that_passed_on_the_base_and_is_gone_now_is_a_failure(scene: Scene) -> None:
+    scene.write("src/sample/mod.py", SAMPLE["src/sample/mod.py"] + "\n\nX = 1\n")
+    (scene.work / "run").mkdir(parents=True)
+    (scene.work / "run" / "base.json").write_text(
+        json.dumps(
+            {
+                "unstable": [],
+                "passing": ["tests/test_mod.py::test_add", "tests/test_mod.py::test_deleted"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    outcome = judge(scene)
+
+    assert findings(outcome) == [
+        "a test that passed on the base is missing or did not pass "
+        "[tests/test_mod.py::test_deleted]"
+    ]
+
+
+def test_a_stable_test_that_now_fails_is_named_once(scene: Scene) -> None:
+    scene.write("src/sample/mod.py", "def add(a: int, b: int) -> int:\n    return a - b\n")
+    (scene.work / "run").mkdir(parents=True)
+    (scene.work / "run" / "base.json").write_text(
+        json.dumps({"unstable": [], "passing": ["tests/test_mod.py::test_add"]}), encoding="utf-8"
+    )
+
+    assert findings(judge(scene)) == ["test failed [tests/test_mod.py::test_add]"]
+
+
+def test_the_base_remembers_which_tests_passed_both_times(scene: Scene) -> None:
+    base_of(scene)
+
+    saved = json.loads((scene.work / "run" / "base.json").read_text(encoding="utf-8"))
+    assert saved == {"unstable": [], "passing": ["tests/test_mod.py::test_add"]}

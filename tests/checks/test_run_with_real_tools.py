@@ -1,0 +1,100 @@
+"""A whole run of the orchestrator with the real measurer: only the agent and gitleaks are faked."""
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from forja.core.states import AttemptState, ExecutionState, Level, TaskState
+from forja.orchestrator.measurer import PipelineMeasurer
+from forja.orchestrator.ports import PlannedTask
+from tests.checks.support import BLOCKING, FAKE_GITLEAKS, LIZARD, PREMISE, SAMPLE
+from tests.orchestrator.fakes import ScriptedAgent, ScriptedPlanner
+from tests.orchestrator.harness import IDENTITY, World, minimal_env
+
+pytestmark = pytest.mark.slow
+
+TASK = PlannedTask("add a subtraction", ("src/sample/mod.py",), 8, 400)
+GOOD = SAMPLE["src/sample/mod.py"] + "\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+UNFORMATTED = SAMPLE["src/sample/mod.py"] + "\n\ndef sub( a,b ):\n  return a-b\n"
+
+
+@pytest.fixture(scope="module")
+def python_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    path = tmp_path_factory.mktemp("python-template") / "repo"
+    home = path.parent / "home"
+    home.mkdir()
+    for relative, text in SAMPLE.items():
+        target = path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8", newline="\n")
+    env = minimal_env(home)
+    base = [
+        "git",
+        "-c",
+        f"user.name={IDENTITY.committer_name}",
+        "-c",
+        f"user.email={IDENTITY.committer_email}",
+    ]
+    for args in (
+        ["init", "-b", "main"],
+        ["config", "core.autocrlf", "false"],
+        ["add", "-A"],
+        ["commit", "-m", "base"],
+    ):
+        subprocess.run([*base, *args], cwd=path, env=env, check=True, capture_output=True)
+    return path
+
+
+@pytest.fixture
+def world(tmp_path: Path, python_template: Path) -> World:
+    (tmp_path / "home").mkdir()
+    shutil.copytree(python_template, tmp_path / "repo")
+    return World.at(tmp_path)
+
+
+def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
+    log = world.open()
+    settings = {n: BLOCKING for n in ("scope", "secrets", "format", "lint", "build", "tests")}
+    measurer = PipelineMeasurer(
+        adapter=__import__("forja.languages.python", fromlist=["PythonAdapter"]).PythonAdapter(
+            cache_dir=world.root / "pycache"
+        ),
+        git=world.repo.git,
+        log=log,
+        workdir=world.run_dir / "measure",
+        host_env=world.repo.env,
+        settings=settings | {"complexity": PREMISE},
+        lizard=LIZARD,
+        gitleaks=(sys.executable, str(FAKE_GITLEAKS)),
+    )
+    return world.run(
+        log=log,
+        measurer=measurer,
+        agent=ScriptedAgent(edits=edits),
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+
+def test_a_good_change_goes_through_every_gate_and_is_delivered(world: World) -> None:
+    outcome, log = run(world, {"src/sample/mod.py": GOOD})
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.state_of(Level.TASK, "t1") is TaskState.INTEGRATED
+    tree = world.repo.sh("show", f"{world.workspace.run_branch}:src/sample/mod.py")
+    assert "def sub" in tree
+
+
+def test_work_the_formatter_would_change_is_rejected_and_the_next_attempt_is_told_why(
+    world: World,
+) -> None:
+    outcome, log = run(world, {"src/sample/mod.py": UNFORMATTED}, {"src/sample/mod.py": GOOD})
+
+    assert outcome.state is ExecutionState.DELIVERED
+    rejected = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.REJECTED)
+    assert rejected == {
+        "reason": "gate 3 (format): the file is not in the canonical format [src/sample/mod.py]"
+    }
+    assert log.state.state_of(Level.ATTEMPT, "t1-a2") is AttemptState.COMMITTED

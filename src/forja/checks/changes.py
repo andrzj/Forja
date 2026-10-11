@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 _OCTAL = re.compile(r"\\([0-7]{3})")
-_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,\d+)? @@")
+_HUNK = re.compile(r"^@@ -\d+(?:,(?P<old>\d+))? \+(?P<start>\d+)(?:,(?P<new>\d+))? @@")
 
 
 class ChangeKind(StrEnum):
@@ -40,6 +40,7 @@ class Changes:
     files: tuple[Change, ...]
     lines: int  # added plus removed, over all files
     patch: tuple[str, ...]  # the diff with no context, for scanners that read text
+    ignored: tuple[str, ...] = ()  # files git ignores that are in the tree anyway
 
     def current(self, suffixes: tuple[str, ...] = ()) -> tuple[str, ...]:
         """Paths that exist after the change, optionally only those with one of the suffixes."""
@@ -62,7 +63,8 @@ async def read_changes(git: Git) -> Changes:
     status = await git.lines("diff", "--cached", "--name-status", "-M", "HEAD")
     numstat = await git.lines("diff", "--cached", "--numstat", "-M", "HEAD")
     patch = await git.lines("diff", "--cached", "-U0", "--no-color", "HEAD")
-    return Changes(parse_status(status), count_lines(numstat), tuple(patch))
+    ignored = await git.lines("ls-files", "--others", "--ignored", "--exclude-standard")
+    return Changes(parse_status(status), count_lines(numstat), tuple(patch), tuple(ignored))
 
 
 def unquote(name: str) -> str:
@@ -120,21 +122,33 @@ class AddedLine:
 
 
 def added_lines(patch: tuple[str, ...]) -> list[AddedLine]:
-    """The lines a patch adds, each with the file and line it lands on."""
+    """The lines a patch adds, each with the file and line it lands on.
+
+    A header is only a header outside a hunk. Inside one, the counts in its ``@@`` line say how
+    many lines belong to it, and a line that looks like ``+++ b/x`` is just an added line.
+    """
     found: list[AddedLine] = []
     path: str | None = None
-    new_line: int | None = None
+    new_line = 0
+    old_left = new_left = 0
     for line in patch:
+        if old_left or new_left:
+            if line.startswith("+") and new_left:
+                found.append(AddedLine(path, new_line, line[1:]))
+                new_line += 1
+                new_left -= 1
+            elif line.startswith("-") and old_left:
+                old_left -= 1
+            continue
         if line.startswith("+++ "):
             target = unquote(line[4:])
             path = target.removeprefix("b/") if target != "/dev/null" else None
-            new_line = None
         elif line.startswith("@@"):
             hunk = _HUNK.match(line)
-            new_line = int(hunk["start"]) if hunk else None
-        elif line.startswith("+"):
-            found.append(AddedLine(path, new_line, line[1:]))
-            new_line = new_line + 1 if new_line is not None else None
+            if hunk:
+                new_line = int(hunk["start"])
+                old_left = int(hunk["old"]) if hunk["old"] is not None else 1
+                new_left = int(hunk["new"]) if hunk["new"] is not None else 1
     return found
 
 
