@@ -122,6 +122,9 @@ class TaskCycle:
                 info, attempt, ctx.workspace.attempt_worktree(attempt), self._last_rejection(info)
             )
             await self._work(attempt_ctx)
+        elif self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.COMMITTED:
+            # cut between the attempt's commit and the stage's: finish what _commit started
+            journal.enter(Level.STAGE, info.stage_id, StageState.COMMITTED)
         await journal.operate(
             "remove_worktree",
             Level.ATTEMPT,

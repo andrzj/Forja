@@ -126,6 +126,7 @@ class ScriptedAgent:
     meddle: Callable[[], object] | None = None
     reject_diff: str | None = None
     die_after_the_call: bool = False
+    by_feedback: bool = False
     seen: list[AttemptContext] = field(default_factory=list)
 
     def prepare_workcopy(self, ctx: AttemptContext) -> Step:
@@ -147,6 +148,9 @@ class ScriptedAgent:
         if self.meddle is not None:
             self.meddle()
         files: Mapping[str, str] = {f"src/{ctx.task.task_id}.py": "def f():\n    return 1\n"}
+        if self.by_feedback:  # "bad" until the agent has been told why it was rejected
+            verdict = "good" if ctx.previous_rejection else "bad"
+            files = {f"src/{ctx.task.task_id}.py": verdict + "\n"}
         if self.edits:
             files = self.edits[min(number, len(self.edits)) - 1]
         spec = ProcessSpec(
@@ -192,3 +196,11 @@ class ScriptedAgent:
         if operation.operation == "prepare_workcopy":
             return reconcile_prepare_workcopy(Path(p["workcopy"]), p["expected_digest"])
         return reconcile_apply_diff(Path(p["worktree"]), p["expected_digest"])
+
+
+class ContentMeasurer(ScriptedMeasurer):
+    """Judges by what the agent wrote, so a restarted run judges the same way."""
+
+    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> PipelineOutcome:
+        written = (ctx.worktree / "src" / f"{ctx.task.task_id}.py").read_text(encoding="utf-8")
+        return REJECTED if written.startswith("bad") else PASSED
