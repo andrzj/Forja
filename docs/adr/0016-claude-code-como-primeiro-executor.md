@@ -29,6 +29,8 @@ O incremento 1 precisava de um agente de verdade. O contrato de adaptador de exe
 
 - **Terceira revisão (corrigida).** Um caminho novo abaixo de um link que já existe no worktree seria escrito através dele. Agora nada pode ser escrito num caminho escondido nem abaixo dele (comparação em forma normal do Windows e sem distinguir caixa), e a cópia de volta recusa qualquer destino que passe por um link.
 
+- **Quarta revisão (corrigida).** No Windows, uma junção de diretório não é um link simbólico para o Python e seria seguida como pasta comum. O manifesto passa a registrar junção como link (`DirEntry.is_junction`), e a cópia, a limpeza e a checagem de destino também a tratam como link.
+
 ## Consequências
 
 - O mesmo `ExecutorAgentRunner` serve a qualquer CLI com um `ExecutorAdapter`; um adaptador novo só descreve a invocação e lê o fluxo.

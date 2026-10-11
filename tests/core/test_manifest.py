@@ -289,3 +289,20 @@ def test_a_collision_between_three_names_lists_the_other_two() -> None:
     details = {v.path: v.detail for v in find_violations(manifest, destination_root=Path("/d"))}
 
     assert details["A.txt"] == "differs only by case from: a.TXT, a.txt"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions exist on Windows")
+def test_a_junction_is_recorded_like_a_link_and_never_followed(tmp_path: Path) -> None:
+    import _winapi  # noqa: PLC0415
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("not ours\n", encoding="utf-8")
+    root = tmp_path / "root"
+    root.mkdir()
+    _winapi.CreateJunction(str(outside), str(root / "jn"))  # type: ignore[attr-defined]
+
+    entries = build_manifest(root).entries
+
+    assert list(entries) == ["jn"]
+    assert entries["jn"].kind is EntryKind.SYMLINK

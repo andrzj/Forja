@@ -540,3 +540,25 @@ def test_a_link_on_the_way_stops_the_copy_even_if_everything_before_missed_it(
     with pytest.raises(RuntimeError, match="through a link"):
         _refuse_links_on_the_way(tmp_path / "wt", "link/x.txt")
     _refuse_links_on_the_way(tmp_path / "wt", "other/x.txt")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions exist on Windows")
+def test_a_junction_in_the_worktree_is_neither_followed_nor_written_through(
+    tmp_path: Path,
+) -> None:
+    import _winapi  # noqa: PLC0415
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("not ours\n", encoding="utf-8")
+    through = {"writes": {"src/jn/x.txt": "planted\n"}, "saida": declare("src/jn/x.txt")}
+    r = rig(tmp_path, through)
+    _winapi.CreateJunction(str(outside), str(r.ctx.worktree / "src" / "jn"))  # type: ignore[attr-defined]
+    go(work(r))
+
+    assert not (r.workcopy / "src" / "jn" / "secret.txt").exists()
+    with pytest.raises(RejectedWork, match="where it may not write"):
+        go(settle(r.runner.apply_diff(r.ctx)))
+    assert sorted(p.name for p in outside.iterdir()) == ["secret.txt"]
+    with pytest.raises(RuntimeError, match="through a link"):
+        _refuse_links_on_the_way(r.ctx.worktree, "src/jn/x.txt")

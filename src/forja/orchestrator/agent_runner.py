@@ -111,7 +111,7 @@ def _wipe(directory: Path, keep: frozenset[str], prefix: str = "") -> None:
         relative = f"{prefix}{entry.name}"
         if (not prefix and entry.name == ".git") or relative in keep:
             continue
-        if entry.is_dir() and not entry.is_symlink():
+        if entry.is_dir() and not (entry.is_symlink() or entry.is_junction()):
             _wipe(entry, keep, f"{relative}/")
             if not any(entry.iterdir()):
                 entry.rmdir()
@@ -123,7 +123,8 @@ def _refuse_links_on_the_way(worktree: Path, path: str) -> None:
     """Writing into the worktree must never go through a link that is already there."""
     parts = path.split("/")
     for i in range(len(parts)):
-        if (worktree.joinpath(*parts[: i + 1])).is_symlink():
+        step = worktree.joinpath(*parts[: i + 1])
+        if step.is_symlink() or step.is_junction():
             raise RuntimeError(f"{path} would be written through a link in the worktree")
 
 
@@ -394,6 +395,7 @@ class ExecutorAgentRunner:
                 for name in names
                 if (not prefix and name == ".git")
                 or (Path(directory) / name).is_symlink()
+                or (Path(directory) / name).is_junction()
                 or self._sensitive.matches(plain(f"{prefix}{name}"))
             }
 

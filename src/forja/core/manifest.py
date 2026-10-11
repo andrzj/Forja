@@ -100,7 +100,7 @@ def _scan(
         if child.name in skip:
             continue
         relative = f"{prefix}{child.name}"
-        if child.is_symlink():
+        if child.is_symlink() or child.is_junction():  # a junction leads out like a link does
             target = os.readlink(child.path)
             digest = hashlib.sha256(os.fsencode(target)).hexdigest()
             out[relative] = ManifestEntry(relative, EntryKind.SYMLINK, digest, False)
