@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -159,3 +160,132 @@ def test_clean_manifest_has_no_violations() -> None:
     manifest = Manifest({"a/b.txt": _entry("a/b.txt")})
 
     assert find_violations(manifest, destination_root=Path("/dest")) == []
+
+
+# -- exact forms -------------------------------------------------------------------------------
+
+
+def test_the_digest_is_the_sha256_of_this_canonical_form() -> None:
+    # Written out: the digest is compared with a stored one when a resumed run decides whether a
+    # copy is complete, so its form may not drift between versions.
+    sha_a, sha_b = "a" * 64, "b" * 64
+    manifest = Manifest(
+        {
+            "z/é.txt": ManifestEntry("z/é.txt", EntryKind.FILE, sha_b, True),
+            "a.txt": ManifestEntry("a.txt", EntryKind.FILE, sha_a, False),
+        }
+    )
+    accent = r"\u00e9"  # JSON spells a non-ASCII character as an escape
+    canonical = (
+        '[["a.txt","file","'
+        + sha_a
+        + '",false],["z/'
+        + accent
+        + '.txt","file","'
+        + sha_b
+        + '",true]]'
+    )
+
+    assert manifest.digest() == hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def test_a_file_is_recorded_with_its_content_hash(tmp_path: Path) -> None:
+    _write(tmp_path, "a.txt", b"hello")
+
+    entry = build_manifest(tmp_path).entries["a.txt"]
+
+    assert entry == ManifestEntry(
+        "a.txt", EntryKind.FILE, hashlib.sha256(b"hello").hexdigest(), False
+    )
+
+
+def test_a_symlink_is_recorded_by_the_hash_of_where_it_points(tmp_path: Path) -> None:
+    if not _symlink(tmp_path / "link", "target.txt"):
+        pytest.skip("symlinks not available")
+
+    entry = build_manifest(tmp_path).entries["link"]
+
+    assert entry == ManifestEntry(
+        "link", EntryKind.SYMLINK, hashlib.sha256(b"target.txt").hexdigest(), False
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a name that is not valid UTF-8")
+def test_a_symlink_whose_target_is_not_valid_text_is_still_recorded(tmp_path: Path) -> None:
+    os.symlink(b"\xff-target", bytes(tmp_path / "link"))
+
+    entry = build_manifest(tmp_path).entries["link"]
+
+    assert entry.sha256 == hashlib.sha256(b"\xff-target").hexdigest()
+
+
+def test_a_symlink_to_a_directory_is_one_entry_and_the_directory_is_not_entered(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "real", "inside.txt")
+    if not _symlink(tmp_path / "alias", "real"):
+        pytest.skip("symlinks not available")
+
+    assert sorted(build_manifest(tmp_path).entries) == ["alias", "real/inside.txt"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no execute bit")
+def test_the_execute_bit_is_read_where_the_file_system_has_one(tmp_path: Path) -> None:
+    _write(tmp_path, "run.sh")
+    os.chmod(tmp_path / "run.sh", 0o755)
+    _write(tmp_path, "data.txt")
+
+    entries = build_manifest(tmp_path).entries
+
+    assert entries["run.sh"].executable is True
+    assert entries["data.txt"].executable is False
+
+
+def test_where_the_file_system_has_no_execute_bit_no_file_is_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write(tmp_path, "run.sh")
+    os.chmod(tmp_path / "run.sh", 0o755)
+    monkeypatch.setattr("forja.core.manifest._HAS_EXECUTE_BIT", False)
+
+    assert build_manifest(tmp_path).entries["run.sh"].executable is False
+
+
+def test_the_words_of_each_violation(tmp_path: Path) -> None:
+    root = Path("/dest")
+    manifest = Manifest(
+        {
+            "link": _entry("link", EntryKind.SYMLINK),
+            "Readme.md": _entry("Readme.md"),
+            "README.md": _entry("README.md"),
+        }
+    )
+
+    details = {(v.kind, v.path): v.detail for v in find_violations(manifest, destination_root=root)}
+
+    assert details == {
+        (ViolationKind.SYMLINK, "link"): "symlink may point outside the working copy",
+        (ViolationKind.CASE_COLLISION, "Readme.md"): "differs only by case from: README.md",
+        (ViolationKind.CASE_COLLISION, "README.md"): "differs only by case from: Readme.md",
+    }
+
+
+def test_a_path_exactly_at_the_limit_is_fine_and_one_more_is_not() -> None:
+    root = Path("/dest")  # 5 characters, plus one separator
+    at_limit, over = "a" * 10, "b" * 11
+    manifest = Manifest({at_limit: _entry(at_limit), over: _entry(over)})
+
+    violations = find_violations(manifest, destination_root=root, max_path_length=16)
+
+    assert [(v.kind, v.path, v.detail) for v in violations] == [
+        (ViolationKind.PATH_TOO_LONG, over, "17 characters under the destination exceeds 16")
+    ]
+
+
+def test_a_collision_between_three_names_lists_the_other_two() -> None:
+    names = ("A.txt", "a.txt", "a.TXT")
+    manifest = Manifest({n: _entry(n) for n in names})
+
+    details = {v.path: v.detail for v in find_violations(manifest, destination_root=Path("/d"))}
+
+    assert details["A.txt"] == "differs only by case from: a.TXT, a.txt"

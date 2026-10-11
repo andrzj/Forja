@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-_CHUNK = 1 << 20
+# Windows file systems have no execute bit; kept as a name so a test can stand in for either side.
+_HAS_EXECUTE_BIT = sys.platform != "win32"
 # Usable characters of a classic Windows path (MAX_PATH is 260 including the terminator).
 WINDOWS_MAX_PATH = 259
 
@@ -48,8 +49,10 @@ class Manifest:
         rows = [
             [e.path, e.kind.value, e.sha256, e.executable] for _, e in sorted(self.entries.items())
         ]
-        payload = json.dumps(rows, separators=(",", ":"), ensure_ascii=True)
-        return hashlib.sha256(payload.encode("ascii")).hexdigest()
+        # The rows are lists, so only the item separator is ever used, and ensure_ascii is the
+        # default; both are spelled out so the canonical form is readable here.
+        payload = json.dumps(rows, separators=(",", ":"), ensure_ascii=True)  # pragma: no mutate
+        return hashlib.sha256(payload.encode("ascii")).hexdigest()  # pragma: no mutate
 
 
 @dataclass(frozen=True)
@@ -84,43 +87,38 @@ def build_manifest(root: Path, *, exclude: Collection[str] = ()) -> Manifest:
     not normalized.
     """
     entries: dict[str, ManifestEntry] = {}
-    _scan(root, "", frozenset(exclude), entries)
+    _scan(root, "", exclude, entries)
     return Manifest(entries)
 
 
 def _scan(
-    directory: Path, prefix: str, exclude: frozenset[str], out: dict[str, ManifestEntry]
+    directory: Path, prefix: str, skip: Collection[str], out: dict[str, ManifestEntry]
 ) -> None:
     with os.scandir(directory) as scan:
         children = sorted(scan, key=lambda child: child.name)
     for child in children:
-        if not prefix and child.name in exclude:
+        if child.name in skip:
             continue
         relative = f"{prefix}{child.name}"
         if child.is_symlink():
             target = os.readlink(child.path)
-            digest = hashlib.sha256(target.encode("utf-8", errors="surrogateescape")).hexdigest()
+            digest = hashlib.sha256(os.fsencode(target)).hexdigest()
             out[relative] = ManifestEntry(relative, EntryKind.SYMLINK, digest, False)
-        elif child.is_dir(follow_symlinks=False):
-            _scan(Path(child.path), f"{relative}/", exclude, out)
-        elif child.is_file(follow_symlinks=False):
+        elif child.is_dir():
+            _scan(Path(child.path), f"{relative}/", (), out)
+        elif child.is_file():
             out[relative] = ManifestEntry(
                 relative, EntryKind.FILE, _hash_file(child.path), _is_executable(child)
             )
 
 
 def _hash_file(path: str) -> str:
-    digest = hashlib.sha256()
     with open(path, "rb") as handle:
-        while chunk := handle.read(_CHUNK):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(handle, hashlib.sha256).hexdigest()
 
 
 def _is_executable(entry: os.DirEntry[str]) -> bool:
-    if sys.platform == "win32":
-        return False
-    return bool(entry.stat(follow_symlinks=False).st_mode & stat.S_IXUSR)
+    return _HAS_EXECUTE_BIT and bool(entry.stat().st_mode & stat.S_IXUSR)
 
 
 def diff_manifests(before: Manifest, after: Manifest) -> ManifestDiff:
