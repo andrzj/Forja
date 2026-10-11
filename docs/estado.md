@@ -10,44 +10,12 @@ O incremento 0 (fundação) está quase completo. Há 1.771 testes passando e 5 
 
 1. ~~Teste de retomada ponta a ponta~~ — feito, em `tests/e2e/` (ver "Retomada").
 2. Rodar `mutmut` para medir se os testes pegam mutações de verdade. Nunca foi executado.
-3. README e ADRs, em português do Brasil.
+3. ~~README e ADRs~~ — feitos (`README.md` e `docs/adr/`).
 4. ~~Atualizar a especificação~~ — feito.
 
 ## Como trabalhar
 
-```bash
-uv sync                 # Python 3.12 via uv; o python do sistema é 3.11
-uv run pytest -q
-uv run ruff format . && uv run ruff check .
-uv run mypy             # strict
-```
-
-Dependência de execução: apenas `pydantic>=2.7`. De desenvolvimento: `pytest`, `ruff`, `mypy`. Não adicionar outras sem decisão (a spec restringe).
-
-Convenções: código, comentários e docstrings em inglês; README e ADRs em português do Brasil. Os valores de estado persistidos no JSONL são em inglês (tabela abaixo).
-
-## Mapa dos módulos (`src/forja/core/`)
-
-| Módulo | O que faz |
-| --- | --- |
-| `states/` | Contrato 1. Máquinas de estado puras dos quatro níveis (execução, tarefa, etapa, tentativa). Só o grafo; guardas ficam no orquestrador. |
-| `process/` | Contrato 2. `ProcessRunner` (asyncio): Job Object por chamada no Windows, grupo de processos no POSIX, log bruto, timeout, cancelamento, `stdin_file`, validação de comando (`check_command_safety`). |
-| `idempotency/` | Contrato 2. Tabela das 10 operações externas, reconciliadores (só olham) e o auxiliar `Git`. |
-| `manifest.py` | Manifesto de uma cópia de trabalho (caminho, SHA-256, tipo, bit de execução), diferença e violações (symlink, maiúsculas, caminho longo). |
-| `events/` | Contrato 4. Log JSONL com hash encadeado, estado reconstruído só pelos eventos, recuperação de cauda truncada, versões de esquema. |
-| `artifacts/` | Contrato 4. Cabeçalho, armazenamento por hash, os 7 tipos de corpo, contrato de saída do LLM (afirmação, ação, premissa). |
-| `evidence/` | Contrato 4. `ToolRun`, `Evidence`, chave de cache e `EvidenceCache`. |
-| `records.py` | Armazenamento genérico de registros imutáveis (`ToolRun`, `Evidence`, decisões de gate, pacotes enviados). |
-| `gates/` | Contrato 5. Quatro resultados, matriz modo × resultado, `GatePipeline`, registro de decisão. Ainda não há gates reais. |
-| `policy/` | Contrato 5. Camadas TOML (código < usuário < repositório < execução), validação, promoção, congelamento em `policy.json`, versão. |
-| `authorization/`, `isolation/`, `gitguard/`, `confirmation.py` | Contrato 3. Classes de ação, níveis de isolamento, arquivos sensíveis, ambiente filtrado, `GuardedGit`, fotografia do git. |
-| `locking/` | Lock por repositório, mutex de git, remoção de `index.lock` órfão. |
-| `adapters/` | Interfaces de adaptador de linguagem e de executor, registro, `TemplateExecutorAdapter`. |
-| `redaction/` | Redação do pacote antes do envio, registro do que foi enviado. |
-| `resume.py` | Retomada: mata processo remanescente, reconcilia cada operação aberta e grava o efeito. |
-| `atomic.py`, `ids.py`, `paths.py`, `failures.py`, `version.py` | Utilitários. |
-
-Os testes ficam em `tests/core/`, espelhando os módulos. `tests/core/adapters/conformance.py` é a suíte reutilizável que todo adaptador real deve passar.
+Os comandos, as convenções e o mapa dos módulos estão no [README](../README.md). Os valores de estado persistidos estão na tabela abaixo. As decisões em forma de registro estão em [docs/adr](adr/README.md).
 
 ## Retomada
 
