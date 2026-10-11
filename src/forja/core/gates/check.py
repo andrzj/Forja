@@ -50,8 +50,13 @@ class Check(Protocol):
     not run and its result is ``not_applicable``.
     """
 
-    id: str
-    gate: int
-    requires: frozenset[str]
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def gate(self) -> int: ...
+
+    @property
+    def requires(self) -> frozenset[str]: ...
 
     async def evaluate(self, data: GateInput) -> GateResult: ...
