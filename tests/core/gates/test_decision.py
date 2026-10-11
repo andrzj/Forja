@@ -137,3 +137,29 @@ def test_a_transition_event_can_cite_the_decision_that_caused_it(tmp_path: Path)
         )
 
     assert event.refs == (ref,)
+
+
+def test_the_decision_lists_the_artifacts_the_check_saw(tmp_path: Path) -> None:
+    from typing import cast
+
+    from forja.core.gates import ArtifactItem
+
+    ref = Ref(kind=RefKind.ARTIFACT, id="art1", hash="b" * 64)
+    item = ArtifactItem(ref=ref, stored=cast(Any, None))  # only the reference is recorded
+
+    decision = decision_for(tmp_path, artifacts=(item,))
+
+    assert decision.artifacts == (ref,)
+
+
+def test_the_store_passes_its_options_on_to_the_record_store(tmp_path: Path) -> None:
+    written: list[Path] = []
+
+    def spy(path: Path, data: bytes) -> None:
+        written.append(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    GateDecisionStore(tmp_path, write=spy).put(decision_for(tmp_path))
+
+    assert [p.name for p in written] == ["dec1.json"]

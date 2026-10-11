@@ -150,9 +150,16 @@ def test_a_crash_inside_a_check_is_a_bug_and_is_not_turned_into_a_result(tmp_pat
 def test_the_configuration_of_the_pipeline_is_validated(tmp_path: Path) -> None:
     a = FakeCheck("a", 1, Approved())
 
-    with pytest.raises(ValueError, match="unique"):
+    with pytest.raises(ValueError) as duplicated:
         GatePipeline([a, FakeCheck("a", 2, Approved())], {"a": BLOCKING})
+    assert str(duplicated.value) == "check ids must be unique"
     with pytest.raises(ValueError, match="without settings"):
         GatePipeline([a], {})
     with pytest.raises(ValueError, match="start at 1"):
         GatePipeline([FakeCheck("zero", 0, Approved())], {"zero": BLOCKING})
+
+
+def test_each_run_remembers_the_gate_number_of_its_check(tmp_path: Path) -> None:
+    outcome = run(GatePipeline([FakeCheck("late", 7, Approved())], {"late": BLOCKING}), tmp_path)
+
+    assert [(r.check_id, r.gate) for r in outcome.runs] == [("late", 7)]

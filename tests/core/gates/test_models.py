@@ -94,3 +94,26 @@ def test_the_reasons_for_an_inconclusive_result_are_a_closed_set() -> None:
 def test_results_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError, match="Extra inputs"):
         Approved.model_validate({"result": "approved", "score": 1})
+
+
+def test_models_are_frozen_and_refuse_unknown_fields() -> None:
+    from forja.core.gates.models import _strict
+
+    # The models read this at import time, so only a direct call can notice a change to it.
+    assert _strict() == {"frozen": True, "extra": "forbid"}
+
+
+def test_a_finding_is_described_with_what_it_measured_only_when_it_measured() -> None:
+    bare = Finding(message="too complex", target="a.py::f")
+    located = Finding(
+        message="too complex", target="a.py::f", location=Location(path="a.py", line=3)
+    )
+    measured_only = Finding(message="too complex", target="a.py::f", measured=12)
+    limit_only = Finding(message="too complex", target="a.py::f", limit=10)
+    both = Finding(message="too complex", target="a.py::f", measured=12.5, limit=10)
+
+    assert bare.describe() == "too complex [a.py::f]"
+    assert located.describe() == "too complex [a.py::f at a.py:3]"
+    assert measured_only.describe() == "too complex [a.py::f] measured 12"
+    assert limit_only.describe() == "too complex [a.py::f]"
+    assert both.describe() == "too complex [a.py::f] measured 12.5, limit 10"

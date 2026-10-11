@@ -49,4 +49,4 @@ def decide_effect(settings: CheckSettings, result: GateResult) -> Effect:
             if settings.on_inconclusive is InconclusivePolicy.BLOCK:
                 return Effect.BLOCK_TASK
             return Effect.CONTINUE_WITH_ASSUMPTION
-    raise AssertionError(f"unhandled result {result!r}")  # pragma: no cover
+    raise AssertionError(f"unhandled result {result!r}")  # pragma: no cover, no mutate

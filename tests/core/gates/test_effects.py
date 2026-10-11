@@ -71,8 +71,10 @@ def test_observation_never_stops_anything() -> None:
 
 
 def test_a_blocking_check_without_an_inconclusive_policy_is_refused() -> None:
-    with pytest.raises(InvalidCheckSettings, match="on_inconclusive"):
+    with pytest.raises(InvalidCheckSettings) as info:
         CheckSettings(Mode.BLOCKING)
+
+    assert str(info.value) == "a blocking check needs an on_inconclusive policy"
 
 
 def test_an_observation_check_may_carry_a_policy_for_its_promotion() -> None:
