@@ -16,6 +16,7 @@ from pathlib import Path
 from forja.core.events.models import Event
 from forja.core.events.versioning import BadLine, parse_line
 from forja.core.states import AttemptState, ExecutionState, Level, TaskState
+from forja.ui.glyphs import clean
 
 GATES = ("scope", "secrets", "format", "lint", "build", "tests", "complexity")
 _FEED = 60
@@ -100,6 +101,8 @@ class ViewModel:
     rejections_total: int = 0
 
     def __post_init__(self) -> None:
+        self.objective, self.repo = clean(self.objective), clean(self.repo)
+        self.branch, self.isolation = clean(self.branch), clean(self.isolation)
         self._started = self.clock()
         self._reset_gates()
 
@@ -129,11 +132,11 @@ class ViewModel:
         if level is Level.EXECUTION:
             self.state = to
             reason = payload.get("reason")
-            self.message = str(reason) if reason else ""
+            self.message = clean(str(reason)) if reason else ""
         elif level is Level.TASK:
             self.tasks[target] = to
             if "intent" in payload:
-                self.intents[target] = str(payload["intent"])
+                self.intents[target] = clean(str(payload["intent"]))
             if to == TaskState.IN_PROGRESS.value:
                 self.task_id = target
                 self.attempt = 0
@@ -206,11 +209,11 @@ class ViewModel:
             self._add(FeedLine(clock, "error", str(payload.get("message", ""))))
 
     def _add(self, line: FeedLine) -> None:
-        self.feed.append(line)
+        self.feed.append(replace(line, text=clean(line.text)))
         self.feed_total += 1
 
     def _reject(self, text: str) -> None:
-        self.rejections.append(text)
+        self.rejections.append(clean(text))
         self.rejections_total += 1
 
     def _reset_gates(self) -> None:

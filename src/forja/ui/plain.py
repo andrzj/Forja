@@ -6,6 +6,7 @@ in a CI log and in any terminal. A line begins with how long the run has been go
 
 from typing import TextIO
 
+from forja.ui.glyphs import clean
 from forja.ui.live import clock_text, percent_text
 from forja.ui.view import GateStatus, View
 
@@ -22,7 +23,7 @@ class PlainRenderer:
         self._tenth = 0
 
     def _line(self, view: View, text: str) -> None:
-        self._out.write(f"[{clock_text(view.elapsed)}] {text}\n")
+        self._out.write(f"[{clock_text(view.elapsed)}] {clean(text)}\n")
         self._out.flush()
 
     def start(self, view: View) -> None:

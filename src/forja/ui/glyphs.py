@@ -6,6 +6,7 @@ ambiguous width), and a test holds every string it can show to that list. ``ASCI
 out for a terminal or a font that gets even these wrong.
 """
 
+import unicodedata
 from dataclasses import dataclass
 
 from rich.cells import cell_len
@@ -111,6 +112,24 @@ def width(text: str) -> int:
     return cell_len(text)
 
 
+def clean(text: str) -> str:
+    """The text with what a terminal could take as an order taken out.
+
+    What the agent, a file name or a commit message says is shown on the screen, and a terminal
+    obeys escape sequences (to move the cursor, to rewrite the title, to hide text, to reach the
+    clipboard). Control characters, the formatting characters that reorder text, and anything
+    unassigned are dropped, and line breaks and tabs become spaces, so nothing can do more than
+    be read.
+    """
+    out = []
+    for char in text:
+        if char in "\t\n\r":
+            out.append(" ")
+        elif unicodedata.category(char) not in ("Cc", "Cf", "Cs", "Co", "Cn"):
+            out.append(char)
+    return "".join(out)
+
+
 def _head(text: str, cells: int) -> str:
     """The first characters of the text that fit in ``cells`` cells."""
     out = ""
@@ -123,6 +142,7 @@ def _head(text: str, cells: int) -> str:
 
 def fit(text: str, size: int, *, ellipsis: str = "…") -> str:
     """The text shortened to at most ``size`` cells, with an ellipsis at the end."""
+    text = clean(text)
     if size <= 0:
         return ""
     if width(text) <= size:
@@ -135,6 +155,7 @@ def fit(text: str, size: int, *, ellipsis: str = "…") -> str:
 
 def fit_path(path: str, size: int, *, ellipsis: str = "…") -> str:
     """A path shortened in the middle: the end, which names the file, is what stays."""
+    path = clean(path)
     if width(path) <= size:
         return path
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
