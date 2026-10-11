@@ -71,27 +71,42 @@ def _count(value: object) -> int:
 
 
 class Meter:
-    """The time budget of this process: what earlier sessions used plus what this one has."""
+    """What the run has spent, read from its events, against the tokens it was given.
+
+    Time is only shown, never a limit. ``enforce`` says whether passing the limit stops the run:
+    with a person watching it does not (they are shown how far over they are and decide), without
+    one there is nobody to decide.
+    """
 
     def __init__(
         self,
-        limit_seconds: float,
-        spent_before: Consumption,
+        limit_tokens: int,
+        log_path: Path,
+        *,
+        enforce: bool = False,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self._limit = limit_seconds
-        self._before = spent_before.seconds
+        self._limit = limit_tokens
+        self._path = log_path
+        self._enforce = enforce
+        self._before = read_consumption(log_path).seconds
         self._clock = clock
         self._started = clock()
 
-    def elapsed(self) -> float:
-        return self._before + (self._clock() - self._started)
+    def used(self) -> int:
+        return read_consumption(self._path).tokens
 
-    def remaining(self) -> float:
-        return max(0.0, self._limit - self.elapsed())
+    def fraction_used(self) -> float:
+        return self.used() / self._limit
+
+    def exceeded(self) -> bool:
+        return self.used() >= self._limit
 
     def exhausted(self) -> bool:
-        return self.elapsed() >= self._limit
+        return self._enforce and self.exceeded()
+
+    def elapsed(self) -> float:
+        return self._before + (self._clock() - self._started)
 
 
 _COUNTED = (AttemptState.REJECTED, AttemptState.APPROVED, AttemptState.COMMITTED)

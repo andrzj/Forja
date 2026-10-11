@@ -39,7 +39,7 @@ CONFIRMATION = Confirmation(
 def test_the_defaults_are_the_ones_agreed_for_increment_1() -> None:
     budget = Budget()
 
-    assert (budget.seconds, budget.attempts_per_task, budget.tasks) == (7200, 3, 5)
+    assert (budget.tokens, budget.attempts_per_task, budget.tasks) == (2_000_000, 3, 5)
     assert (budget.files_per_task, budget.lines_per_task, budget.infra_failures) == (8, 400, 3)
 
 
@@ -53,10 +53,15 @@ def test_a_budget_cannot_be_zero_or_negative(field: str) -> None:
     assert Budget(**{field: 1})
 
 
-def test_a_budget_of_less_than_a_minute_is_refused() -> None:
+def test_a_budget_of_no_tokens_is_refused() -> None:
     with pytest.raises(ValidationError):
-        Budget(seconds=59)
-    assert Budget(seconds=60).seconds == 60
+        Budget(tokens=0)
+    assert Budget(tokens=1).tokens == 1
+
+
+def test_there_is_no_time_limit_in_the_budget() -> None:
+    with pytest.raises(ValidationError):
+        Budget(seconds=60)  # type: ignore[call-arg]
 
 
 def test_unknown_fields_are_refused() -> None:

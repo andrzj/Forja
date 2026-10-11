@@ -106,6 +106,16 @@ def test_prepare_workcopy_with_the_expected_content_is_already_done(tmp_path: Pa
     assert reconcile_prepare_workcopy(tmp_path / "copy", digest).decision is DONE
 
 
+def test_prepare_workcopy_ignores_what_forja_itself_put_in_the_copy(tmp_path: Path) -> None:
+    digest = _tree(tmp_path / "copy", {"a.py": b"a"})
+    (tmp_path / "copy" / ".forja-agent").mkdir()
+    (tmp_path / "copy" / ".forja-agent" / "package.md").write_bytes(b"task")
+
+    assert reconcile_prepare_workcopy(tmp_path / "copy", digest).decision is REDO
+    verdict = reconcile_prepare_workcopy(tmp_path / "copy", digest, exclude={".forja-agent"})
+    assert verdict.decision is DONE
+
+
 @pytest.mark.parametrize("damage", ["missing_dir", "missing_file", "extra_file", "edited_file"])
 def test_prepare_workcopy_partial_or_wrong_copy_means_redo(tmp_path: Path, damage: str) -> None:
     copy = tmp_path / "copy"

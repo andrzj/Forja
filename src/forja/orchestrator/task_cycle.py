@@ -99,7 +99,7 @@ class TaskCycle:
             self._exhaust(info, "attempts_exhausted")
             return None
         if self._ctx.meter.exhausted():
-            self._exhaust(info, "time_budget_exhausted")
+            self._exhaust(info, "token_budget_exhausted")
             return None
         return f"{info.task_id}-a{len(children) + 1}"
 
@@ -293,7 +293,7 @@ class TaskCycle:
             await run.sleep(run.backoff[min(failures, len(run.backoff)) - 1])
         elif not await self._network_came_back():
             self._stage_pause(info)
-            raise StopRun("the network did not come back before the budget ran out")
+            raise StopRun("the network did not come back")
 
     async def _result_lost(self, info: TaskInfo, attempt: str) -> None:
         """The call ended but the run died before it could say how: that cannot be trusted.
@@ -322,7 +322,11 @@ class TaskCycle:
 
     async def _network_came_back(self) -> bool:
         run = self._ctx
-        while not run.meter.exhausted():
+        probes = 0
+        while not run.meter.exhausted() and (
+            run.max_network_probes is None or probes < run.max_network_probes
+        ):
+            probes += 1
             self._journal.note("waiting_for_network")
             await run.sleep(run.probe_interval)
             if await run.network_is_up():

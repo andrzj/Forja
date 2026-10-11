@@ -6,6 +6,7 @@ operation itself when the orchestrator repeats it.
 """
 
 import os
+from collections.abc import Collection
 from pathlib import Path
 from typing import Protocol
 
@@ -87,8 +88,14 @@ async def reconcile_create_attempt_worktree(
     return _verdict(head == expected_head and worktree.is_dir())
 
 
-def reconcile_prepare_workcopy(workcopy: Path, expected_digest: str) -> Reconciliation:
-    return _verdict(workcopy.is_dir() and build_manifest(workcopy).digest() == expected_digest)
+def reconcile_prepare_workcopy(
+    workcopy: Path, expected_digest: str, *, exclude: Collection[str] = ()
+) -> Reconciliation:
+    """``exclude`` names what Forja put in the copy besides the repository (the package)."""
+    done = (
+        workcopy.is_dir() and build_manifest(workcopy, exclude=exclude).digest() == expected_digest
+    )
+    return _verdict(done)
 
 
 def reconcile_call_agent_cli() -> Reconciliation:

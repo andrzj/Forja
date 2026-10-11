@@ -15,7 +15,7 @@ from forja.core.events import EventLog
 from forja.core.gitguard import GuardedGit
 from forja.core.isolation import IsolationLevel, IsolationRecord
 from forja.core.states import ExecutionState, Level
-from forja.orchestrator.budget import Meter, read_consumption
+from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import Budget, ExecutorRef, Objective, RunConfig
 from forja.orchestrator.operations import Hook, Journal
 from forja.orchestrator.outcome import Outcome
@@ -127,7 +127,7 @@ class World:
         agent: ScriptedAgent,
         planner: ScriptedPlanner,
         budget: Budget | None = None,
-        seconds_left: float = 7200.0,
+        token_limit: int = 2_000_000,
         hook: Hook | None = None,
     ) -> RunContext:
         config = self.config.model_copy(update={"budget": budget or Budget()})
@@ -139,7 +139,7 @@ class World:
             measurer=measurer,
             agent=agent,
             planner=planner,
-            meter=Meter(seconds_left, read_consumption(log.path)),
+            meter=Meter(token_limit, log.path, enforce=True),
             run_dir=self.run_dir,
             sleep=self.sleep,
             network_is_up=self.network_is_up,
@@ -152,7 +152,7 @@ class World:
         agent: ScriptedAgent | None = None,
         planner: ScriptedPlanner | None = None,
         budget: Budget | None = None,
-        seconds_left: float = 7200.0,
+        token_limit: int = 2_000_000,
         log: EventLog | None = None,
         hook: Hook | None = None,
     ) -> tuple[Outcome, EventLog]:
@@ -166,7 +166,7 @@ class World:
             agent=agent or ScriptedAgent(),
             planner=planner or ScriptedPlanner(),
             budget=budget,
-            seconds_left=seconds_left,
+            token_limit=token_limit,
             hook=hook,
         )
         return asyncio.run(Orchestrator(ctx).run()), opened

@@ -704,3 +704,29 @@ def test_a_lizard_that_exits_badly_leaves_the_complexity_out_of_the_numbers(scen
 
     assert measured.ok
     assert "max_ccn" not in measured.metrics and "functions" not in measured.metrics
+
+
+def test_the_complexity_of_every_function_is_available_to_the_planner(scene: Scene) -> None:
+    scene.write("src/sample/mod.py", MOD + "\n\n" + deep("branchy", 6))
+
+    found = asyncio.run(scene.measurer.functions(scene.repo.path, scene.recorder.sinks))
+
+    assert found == {
+        ("src/sample/mod.py", "add"): 1,
+        ("src/sample/mod.py", "branchy"): 7,
+        ("src/sample/other.py", "twice"): 1,
+    }
+
+
+def test_a_project_without_production_code_has_no_functions(scene: Scene) -> None:
+    for path in ("src/sample/__init__.py", "src/sample/mod.py", "src/sample/other.py"):
+        scene.repo.sh("rm", "-f", path)
+
+    assert asyncio.run(scene.measurer.functions(scene.repo.path, scene.recorder.sinks)) == {}
+
+
+def test_a_lizard_that_fails_stops_the_planning_with_a_reason(scene: Scene) -> None:
+    scene.measurer._lizard = (*scene.measurer._lizard[:2], "nonsense")  # noqa: SLF001
+
+    with pytest.raises(RuntimeError, match="the complexity could not be measured: complexity: "):
+        asyncio.run(scene.measurer.functions(scene.repo.path, scene.recorder.sinks))

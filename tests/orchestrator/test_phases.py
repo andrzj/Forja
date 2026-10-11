@@ -8,7 +8,7 @@ import pytest
 from forja.core.adapters.executor import ErrorKind
 from forja.core.events import EventLog
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
-from forja.orchestrator.budget import Meter, read_consumption
+from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.config import Budget
 from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
@@ -362,33 +362,31 @@ def test_a_persistent_failure_waits_for_the_network_and_goes_on(world: MemoryWor
     assert b"waiting_for_network" in log.path.read_bytes()
 
 
-def test_a_network_that_never_comes_back_pauses_the_run_when_the_budget_is_gone(
+def test_a_network_that_never_comes_back_pauses_the_run_when_the_probes_are_used(
     world: MemoryWorld,
 ) -> None:
     world.network = [False]
     agent = ScriptedAgent(errors={0: ErrorKind.PERSISTENT})
-    times = iter([0.0, 0.0, 0.0, 0.0, 10_000.0] + [10_000.0] * 50)
 
     log = world.open()
     confirm_run(log, world.config, ISOLATION)
-    ctx = world.context(
-        log, measurer=ScriptedMeasurer(), agent=agent, planner=ScriptedPlanner(), seconds_left=100.0
-    )
-    ctx.meter = Meter(100.0, read_consumption(log.path), clock=lambda: next(times))
+    ctx = world.context(log, measurer=ScriptedMeasurer(), agent=agent, planner=ScriptedPlanner())
+    ctx.max_network_probes = 2
 
     outcome = asyncio.run(Orchestrator(ctx).run())
 
     assert outcome.state is ExecutionState.PAUSED
-    assert outcome.message == "the network did not come back before the budget ran out"
+    assert outcome.message == "the network did not come back"
+    assert world.slept == [60.0, 60.0]
 
 
-# -- time ---------------------------------------------------------------------------------------
+# -- tokens -------------------------------------------------------------------------------------
 
 
-def test_when_the_time_is_up_the_tasks_not_started_stay_pending_and_the_run_is_delivered(
+def test_when_the_tokens_are_up_the_tasks_not_started_stay_pending_and_the_run_is_delivered(
     world: MemoryWorld,
 ) -> None:
-    outcome, log = world.run(planner=ScriptedPlanner(TWO_TASKS), seconds_left=0.0)
+    outcome, log = world.run(planner=ScriptedPlanner(TWO_TASKS), token_limit=0)
 
     assert outcome.state is ExecutionState.DELIVERED
     assert [task_state(log, t) for t in ("t1", "t2")] == [TaskState.PENDING] * 2

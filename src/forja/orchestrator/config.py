@@ -33,7 +33,7 @@ class Budget(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    seconds: int = Field(default=7200, ge=60)
+    tokens: int = Field(default=2_000_000, ge=1)
     attempts_per_task: int = Field(default=3, ge=1)
     tasks: int = Field(default=5, ge=1)
     files_per_task: int = Field(default=8, ge=1)

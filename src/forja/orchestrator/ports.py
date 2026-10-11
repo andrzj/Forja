@@ -186,6 +186,7 @@ class RunContext:
     network_is_up: Callable[[], Awaitable[bool]] = _network_is_up
     backoff: tuple[float, ...] = (30.0, 60.0, 120.0)
     probe_interval: float = 60.0
+    max_network_probes: int | None = None  # None waits for the network as long as it takes
 
     def sinks(self, level: Level, target_id: str, operation: str) -> EventSink:
         return LogEventSink(self.journal.log, level, target_id, operation)

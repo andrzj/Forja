@@ -28,7 +28,7 @@ from forja.core.gates import (
 )
 from forja.core.idempotency import Decision, Reconciliation, reconcile_call_agent_cli
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
-from forja.orchestrator.budget import Meter, read_consumption
+from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import Budget, confirmed_payload
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
@@ -279,17 +279,17 @@ def test_the_agent_is_handed_a_sink_for_its_own_call(world: MemoryWorld) -> None
     )  # type: ignore[attr-defined]  # noqa: SLF001
 
 
-# -- the time budget between attempts --------------------------------------------------------------
+# -- the token budget between attempts -------------------------------------------------------------
 
 
-def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(
+def test_a_task_whose_tokens_run_out_between_attempts_is_blocked_for_them(
     world: MemoryWorld,
 ) -> None:
-    now = [0.0]
-
     class Slow(ScriptedMeasurer):
         async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
-            now[0] = 10_000.0  # the first attempt takes all the time there is
+            # the first attempt spends all the tokens there are
+            usage = {"type": "usage", "input": 10_000, "output": 0}
+            log.append_progress(Level.ATTEMPT, ctx.attempt_id, "agent_activity", payload=usage)
             return await super().judge(ctx, sinks)
 
     log = world.open()
@@ -297,14 +297,14 @@ def test_a_task_whose_time_runs_out_between_attempts_is_blocked_for_the_time(
     ctx = world.context(
         log, measurer=Slow(verdicts=(REJECTED,)), agent=ScriptedAgent(), planner=ScriptedPlanner()
     )
-    ctx.meter = Meter(100.0, read_consumption(log.path), clock=lambda: now[0])
+    ctx.meter = Meter(100, log.path, enforce=True)
 
     outcome = asyncio.run(Orchestrator(ctx).run())
 
     assert outcome.state is ExecutionState.DELIVERED
     assert log.state.state_of(Level.STAGE, "t1-s") is StageState.EXHAUSTED
     exhausted = log.state.transition_payload(Level.STAGE, "t1-s", StageState.EXHAUSTED)
-    assert exhausted == {"reason": "time_budget_exhausted"}
+    assert exhausted == {"reason": "token_budget_exhausted"}
 
 
 # -- resuming a task already settled ---------------------------------------------------------------
@@ -655,7 +655,7 @@ def test_the_summary_artifact_says_how_each_task_ended(world: MemoryWorld) -> No
 
 
 def test_a_task_never_started_is_cancelled_with_no_attempts(world: MemoryWorld) -> None:
-    _, log = world.run(seconds_left=0.0)
+    _, log = world.run(token_limit=0)
 
     assert summary_body(log.state).tasks == (outcome_of("t1", TaskOutcomeKind.CANCELLED, 0, 0),)
 

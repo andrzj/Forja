@@ -58,6 +58,17 @@ Pedaços combinados: 1a orquestrador, 1b Python e gates, 1c gestor de git, 1d ex
 - `mypy` (strict, `files = ["src", "tests"]`) acusa 29 erros em 10 arquivos de `tests/` que já existiam (só rodávamos `mypy src`); `src` e `scripts` estão limpos. Pendente.
 - Os quatro testes que falham no Linux estão agora em `[tool.forja.mutation] deselect` no `pyproject.toml` (o gate precisa partir de um verde); a investigação deles continua pendente.
 
+### Experiência de uso (decidida)
+
+- **Poucos parâmetros.** A Forja não pode exigir que o usuário decore uma lista de opções. Tudo tem padrão sensato (descoberta de CLIs e ferramentas, configuração do usuário no perfil dele) e, quando há ambiguidade, a Forja pergunta de forma interativa. `forja` sem argumentos conduz. A CLI de agente é um parâmetro opcional (`--cli`), porque o usuário sabe quais tem instaladas e configuradas; sem ele, a Forja descobre e, havendo várias, pergunta.
+- **Tudo da CLI do agente é do usuário e prévio** (instalação, login, modelo, gateway). A Forja só verifica, no `forja doctor` e antes de toda rodada, e a documentação de setup lista os pré-requisitos.
+
+### 1d (feito)
+
+- `executors/claude_code.py` (adaptador), `orchestrator/agent_runner.py` (`ExecutorAgentRunner`, pacote, vigia de saída e de travamento), `orchestrator/planner.py` (`ComplexityPlanner`), `PipelineMeasurer.functions`, `reconcile_prepare_workcopy(..., exclude=)`. ADR 0016. Testes em `tests/executors/` (adaptador, pacote, runner com processo real no lugar da CLI, uma execução inteira entregue) e um teste `live` opt-in.
+- **Achados da gravação com a CLI real:** nesta máquina a sessão OAuth da CLI avulsa expirou (`Failed to authenticate: OAuth session expired`), então a chamada feliz ainda não foi gravada: o usuário precisa rodar `claude` e fazer login (`/login`), e depois `FORJA_LIVE=1 uv run pytest tests/executors/test_live.py`. Os hooks do perfil do usuário rodavam dentro da chamada; `--settings` com `disableAllHooks` os desliga (verificado). O ambiente de um aplicativo hospedeiro (`CLAUDE_CODE_*`) não deve ser repassado.
+- **Pendências do 1d:** validar os formatos de `tool_use` contra a CLI real (teste live); conferir a classificação de erros com erros reais; uso de tokens só ao fim da chamada; `AgentResult` ainda não traz `declared_files` (a conferência declarado contra diff é feita em `apply_diff`, o que cobre o objetivo).
+
 ### Direção (decidida)
 
 - **Terminar a Forja primeiro (1d a 1h), sem perfeccionismo.** Depois, um segundo plano: a Forja avalia a si mesma (qualidade, assertividade, pontos de melhoria), com os próprios gates. Mutação em `--all` e o fechamento do 1b entram nessa autoavaliação, não antes.
@@ -82,8 +93,8 @@ Pedaços combinados: 1a orquestrador, 1b Python e gates, 1c gestor de git, 1d ex
 - **Eventos** não guardam conteúdo (payload até 4 KiB; linhas de saída cortadas em 1 KiB). `fsync` em tudo menos `progress`. O `started` do executor é persistido como `progress` com `kind="process_started"` e é usado para achar processos remanescentes.
 - **Mutex de git** só nos comandos que escrevem, e nunca preso durante a chamada ao agente. Quando houver paralelismo (incremento 7), a fotografia do git deverá ignorar os refs das outras tarefas.
 - **Redação** cobre só o que a Forja envia. Não mascara o conteúdo dos arquivos da cópia de trabalho, porque o agente gravaria `[REDACTED]` no código real.
-- **Orçamento é de tokens, não de tempo (decidido antes do 1d; código ainda não mudou).** `Budget.seconds` e `time_budget_exhausted` saem; ficam os limites estruturais (tentativas, tarefas, arquivos, linhas, falhas de infra) e entra um limite de tokens. Com terminal, o limite nunca barra sozinho: a Forja mostra sempre o percentual de tokens restante e o tempo decorrido (sem percentual), e ao passar de 100% mantém o indicador visual. Sem terminal (CI, agendada), o limite de tokens barra sozinho. Timeouts de processo continuam (detectam travamento, não são orçamento). Sem limite em dinheiro.
-- **Interrupção pelo usuário: Ctrl+K.** Uma vez: parada graciosa (salva o estado, registra `interrupted`, preserva o worktree, a tentativa em curso não conta como de qualidade; retomável). Duas vezes: parada imediata (mata o agente e grava o que der). O percentual só atualiza ao fim de cada mensagem do agente; o formato do uso de tokens e a conta do cache são confirmados no 1d. Orquestrador (`Budget`, `Meter`, `task_cycle`) muda junto com o 1d e reabre a mutação desses módulos; linha de status no 1f, painel no 1g.
+- **Orçamento é de tokens, não de tempo (feito no 1d: `Budget.tokens`, `Meter` lê o log, `enforce` só sem pessoa; a linha de status e o Ctrl+K chegam no 1f).** `Budget.seconds` e `time_budget_exhausted` saem; ficam os limites estruturais (tentativas, tarefas, arquivos, linhas, falhas de infra) e entra um limite de tokens. Com terminal, o limite nunca barra sozinho: a Forja mostra sempre o percentual de tokens restante e o tempo decorrido (sem percentual), e ao passar de 100% mantém o indicador visual. Sem terminal (CI, agendada), o limite de tokens barra sozinho. Timeouts de processo continuam (detectam travamento, não são orçamento). Sem limite em dinheiro.
+- **Interrupção pelo usuário: Ctrl+K.** Uma vez: parada graciosa (salva o estado, registra `interrupted`, preserva o worktree, a tentativa em curso não conta como de qualidade; retomável). Duas vezes: parada imediata (mata o agente e grava o que der). O percentual só atualiza ao fim de cada mensagem do agente; o formato do uso de tokens e a conta do cache são confirmados no 1d. Linha de status e Ctrl+K no 1f, painel no 1g.
 - **Verificação prévia de ambiente (1f):** `forja doctor`, também antes de toda rodada, checa Claude Code instalado e autenticado, restrições do WSL, gitleaks/lizard/ruff. Falhou: aborta cedo com a correção. A Forja tenta instalar o que falta (com confirmação) e a documentação de setup traz o passo a passo manual.
 - **Dados em `FORJA_HOME`:** `%LOCALAPPDATA%\forja` no Windows, `~/.local/share/forja` no resto. Execuções em `runs/<id>`, locks em `locks/<id>`.
 
@@ -115,4 +126,4 @@ Atualizadas em `Especificação.md` e `Plano de execução.md`: sem PR (a entreg
 ## Próximos passos
 
 1. Fechar o incremento 0 (itens da seção "Onde estamos").
-2. Incremento 1: 1a e 1b feitos. Faltam 1d (executor real), 1e (isolamento), 1f (preparação guiada e comando `forja`), 1g (interface) e 1h (aceitação). Antes da 1d e da 1e ficam as perguntas abertas: Claude Code instalado e autenticado, restrições do WSL corporativo, quem instala `gitleaks`, `lizard` e `ruff` na distro e o limite de gasto por execução.
+2. Incremento 1: 1a, 1b e 1d feitos. Faltam 1e (isolamento), 1f (preparação guiada e comando `forja`), 1g (interface) e 1h (aceitação). Respondidas: Claude Code e WSL são do usuário e checados pelo doctor (documentados); a Forja tenta instalar `gitleaks`, `lizard` e `ruff` e documenta o passo a passo; o limite é de tokens.

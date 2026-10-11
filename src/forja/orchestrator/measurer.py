@@ -133,7 +133,7 @@ class PipelineMeasurer:
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
         problems: list[str] = []
         try:
-            problems += await self._build_problems(tools, worktree)  # empty
+            problems += await self._build_problems(tools, worktree)
             first = await self._outcomes(tools, worktree)
             second = await self._outcomes(tools, worktree)
         except Undecided as stop:
@@ -203,8 +203,19 @@ class PipelineMeasurer:
         plan = lizard_plan(self._lizard, worktree, files)
         execution = await tools.run("complexity", plan)
         if not execution.finished or execution.result.exit_code != 0:
-            raise Undecided(execution.inconclusive("complexity"))  # not shown
+            raise Undecided(execution.inconclusive("complexity"))
         return parse_functions(execution.lines)
+
+    async def functions(self, worktree: Path, sinks: SinkFactory) -> dict[tuple[str, str], int]:
+        """The cyclomatic complexity of every function of the production code, for the planner."""
+        files = await self._production_files(worktree)
+        if not files:
+            return {}
+        tools = self._tools(sinks, Level.EXECUTION, self._run_id)
+        try:
+            return await self._complexity(tools, worktree, files)
+        except Undecided as stop:
+            raise RuntimeError(f"the complexity could not be measured: {_describe(stop)}") from None
 
     # -- attempts and integration -------------------------------------------------------------
 

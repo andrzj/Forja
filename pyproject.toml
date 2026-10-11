@@ -36,6 +36,7 @@ markers = [
     "slow: end-to-end runs that start many processes; run them before every release",
     "tools: needs an external tool (gitleaks); skipped when it is not installed",
     "integration: real git or real processes; left out when FORJA_FAST=1 (mutation testing)",
+    "live: calls a real agent CLI with the user's own login; only runs with FORJA_LIVE=1",
 ]
 
 [tool.ruff]

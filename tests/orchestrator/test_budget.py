@@ -12,7 +12,7 @@ from forja.orchestrator.budget import (
     quality_attempts,
     read_consumption,
 )
-from tests.core.events.support import RUN, create_run
+from tests.core.events.support import RUN, FakeClock, create_run
 from tests.orchestrator.support import ManualClock, add_attempt, open_with, start_stage
 
 
@@ -125,17 +125,47 @@ def test_a_torn_last_line_is_ignored(tmp_path: Path, clock: ManualClock) -> None
     assert read_consumption(path).seconds == 6.0
 
 
-def test_the_meter_adds_this_session_to_what_the_earlier_ones_used() -> None:
-    now = [100.0]
-    meter = Meter(60, Consumption(seconds=20, tokens=0), clock=lambda: now[0])
+def usage(log: EventLog, tokens: int) -> None:
+    log.append_progress(
+        Level.ATTEMPT,
+        "t1-a1",
+        "agent_activity",
+        payload={"type": "usage", "input": tokens, "output": 0},
+    )
 
-    assert meter.elapsed() == 20 and meter.remaining() == 40 and not meter.exhausted()
+
+def test_the_meter_counts_tokens_from_the_log_as_they_arrive(tmp_path: Path) -> None:
+    log = EventLog.open(tmp_path / "events.jsonl", "r1", clock=FakeClock())
+    meter = Meter(1000, log.path)
+
+    assert (meter.used(), meter.fraction_used(), meter.exceeded()) == (0, 0.0, False)
+    usage(log, 250)
+    assert (meter.used(), meter.fraction_used(), meter.exceeded()) == (250, 0.25, False)
+    usage(log, 750)
+    assert (meter.used(), meter.fraction_used(), meter.exceeded()) == (1000, 1.0, True)
+    usage(log, 500)
+    assert meter.fraction_used() == 1.5
+
+
+def test_passing_the_limit_stops_the_run_only_when_nobody_is_there_to_decide(
+    tmp_path: Path,
+) -> None:
+    log = EventLog.open(tmp_path / "events.jsonl", "r1", clock=FakeClock())
+    usage(log, 100)
+
+    assert Meter(100, log.path, enforce=True).exhausted()
+    assert not Meter(100, log.path).exhausted()
+    assert not Meter(101, log.path, enforce=True).exhausted()
+
+
+def test_the_meter_shows_the_time_of_earlier_sessions_plus_this_one(tmp_path: Path) -> None:
+    now = [100.0]
+    log = EventLog.open(tmp_path / "events.jsonl", "r1", clock=FakeClock())
+    meter = Meter(1000, log.path, clock=lambda: now[0])
+
+    assert meter.elapsed() == read_consumption(log.path).seconds
     now[0] += 39.5
-    assert meter.elapsed() == 59.5 and not meter.exhausted()
-    now[0] += 0.5
-    assert meter.exhausted() and meter.remaining() == 0.0
-    now[0] += 100
-    assert meter.remaining() == 0.0
+    assert meter.elapsed() == read_consumption(log.path).seconds + 39.5
 
 
 def test_only_attempts_that_judged_the_agents_work_count_as_quality_attempts(
