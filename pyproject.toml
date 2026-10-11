@@ -7,7 +7,10 @@ name = "forja"
 version = "0.0.0"
 description = "Drives coding-agent CLIs and gates their output with deterministic checks."
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.7"]
+dependencies = [
+    "pydantic>=2.7",
+    "rich>=15.0.0",
+]
 
 [dependency-groups]
 dev = [

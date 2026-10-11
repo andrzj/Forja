@@ -5,6 +5,7 @@ says which phase is next, and the journal skips what each phase already did. A r
 (a CLI that cannot continue, the network gone) is left ``paused`` with everything saved.
 """
 
+import asyncio
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -16,7 +17,13 @@ from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog
 from forja.core.idempotency import reconcile_call_agent_cli
 from forja.core.resume import resume
-from forja.core.states import ExecutionState, Level, TaskState
+from forja.core.states import (
+    EXECUTION_MACHINE,
+    AttemptState,
+    ExecutionState,
+    Level,
+    TaskState,
+)
 from forja.orchestrator.config import RunConfig, confirmed_payload
 from forja.orchestrator.outcome import ExitCode, Outcome, StopRun, exit_code_for
 from forja.orchestrator.ports import Baseline, RunContext
@@ -73,6 +80,10 @@ class Orchestrator:
             outcome = self._outcome()
         except StopRun as stop:
             outcome = self._pause(stop.reason)
+        except asyncio.CancelledError:
+            self._interrupted()
+            journal.session_ended("interrupted")
+            raise
         journal.session_ended(outcome.state.value)
         return outcome
 
@@ -94,6 +105,27 @@ class Orchestrator:
         if name == "run_tool":
             return await ctx.measurer.reconcile(operation)
         raise KeyError(f"no reconciler for {name}")
+
+    def _interrupted(self) -> None:
+        """The person stopped the run: save where it was and leave it ready to resume.
+
+        An attempt whose agent was cut short is dropped without counting against the task, as
+        nothing about the work was judged. Everything else the log already settles on resume.
+        """
+        state = self._log.state
+        for task in state.children_of(Level.TASK, self._run_id):
+            for stage in state.children_of(Level.STAGE, task):
+                for attempt in state.children_of(Level.ATTEMPT, stage):
+                    if state.state_of(Level.ATTEMPT, attempt) is AttemptState.AGENT_RUNNING:
+                        self._log.append_transition(
+                            Level.ATTEMPT,
+                            attempt,
+                            AttemptState.AGENT_RUNNING,
+                            AttemptState.DISCARDED,
+                            payload={"reason": "interrupted", "infra_failure": False},
+                        )
+        if not EXECUTION_MACHINE.is_terminal(self._state):
+            self._pause("interrupted")
 
     def _leave_pause(self) -> None:
         state = self._state
