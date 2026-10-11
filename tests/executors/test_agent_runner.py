@@ -22,6 +22,7 @@ from forja.executors import ClaudeCodeAdapter
 from forja.orchestrator.agent_runner import (
     PACKAGE,
     ExecutorAgentRunner,
+    _refuse_links_on_the_way,
     touches_git,
     workcopy_of,
 )
@@ -487,3 +488,55 @@ def test_the_adapter_also_denies_the_agent_its_own_package_and_settings() -> Non
 
     assert f"Edit(./.forja-agent/{PACKAGE})" in deny
     assert "Write(./.forja-agent/claude-settings.json)" in deny
+
+
+def kept(*paths: str) -> dict[str, ManifestEntry]:
+    return dict(listed(*paths).entries)
+
+
+@pytest.mark.parametrize(
+    "name", ["src/link", "src/link/x.txt", "SRC/Link/deep/x.txt", "src/link./x"]
+)
+def test_nothing_is_written_at_a_hidden_path_or_below_it(tmp_path: Path, name: str) -> None:
+    runner = rig(tmp_path, GOOD).runner
+
+    with pytest.raises(RejectedWork, match="where it may not write"):
+        runner._refuse_collisions(listed(name), kept("src/link"))  # noqa: SLF001
+
+
+def test_a_path_that_only_looks_like_a_hidden_one_is_not_refused(tmp_path: Path) -> None:
+    runner = rig(tmp_path, GOOD).runner
+
+    runner._refuse_collisions(listed("src/linked.txt", "src/link2/x"), kept("src/link"))  # noqa: SLF001
+
+
+def test_work_written_below_a_link_never_goes_through_it(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    through = {"writes": {"src/link/x.txt": "planted\n"}, "saida": declare("src/link/x.txt")}
+    r = rig(tmp_path, through)
+    try:
+        (r.ctx.worktree / "src" / "link").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks need a privilege here")
+    go(work(r))
+
+    with pytest.raises(RejectedWork, match="where it may not write"):
+        go(settle(r.runner.apply_diff(r.ctx)))
+    assert list(outside.iterdir()) == []
+
+
+def test_a_link_on_the_way_stops_the_copy_even_if_everything_before_missed_it(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        (tmp_path / "wt" / "link").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "wt" / "link").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks need a privilege here")
+
+    with pytest.raises(RuntimeError, match="through a link"):
+        _refuse_links_on_the_way(tmp_path / "wt", "link/x.txt")
+    _refuse_links_on_the_way(tmp_path / "wt", "other/x.txt")

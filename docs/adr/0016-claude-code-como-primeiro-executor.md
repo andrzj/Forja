@@ -27,6 +27,8 @@ O incremento 1 precisava de um agente de verdade. O contrato de adaptador de exe
 
 - **Segunda revisão (corrigida).** (1) Os nomes são lidos como o Windows os lê (`.env.` e `.env ` são `.env`) antes de comparar com os padrões sensíveis, e um nome novo com marca de nome curto (`ENV~1`) é recusado; depois da volta, confere-se que os arquivos que deviam ficar intactos continuam iguais. (2) Links simbólicos ficam fora da cópia e voltam intactos, como os sensíveis: o agente não recebe o link nem o que ele aponta. (3) As configurações geradas negam `Edit` e `Write` nelas mesmas e no pacote, e a volta recusa o trabalho se o agente as alterou.
 
+- **Terceira revisão (corrigida).** Um caminho novo abaixo de um link que já existe no worktree seria escrito através dele. Agora nada pode ser escrito num caminho escondido nem abaixo dele (comparação em forma normal do Windows e sem distinguir caixa), e a cópia de volta recusa qualquer destino que passe por um link.
+
 ## Consequências
 
 - O mesmo `ExecutorAgentRunner` serve a qualquer CLI com um `ExecutorAdapter`; um adaptador novo só descreve a invocação e lê o fluxo.

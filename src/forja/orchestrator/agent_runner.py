@@ -119,6 +119,14 @@ def _wipe(directory: Path, keep: frozenset[str], prefix: str = "") -> None:
             entry.unlink()
 
 
+def _refuse_links_on_the_way(worktree: Path, path: str) -> None:
+    """Writing into the worktree must never go through a link that is already there."""
+    parts = path.split("/")
+    for i in range(len(parts)):
+        if (worktree.joinpath(*parts[: i + 1])).is_symlink():
+            raise RuntimeError(f"{path} would be written through a link in the worktree")
+
+
 def workcopy_of(ctx: AttemptContext) -> Path:
     return ctx.worktree.with_name(f"{ctx.attempt_id}-copy")
 
@@ -322,6 +330,7 @@ class ExecutorAgentRunner:
             before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
             self._refuse_tampering(source)
             self._refuse_off_limits(after, diff_manifests(before, after))
+            self._refuse_collisions(after, hidden)
             problems = find_violations(after, destination_root=ctx.worktree)
             if problems:
                 raise RejectedWork("; ".join(f"{p.path}: {p.detail}" for p in problems))
@@ -341,6 +350,8 @@ class ExecutorAgentRunner:
         async def run() -> None:
             kept = self._hidden(ctx.worktree)
             _wipe(ctx.worktree, frozenset(kept))
+            for path in build_manifest(source, exclude={AGENT_DIR}).entries:
+                _refuse_links_on_the_way(ctx.worktree, path)
             shutil.copytree(
                 source,
                 ctx.worktree,
@@ -403,6 +414,14 @@ class ExecutorAgentRunner:
         for path in (*changed.created, *changed.modified):
             if any(_SHORT_NAME.search(part) for part in path.split("/")):
                 raise RejectedWork(f"{path}: a name with a short-name marker (~digit) is refused")
+
+    def _refuse_collisions(self, after: Manifest, hidden: Mapping[str, ManifestEntry]) -> None:
+        """Nothing may be written at a hidden path or below it: below a link it would go through."""
+        taken = {plain(path).casefold() for path in hidden}
+        for path in after.entries:
+            parts = plain(path).casefold().split("/")
+            if any("/".join(parts[: i + 1]) in taken for i in range(len(parts))):
+                raise RejectedWork(f"{path}: the work goes where it may not write")
 
     def _refuse_tampering(self, source: Path) -> None:
         """The agent writes in its own directory; its permissions are not for it to change."""
