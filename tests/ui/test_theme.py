@@ -154,9 +154,7 @@ def test_a_style_has_no_emphasis_unless_asked_and_each_emphasis_is_independent()
     assert (only.bold, only.underline) == (None, None)
 
 
-def test_the_sixteen_colors_of_a_dark_theme_are_the_dark_ones_and_of_a_light_theme_the_light_ones() -> (
-    None
-):
+def test_the_sixteen_colors_follow_the_kind_of_the_theme() -> None:
     dark, light = THEMES["escuro"].ansi, THEMES["claro"].ansi
 
     assert (dark[Role.BACKGROUND], dark[Role.TEXT]) == ("black", "white")
