@@ -149,6 +149,7 @@ def summary_of(
     detection: Detection, config: RunConfig, scope: tuple[str, ...], tokens: int
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
+    limit = format(tokens, ",").replace(",", ".")
     tests = (
         "o agente pode rodar os testes do projeto na cópia dele (`agente_roda_testes = false` "
         "no execucao.toml desliga)"
@@ -160,7 +161,7 @@ def summary_of(
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
         f"  agente: {config.implementer.name} {config.implementer.version}",
         f"  onde: {where}",
-        f"  limite: {format(tokens, ',').replace(',', '.')} tokens, até {config.budget.tasks} tarefas",
+        f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
         "são garantidas pelo seu ambiente",
         "  a Forja impõe: ambiente filtrado para a CLI, cópia sem .git e sem arquivos sensíveis, "
