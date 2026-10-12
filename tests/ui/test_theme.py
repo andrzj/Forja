@@ -152,3 +152,18 @@ def test_a_style_has_no_emphasis_unless_asked_and_each_emphasis_is_independent()
     assert (only.bold, only.reverse) == (None, None)
     only = theme.style(Role.TEXT, reverse=True)
     assert (only.bold, only.underline) == (None, None)
+
+
+def test_the_sixteen_colors_of_a_dark_theme_are_the_dark_ones_and_of_a_light_theme_the_light_ones() -> (
+    None
+):
+    dark, light = THEMES["escuro"].ansi, THEMES["claro"].ansi
+
+    assert (dark[Role.BACKGROUND], dark[Role.TEXT]) == ("black", "white")
+    assert (light[Role.BACKGROUND], light[Role.TEXT]) == ("white", "black")
+    assert dark[Role.ACCENT] == "bright_blue" and light[Role.ACCENT] == "blue"
+
+
+def test_a_theme_can_name_its_own_sixteen_colors_where_the_standard_ones_do_not_suit() -> None:
+    assert THEMES["dos"].ansi[Role.BACKGROUND] == "blue"
+    assert THEMES["dos"].ansi[Role.TEXT] == "white"
