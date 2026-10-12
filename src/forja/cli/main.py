@@ -7,7 +7,7 @@ fix), 3 stopped with everything saved, 130 stopped by the person.
 import asyncio
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
 from pathlib import Path
 
 from forja.cli.args import Arguments, parse
@@ -18,7 +18,7 @@ from forja.cli.facade import run_facade
 from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
-from forja.cli.run import Ended, Renderer, closing_lines, execute, exit_code
+from forja.cli.run import Ended, ForcedExit, Renderer, closing_lines, execute, exit_code
 from forja.cli.session import Session, open_session
 from forja.cli.settings import (
     Execucao,
@@ -34,6 +34,7 @@ from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
 from forja.orchestrator.outcome import ExitCode
 from forja.ui import terminal
+from forja.ui.full import FullRenderer
 from forja.ui.live import LiveRenderer
 from forja.ui.plain import PlainRenderer
 from forja.ui.terminal import Tier
@@ -41,11 +42,12 @@ from forja.ui.theme import theme_named, with_ascii
 
 
 def renderer_for(profile: Perfil, saved: Execucao | None, console: Console) -> Renderer:
-    """The screen for this terminal: the live line when it can, plain text when it cannot."""
+    """The screen for this terminal: the full screen when there is room, then the live line,
+    then plain text for a pipe or CI."""
     caps = terminal.detect()
     style = saved.interface if saved else profile.interface
     forced = None if style.modo == "auto" else Tier(style.modo)
-    tier, why = terminal.choose_tier(caps, forced)
+    tier, why = terminal.choose_tier(caps, forced, full_available=True)
     if why:
         console.say(why)
     if tier is Tier.TEXT:
@@ -53,6 +55,8 @@ def renderer_for(profile: Perfil, saved: Execucao | None, console: Console) -> R
     theme = theme_named(style.tema or None, dark_background=caps.dark_background)
     if style.ascii or not caps.unicode:
         theme = with_ascii(theme)
+    if tier is Tier.FULL:
+        return FullRenderer(theme, caps, resize=style.redimensionar)
     return LiveRenderer(theme, caps)
 
 
@@ -87,14 +91,33 @@ def _finish(session: Session, ended: Ended, console: Console) -> int:
 
 
 async def _run(session: Session, renderer: Renderer, console: Console) -> int:
-    keys = terminal_keys()
+    keys = renderer.keys_source if isinstance(renderer, FullRenderer) else terminal_keys()
     try:
         ended = await execute(session, renderer, keys)
+    except ForcedExit:
+        if isinstance(renderer, FullRenderer):
+            renderer.abort()
+            await _screen(renderer.closed(), console)
+        console.say(
+            "Saiu sem esperar. O que já estava gravado está salvo; rode `forja` para retomar."
+        )
+        return int(ExitCode.INTERRUPTED)
     finally:
         if keys is not None:
             keys.close()
         session.close()
+    lines = closing_lines(session, ended)
+    if isinstance(renderer, FullRenderer):
+        await _screen(renderer.finish(lines), console)
     return _finish(session, ended, console)
+
+
+async def _screen(waiting: Awaitable[None], console: Console) -> None:
+    """Wait for the full screen to close; if it broke, the run is unaffected and this says so."""
+    try:
+        await waiting
+    except Exception as error:  # noqa: BLE001 - a broken screen must never lose the result
+        console.say(f"A tela completa falhou ({error}); o resultado da execução continua valendo.")
 
 
 async def _discard(latest: Unfinished, console: Console) -> None:

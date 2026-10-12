@@ -64,6 +64,7 @@ class View:
     elapsed: float
     tasks_integrated: int = 0
     tasks_blocked: int = 0
+    task_rows: tuple[tuple[str, str, str], ...] = ()  # (id, intent, state), in plan order
 
     @property
     def tokens_fraction(self) -> float:
@@ -248,6 +249,9 @@ class ViewModel:
             elapsed=self.seconds_before + (self.clock() - self._started),
             tasks_integrated=sum(1 for s in self.tasks.values() if s == TaskState.INTEGRATED),
             tasks_blocked=sum(1 for s in self.tasks.values() if s == TaskState.BLOCKED),
+            task_rows=tuple(
+                (task, self.intents.get(task, ""), state) for task, state in self.tasks.items()
+            ),
         )
 
 

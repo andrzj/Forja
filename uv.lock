@@ -216,6 +216,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "rich" },
     { name = "ruff" },
+    { name = "textual" },
 ]
 
 [package.dev-dependencies]
@@ -236,6 +237,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff" },
+    { name = "textual", specifier = ">=8.2.8" },
 ]
 
 [package.metadata.requires-dev]
