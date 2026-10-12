@@ -32,32 +32,51 @@ class PlainRenderer:
         self.update(view)
 
     def update(self, view: View) -> None:
+        self._update_state(view)
+        self._update_task(view)
+        self._update_gates(view)
+        self._update_feed(view)
+        self._update_rejections(view)
+        self._update_tokens(view)
+
+    def _update_state(self, view: View) -> None:
         if view.state != self._state:
             self._state = view.state
             self._line(
                 view, f"estado: {view.state}" + (f" ({view.message})" if view.message else "")
             )
-        if view.task_id and (view.task_id, view.attempt) != (self._task, self._attempt):
-            if view.task_id != self._task:
-                number = min(view.tasks_done + 1, view.tasks_total)
-                self._line(view, f"tarefa {number}/{view.tasks_total}: {view.task_intent}")
-            if view.attempt:
-                self._line(view, f"tentativa {view.attempt}/{view.attempts_max} de {view.task_id}")
-            self._task, self._attempt = view.task_id, view.attempt
+
+    def _update_task(self, view: View) -> None:
+        if not view.task_id or (view.task_id, view.attempt) == (self._task, self._attempt):
+            return
+        if view.task_id != self._task:
+            number = min(view.tasks_done + 1, view.tasks_total)
+            self._line(view, f"tarefa {number}/{view.tasks_total}: {view.task_intent}")
+        if view.attempt:
+            self._line(view, f"tentativa {view.attempt}/{view.attempts_max} de {view.task_id}")
+        self._task, self._attempt = view.task_id, view.attempt
+
+    def _update_gates(self, view: View) -> None:
         for name, status in view.gates:
             if status in (GateStatus.PASSED, GateStatus.FAILED) and self._gates.get(name) != status:
                 self._line(
                     view, f"gate {name}: {'ok' if status is GateStatus.PASSED else 'falhou'}"
                 )
             self._gates[name] = status
+
+    def _update_feed(self, view: View) -> None:
         new = min(view.feed_total - self._printed, len(view.feed))
         for item in view.feed[len(view.feed) - new :] if new > 0 else ():
             self._line(view, f"{item.time} {item.text}")
         self._printed = view.feed_total
+
+    def _update_rejections(self, view: View) -> None:
         fresh = min(view.rejections_total - self._rejected, len(view.rejections))
         for rejection in view.rejections[len(view.rejections) - fresh :] if fresh > 0 else ():
             self._line(view, f"rejeitada: {rejection}")
         self._rejected = view.rejections_total
+
+    def _update_tokens(self, view: View) -> None:
         tenth = int(view.tokens_fraction * 10)
         if tenth > self._tenth:
             self._tenth = tenth
