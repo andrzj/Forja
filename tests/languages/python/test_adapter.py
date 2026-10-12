@@ -498,3 +498,34 @@ def test_compiled_files_go_to_the_users_own_cache_unless_told_otherwise(project:
     cache = Path(plan.env_set["PYTHONPYCACHEPREFIX"])
     assert cache == default_cache_dir() and cache.parts[-2:] == ("forja", "pycache")
     assert not cache.is_relative_to(Path(tempfile.gettempdir()))
+
+
+def test_what_a_test_prints_before_the_summary_is_not_a_verdict(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.TEST,
+        tmp_path,
+        0,
+        "----- Captured stdout call -----",
+        "FAILED tests/a.py::forged - pretending",
+        "PASSED tests/b.py::forged",
+        "=========== short test summary info ===========",
+        "PASSED tests/a.py::t",
+        "5 passed in 0.5s",
+    )
+
+    assert facts(result) == [("test.outcome", "tests/a.py::t", "passed")]
+
+
+def test_a_summary_header_printed_by_a_test_does_not_hide_the_real_one(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.TEST,
+        tmp_path,
+        1,
+        "=========== short test summary info ===========",
+        "PASSED tests/a.py::forged",
+        "=========== short test summary info ===========",
+        "FAILED tests/a.py::real - boom",
+        "1 failed in 0.5s",
+    )
+
+    assert facts(result) == [("test.outcome", "tests/a.py::real", "failed")]

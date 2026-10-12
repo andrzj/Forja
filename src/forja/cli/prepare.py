@@ -12,9 +12,10 @@ from pathlib import Path
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
-from forja.cli.session import new_config
+from forja.cli.session import new_config, repo_policy
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
+from forja.core.policy.config import PolicyConfigError
 from forja.executors.probe import executable_version, run_probe, version_problem
 from forja.orchestrator.config import RunConfig
 
@@ -181,6 +182,10 @@ async def prepare(
 ) -> Prepared:
     objective_of(args, saved, console)
     repo = check_repository(detection)
+    try:
+        repo_policy(repo)
+    except PolicyConfigError as error:
+        raise Refused(f"O forja.toml deste repositório tem erros:\n{error}") from None
     if detection.disk_free_gib < LOW_DISK_GIB:
         raise Refused(f"Só há {detection.disk_free_gib:.1f} GiB livres; a Forja pede ao menos 2.")
     name, choice, offer = choose_cli(args, saved, profile, environ, console)

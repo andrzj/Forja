@@ -21,6 +21,7 @@ _RUFF_PATH = re.compile(r"^\s*--> (?P<path>.+?):\d+:\d+$")
 _COMPILE_ERROR = re.compile(r"^\*\*\* Error compiling '(?P<path>.+)'\.\.\.$")
 _TEST_LINE = re.compile(r"^(?P<outcome>PASSED|FAILED|ERROR|XFAIL|XPASS) (?P<id>.+?)(?: - .*)?$")
 _SKIPPED = re.compile(r"^SKIPPED \[(?P<count>\d{1,9})\]")
+_SUMMARY = re.compile(r"^=+ short test summary info =+$")
 
 LINT_OK = (0, 1)
 PYTEST_NO_TESTS = 5
@@ -111,7 +112,10 @@ def parse_tests(output: ToolOutput) -> ParseResult:
         return Unparseable(f"pytest ended with {code}")
     outcomes: dict[str, str] = {}
     skipped = 0
-    for line in _lines(output):
+    lines = _lines(output)
+    # what a test prints while it runs comes before the summary; only the summary is the verdict
+    summary = [i for i, line in enumerate(lines) if _SUMMARY.match(line)]
+    for line in lines[summary[-1] + 1 :] if summary else lines:
         found = _TEST_LINE.match(line)
         if found:
             outcomes[found["id"]] = found["outcome"].lower()

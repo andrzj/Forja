@@ -1,0 +1,6 @@
+# How the Forja judges this repository when it works on it.
+
+# The suite takes minutes when it runs one test after another. The gate runs the fast part in
+# parallel; the slow and integration tests run in CI and before a release.
+[checks.tests.commands]
+test = ["python", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no", "-n", "auto", "-m", "not slow and not integration"]

@@ -148,3 +148,31 @@ def test_an_invalid_settings_file_is_named(repo: Path, environ: dict[str, str]) 
     talk = Talk()
     assert go(["--config", str(bad), "refatorar"], talk, environ) == 2
     assert "tokenz" in talk.text
+
+
+def commit_policy(repo: Path, text: str) -> None:
+    (repo / "forja.toml").write_text(text, encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "policy")
+
+
+def test_a_forja_toml_with_errors_is_named_before_anything_runs(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    commit_policy(repo, "[checks.tests.commands]" + chr(10) + "nope = 1" + chr(10))
+    talk = Talk()
+
+    assert go(["refatorar", "--plano"], talk, environ) == 2
+    assert "forja.toml" in talk.text
+    assert "nope" in talk.text
+
+
+def test_the_repositorys_own_policy_is_read_when_it_is_valid(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    commit_policy(
+        repo, "[checks.tests.commands]" + chr(10) + 'test = ["python", "-m", "pytest"]' + chr(10)
+    )
+    talk = Talk()
+
+    assert go(["refatorar", "--plano"], talk, environ) == 0

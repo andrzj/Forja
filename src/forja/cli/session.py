@@ -20,10 +20,12 @@ from forja.core.gates import CheckSettings
 from forja.core.gitguard import GuardedGit
 from forja.core.idempotency.git import Git
 from forja.core.ids import new_id
-from forja.core.isolation import IsolationLevel, IsolationRecord
+from forja.core.isolation import IsolationLevel, IsolationRecord, SensitivePaths
 from forja.core.locking import LockOwner, LockPolicy, acquire_repository_lock, repository_id
 from forja.core.locking.repository import HeldLock
 from forja.core.paths import forja_home, locks_dir, run_dir
+from forja.core.policy.config import EffectivePolicy, load_policy
+from forja.core.redaction import Redactor
 from forja.core.states import Level
 from forja.executors import ClaudeCodeAdapter
 from forja.languages.python import PythonAdapter
@@ -68,6 +70,11 @@ def repo_python(repo: Path) -> tuple[str, ...]:
             return (str(repo / relative),)
     found = locate_in_path("python") or locate_in_path("python3")
     return (str(found) if found else sys.executable,)
+
+
+def repo_policy(repo: Path) -> EffectivePolicy:
+    """The Forja's defaults with what the repository's own ``forja.toml`` says, if it has one."""
+    return load_policy(default_registry(), repo=repo / "forja.toml")
 
 
 def standard_settings() -> dict[str, CheckSettings]:
@@ -211,6 +218,7 @@ async def _context(
     interactive: bool,
 ) -> RunContext:
     repo = Path(config.repo)
+    policy = repo_policy(repo)
     identity = await detect_identity(plain, config.implementer.name)
     branch = (await plain.lines("rev-parse", "--abbrev-ref", "HEAD"))[0]
     git = GuardedGit(
@@ -219,7 +227,9 @@ async def _context(
         env=git_environment(git_base_environment(env), identity),
         timeout=120,
         log_dir=directory / "logs" / "guard",
-        protected=ProtectedBranches(frozenset({"main", "master", branch})),
+        protected=ProtectedBranches(
+            frozenset({"main", "master", branch, *policy.protected_branches})
+        ),
     )
     workspace = GitWorkspace(git, run_id=run_id, layout=Layout.for_run(base, run_id))
 
@@ -232,7 +242,8 @@ async def _context(
         log=log,
         workdir=directory / "measure",
         host_env=env,
-        settings=standard_settings(),
+        settings=policy.settings(),
+        values=policy.values(),
         lizard=(sys.executable, "-m", "lizard"),
         gitleaks=(missing_tool("gitleaks"),),
     )
@@ -246,11 +257,14 @@ async def _context(
         commands = ("forja agente lint", "forja agente medir")
         if config.agent_runs_tests:
             commands = (*commands, "forja agente testar")
+    sensitive = SensitivePaths.with_defaults(policy.sensitive_paths)
     agent = ExecutorAgentRunner(
         ClaudeCodeAdapter(),
         Path(config.implementer.path),
         {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
         log,
+        sensitive=sensitive,
+        redactor=Redactor(policy.redaction, sensitive),
         permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
     )
     return RunContext(
