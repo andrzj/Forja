@@ -259,7 +259,7 @@ def canary(engine: Path) -> bool:
     return results["loose"][1] >= 1 and results["tight"] == (0, 0)
 
 
-def main() -> int:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
@@ -275,7 +275,28 @@ def main() -> int:
     parser.add_argument(
         "--fresh", action="store_true", help="run every mutant again, ignoring the snapshot"
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def report_survivors(survived: list[str], allowed: list[dict[str, str]]) -> int:
+    """Print the survivors no suppression names; return how many there were."""
+    count = 0
+    for entry in survived:
+        where, _, change = entry.partition(" ")
+        path, _, line = where.rpartition(":")
+        function = function_at(ROOT / path, int(line))
+        muted = any(
+            s["file"] == path and s["function"] == function and s["change"] == change
+            for s in allowed
+        )
+        if not muted:
+            print(f"SURVIVED {entry}  [{function}]")
+            count += 1
+    return count
+
+
+def main() -> int:
+    args = parse_args()
     files = args.files or (all_sources() if args.all else changed_sources())
     if not files:
         print("no source file changed: nothing to mutate")
@@ -305,17 +326,7 @@ def main() -> int:
         if code == 2:
             print(f"{file}: the tests fail before any mutation")
             return 2
-        for entry in survived:
-            where, _, change = entry.partition(" ")
-            path, _, line = where.rpartition(":")
-            function = function_at(ROOT / path, int(line))
-            muted = any(
-                s["file"] == path and s["function"] == function and s["change"] == change
-                for s in allowed
-            )
-            if not muted:
-                print(f"SURVIVED {entry}  [{function}]")
-                survivors += 1
+        survivors += report_survivors(survived, allowed)
         if uncovered:
             unreached += len(uncovered)
             print(f"{file}: {len(uncovered)} site(s) on lines no test runs (not run)")
