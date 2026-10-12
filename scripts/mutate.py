@@ -4,8 +4,12 @@
     scripts/mutate.py --all        # every source file
     scripts/mutate.py src/forja/checks/changes.py
 
-It runs the engine (unclebob/mutator) on each file with only the tests that exercise that file,
-found from a coverage run that records which test ran each line. A surviving mutant fails the run
+It runs the engine (unclebob/mutator) the way the engine is meant to be run: the coverage report
+decides which sites are run (a site no test reaches is reported as uncovered, not run), and the
+snapshot the engine keeps in ``.metrics/mutate`` makes every run after the first differential (only
+survivors and the functions whose text changed are run again; ``--fresh`` runs everything). What
+the script adds is the choice of tests: only those that exercise the file, found from a coverage
+run that records which test ran each line. A surviving mutant fails the run
 unless ``mutation-suppressions.toml`` names it, with a reason a person approved. Nothing in the
 source can switch the gate off: a comment that does is rejected by the scope gate.
 
@@ -29,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUPPRESSIONS = ROOT / "mutation-suppressions.toml"
 COVERAGE = ROOT / "target" / "coverage" / "python"
+LCOV = COVERAGE / "lcov.info"  # where the engine looks for the coverage of a Python project
 OUTCOME = re.compile(
     r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
 )
@@ -69,7 +74,7 @@ def record_coverage(reuse: bool) -> dict[str, list[str]]:
     """Which test files ran each source file, from one run of the fast tests."""
     COVERAGE.mkdir(parents=True, exist_ok=True)
     data, report = COVERAGE / ".coverage", COVERAGE / "contexts.json"
-    if not (reuse and report.exists()):
+    if not (reuse and report.exists() and LCOV.exists()):
         measure_coverage(data, report)
     files = json.loads(report.read_text(encoding="utf-8"))["files"]
     tests_of: dict[str, set[str]] = defaultdict(set)
@@ -92,13 +97,14 @@ def measure_coverage(data: Path, report: Path) -> None:
     if tested.returncode != 0:
         print(tested.stdout[-3000:], file=sys.stderr)
         raise SystemExit(2)
-    exported = run(
-        sys.executable, "-m", "coverage", "json", f"--data-file={data}", "--show-contexts",
-        "-o", str(report),
-    )  # fmt: skip
-    if exported.returncode != 0:
-        print(exported.stderr, file=sys.stderr)
-        raise SystemExit(2)
+    for kind, target in (("json", report), ("lcov", LCOV)):
+        extra = ["--show-contexts"] if kind == "json" else []
+        exported = run(
+            sys.executable, "-m", "coverage", kind, f"--data-file={data}", *extra, "-o", str(target)
+        )  # fmt: skip
+        if exported.returncode != 0:
+            print(exported.stderr, file=sys.stderr)
+            raise SystemExit(2)
 
 
 def ordered(source: str, tests: set[str]) -> list[str]:
@@ -154,7 +160,7 @@ def function_at(source: Path, line: int) -> str:
 
 
 def mutate(
-    file: str, tests: list[str], engine: Path, workers: int
+    file: str, tests: list[str], engine: Path, workers: int, *, fresh: bool = False
 ) -> tuple[int, list[str], list[str]]:
     skipped = " ".join(f"--deselect {name}" for name in settings().get("deselect", []))
     # --timeout: a mutant that loops forever fails its test in seconds, instead of the engine
@@ -162,8 +168,8 @@ def mutate(
     base = f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 --timeout={TEST_TIMEOUT}"
     command = f"{base} {skipped} {' '.join(tests)}"
     done = run(
-        str(engine), "--no-coverage", "--mutate-all", "--max-workers", str(workers),
-        "--test-command", command, file, env=FAST,
+        str(engine), "--use-existing-coverage", *(["--mutate-all"] if fresh else []),
+        "--max-workers", str(workers), "--test-command", command, file, env=FAST,
     )  # fmt: skip
     survived, uncovered = [], []
     for text in done.stdout.splitlines():
@@ -217,6 +223,9 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--reuse-coverage", action="store_true")
     parser.add_argument("--skip-canary", action="store_true")
+    parser.add_argument(
+        "--fresh", action="store_true", help="run every mutant again, ignoring the snapshot"
+    )
     args = parser.parse_args()
     files = args.files or (all_sources() if args.all else changed_sources())
     if not files:
@@ -231,16 +240,19 @@ def main() -> int:
     tests_of = record_coverage(args.reuse_coverage)
     print(f"coverage by test: {time.monotonic() - started:.0f}s")
     allowed = suppressions()
-    survivors = 0
-    for file in files:
+    survivors, unreached = 0, 0
+    for number, file in enumerate(files, start=1):
         tests = tests_of.get(file)
         if not tests:
             print(f"{file}: no test runs it, so no mutant can be judged")
             survivors += 1
             continue
         started = time.monotonic()
-        code, survived, uncovered = mutate(file, tests, Path(args.engine), args.workers)
-        print(f"{file}: {len(tests)} test file(s), {time.monotonic() - started:.0f}s")
+        code, survived, uncovered = mutate(
+            file, tests, Path(args.engine), args.workers, fresh=args.fresh
+        )
+        took = time.monotonic() - started
+        print(f"[{number}/{len(files)}] {file}: {len(tests)} test file(s), {took:.0f}s", flush=True)
         if code == 2:
             print(f"{file}: the tests fail before any mutation")
             return 2
@@ -256,11 +268,14 @@ def main() -> int:
                 print(f"SURVIVED {entry}  [{function}]")
                 survivors += 1
         if uncovered:
-            print(f"{file}: {len(uncovered)} mutant(s) on lines no test runs")
+            unreached += len(uncovered)
+            print(f"{file}: {len(uncovered)} site(s) on lines no test runs (not run)")
     print(
         "mutation: "
         + ("all mutants killed or suppressed" if not survivors else f"{survivors} survived")
     )
+    if unreached:
+        print(f"{unreached} site(s) on lines no test runs: write a test, or the code is not needed")
     return 3 if survivors else 0
 
 
