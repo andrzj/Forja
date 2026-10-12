@@ -95,3 +95,11 @@ def test_lint_runs_and_returns_the_exit_code_of_the_tool(
     assert run_facade(["lint", "ok.py"], tmp_path, {}) == 0
     assert run_facade(["lint", "bad.py"], tmp_path, {}) != 0
     assert "F401" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("what", ["git", "bash", "rm", "testar; git status", "--help"])
+def test_the_facade_does_not_run_git_or_anything_it_does_not_name(
+    what: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run_facade([what], tmp_path, {}) == 2
+    assert "uso:" in capsys.readouterr().out

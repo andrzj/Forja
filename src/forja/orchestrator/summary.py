@@ -9,8 +9,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from forja.core.artifacts.schemas import ExecutionSummaryBody, TaskOutcome, TaskOutcomeKind
+from forja.core.confirmation import ConfirmationError, load_confirmation
 from forja.core.events.state import RunState
 from forja.core.events.versioning import BadLine, parse_line
+from forja.core.isolation import Context, Guarantee, Status
 from forja.core.states import AttemptState, Level, TaskState
 from forja.orchestrator.config import RunConfig
 
@@ -137,6 +139,10 @@ def render_summary(
         "",
         *_metrics(facts),
         "",
+        "## Ambiente e garantias",
+        "",
+        *_environment(state, config),
+        "",
         "## Para publicar",
         "",
         f"A Forja não faz push. Se aprovar o resultado: `git push -u <remoto> {run_branch}`.",
@@ -144,6 +150,44 @@ def render_summary(
         "",
     ]
     return "\n".join(lines)
+
+
+GUARANTEE_TEXT = {
+    Guarantee.FILTERED_ENVIRONMENT: "ambiente filtrado para a CLI do agente",
+    Guarantee.SENSITIVE_FILES_ABSENT: "arquivos sensíveis ausentes da cópia do agente",
+    Guarantee.NO_DOT_GIT_IN_COPY: "cópia do agente sem `.git`",
+    Guarantee.PROCESS_TREE_CONTAINED: "processos presos à Forja (não sobrevivem a ela)",
+    Guarantee.NO_GIT_AVAILABLE: "uso de git em outro caminho",
+    Guarantee.READ_RESTRICTED_TO_WORKCOPY: "leitura fora da cópia por código executado",
+    Guarantee.NETWORK_ALLOWLIST: "acesso à rede",
+    Guarantee.NO_SECRETS: "segredos do ambiente do usuário",
+}
+STATUS_TEXT = {
+    Status.ENFORCED: "a Forja impôs",
+    Status.DETECTED_ONLY: "a Forja só detecta (git conferido antes e depois de cada chamada)",
+    Status.ENVIRONMENT: "ficou por conta do ambiente em que a Forja rodou",
+}
+
+
+def _environment(state: RunState, config: RunConfig) -> list[str]:
+    """What the Forja imposed, what it only noticed and what it left to the environment."""
+    try:
+        record = load_confirmation(state).isolation
+    except ConfirmationError:
+        return ["Não registrado."]
+    declared = record.declaration()[Context.AGENT]
+    lines = [
+        "A Forja rodou no terminal do usuário e não cria sandbox: a infraestrutura e as "
+        "permissões em volta são do usuário ou da empresa.",
+        "",
+    ]
+    for status in (Status.ENFORCED, Status.DETECTED_ONLY, Status.ENVIRONMENT):
+        for guarantee in Guarantee:
+            if declared[guarantee] is status:
+                lines.append(f"- {GUARANTEE_TEXT[guarantee]}: {STATUS_TEXT[status]}.")
+    tests = "pôde" if config.agent_runs_tests else "não pôde"
+    lines += ["", f"O agente {tests} rodar os testes do projeto (`forja agente testar`)."]
+    return lines
 
 
 def _premises(facts: Facts) -> list[str]:

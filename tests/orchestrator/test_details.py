@@ -414,6 +414,24 @@ def test_the_summary_says_everything_in_this_order(world: MemoryWorld) -> None:
             "| b | 2.5 | 2 |",
             "| c | - | 3 |",
             "",
+            "## Ambiente e garantias",
+            "",
+            "A Forja rodou no terminal do usuário e não cria sandbox: a infraestrutura e as "
+            "permissões em volta são do usuário ou da empresa.",
+            "",
+            "- cópia do agente sem `.git`: a Forja impôs.",
+            "- arquivos sensíveis ausentes da cópia do agente: a Forja impôs.",
+            "- ambiente filtrado para a CLI do agente: a Forja impôs.",
+            "- processos presos à Forja (não sobrevivem a ela): a Forja impôs.",
+            "- uso de git em outro caminho: a Forja só detecta (git conferido antes e depois de "
+            "cada chamada).",
+            "- leitura fora da cópia por código executado: ficou por conta do ambiente em que a "
+            "Forja rodou.",
+            "- acesso à rede: ficou por conta do ambiente em que a Forja rodou.",
+            "- segredos do ambiente do usuário: ficou por conta do ambiente em que a Forja rodou.",
+            "",
+            "O agente pôde rodar os testes do projeto (`forja agente testar`).",
+            "",
             "## Para publicar",
             "",
             "A Forja não faz push. Se aprovar o resultado: "

@@ -174,7 +174,11 @@ class TaskCycle:
                 payload={"reason": result.reason[:REASON_LIMIT]},
             )
             if differences:
-                self._reject(attempt, "git changed while the agent ran: " + "; ".join(differences))
+                reason = "git changed while the agent ran: " + "; ".join(differences)
+                self._reject(attempt, reason)
+                # the repository was touched outside the contract: more attempts would start from
+                # a state nobody approved, so the run stops and says why
+                raise StopRun(reason[:REASON_LIMIT])
 
         if self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.VALIDATING:
             await self._judge(ctx)

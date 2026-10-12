@@ -12,6 +12,7 @@ import re
 import shutil
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,7 @@ from forja.core.idempotency import (
     reconcile_apply_diff,
     reconcile_prepare_workcopy,
 )
-from forja.core.isolation import SensitivePaths
+from forja.core.isolation import SensitivePaths, git_blocking_environment
 from forja.core.manifest import (
     EntryKind,
     Manifest,
@@ -301,6 +302,9 @@ class ExecutorAgentRunner:
         )
         setup = self._adapter.permission_setup(self._role, self._permissions)
         plan = self._adapter.plan_invocation(request, setup, self._executable)
+        # git must fail in the copy even if a repository lies above it (contract 3)
+        blocking = git_blocking_environment(workcopy)
+        plan = replace(plan, env_set={**plan.env_set, **blocking})
         spec = build_spec(plan, self._env, timeout=None)
         watch = Watch(sink, self._log, ctx, self._adapter, self._clock)
         log_path = ctx.worktree.parent / f"{operation_id}.log"

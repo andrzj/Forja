@@ -10,7 +10,9 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -104,6 +106,7 @@ def whole_run(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     written: str,
+    extra: Callable[[Path], dict[str, Any]] | None = None,
 ) -> Outcome:
     """Run ``forja refatorar`` unattended, the stand-in agent writing ``written``."""
     repo = make_repo(tmp_path)
@@ -117,6 +120,7 @@ def whole_run(
                 "writes": {"src/pkg/mod.py": written},
                 "saida": DECLARED,
                 "lines": [json.dumps(USAGE)],
+                **(extra(repo) if extra else {}),
             }
         ),
         encoding="utf-8",

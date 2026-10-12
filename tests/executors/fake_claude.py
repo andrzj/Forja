@@ -4,6 +4,7 @@ print lines, wait, exit. The script is named by FAKE_CLAUDE_SCRIPT.
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -25,6 +26,12 @@ if "saida" in script:
     text = saida if isinstance(saida, str) else json.dumps(saida)
     Path(".forja-agent").mkdir(exist_ok=True)
     Path(".forja-agent/saida.json").write_text(text, encoding="utf-8")
+ran = []
+for item in script.get("run", []):
+    done = subprocess.run(item["cmd"], capture_output=True, text=True, check=False)
+    ran.append({"cmd": item["cmd"], "code": done.returncode, "out": done.stdout + done.stderr})
+if "run" in script:
+    Path(script["ran"]).write_text(json.dumps(ran), encoding="utf-8")
 for text in script.get("lines", []):
     print(text, flush=True)
 if script.get("stderr"):
