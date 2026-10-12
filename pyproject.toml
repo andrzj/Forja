@@ -49,7 +49,10 @@ markers = [
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["scripts/medicao/repos"]  # the experiment's repositories: data, not code
+extend-exclude = [
+    "scripts/medicao/repos",  # the experiment's repositories: data, not code
+    "scripts/medicao/defeitos",  # repositories with planted defects and deliberately bad tests
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,0 +1,22 @@
+{
+  "criteria": [
+    {
+      "id": 1,
+      "text": "A run of characters that are not letters or digits becomes a single hyphen.",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 2,
+      "text": "The slug never starts with a hyphen.",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 3,
+      "text": "The slug never ends with a hyphen.",
+      "level": "unit",
+      "origin": "task description"
+    }
+  ]
+}

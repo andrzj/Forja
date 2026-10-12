@@ -1,0 +1,22 @@
+{
+  "criteria": [
+    {
+      "id": 1,
+      "text": "Page 1 returns the first `size` items.",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 2,
+      "text": "The last page returns the remaining items and may be shorter than `size`.",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 3,
+      "text": "The concatenation of all pages, in order, is exactly the original list.",
+      "level": "unit",
+      "origin": "task description"
+    }
+  ]
+}

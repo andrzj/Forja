@@ -1,0 +1,1 @@
+paginate(items, page, size) returns the items of one page. Pages are numbered from 1, but page 1 returns the wrong items: the pages are shifted by one.

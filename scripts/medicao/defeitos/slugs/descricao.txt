@@ -1,0 +1,1 @@
+slugify(text) turns text into a URL slug. Every character that is not a letter or a digit becomes a hyphen, so runs of separators give several hyphens and the slug can start or end with one.

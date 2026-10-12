@@ -1,0 +1,1 @@
+split(total_cents, parts) divides an amount in cents into `parts` shares. The remainder of the division is lost, so the shares do not add up to the total.

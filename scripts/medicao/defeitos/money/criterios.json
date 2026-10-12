@@ -1,0 +1,22 @@
+{
+  "criteria": [
+    {
+      "id": 1,
+      "text": "The shares always add up to the total.",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 2,
+      "text": "A total smaller than the number of parts is still kept: split(2, 3) is [1, 1, 0].",
+      "level": "unit",
+      "origin": "task description"
+    },
+    {
+      "id": 3,
+      "text": "The extra cents go to the first shares: split(10, 3) is [4, 3, 3].",
+      "level": "unit",
+      "origin": "task description"
+    }
+  ]
+}
