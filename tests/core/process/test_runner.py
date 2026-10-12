@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from forja.core.events.models import canonical_json
 from forja.core.process import Outcome, ProcessIdentity, ProcessRunner, ProcessSpec
+from forja.core.process.runner import command_for_log
 from tests.core.process.support import (
     RecordingSink,
     minimal_env,
@@ -185,3 +187,29 @@ def test_command_is_never_run_through_a_shell(tmp_path: Path) -> None:
     _, sink = run_to_end(process_spec, tmp_path / "op.log")
 
     assert sink.lines("out") == ["['a b', '&& echo injected']"]
+
+
+# -- a command too long for an event ----------------------------------------------------------
+
+
+def test_a_short_command_is_logged_whole() -> None:
+    assert command_for_log(["python", "-m", "pytest"]) == ["python", "-m", "pytest"]
+
+
+def test_a_command_naming_hundreds_of_files_fits_in_an_event_and_says_what_was_left_out() -> None:
+    files = [f"src/forja/some/deep/package/module_number_{n}.py" for n in range(400)]
+    command = ["lizard", "--csv", *files]
+
+    logged = command_for_log(command)
+
+    assert logged[:3] == ["lizard", "--csv", files[0]]
+    assert len(canonical_json(logged)) < 4096
+    assert "more arguments, sha256 " in logged[-1]
+    assert command_for_log(command) == logged
+    assert command_for_log([*command, "one-more.py"]) != logged
+
+
+def test_one_huge_argument_is_shortened() -> None:
+    logged = command_for_log(["python", "-c", "x" * 10_000])
+
+    assert len(logged[2]) < 400 and logged[2].endswith("...")

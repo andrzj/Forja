@@ -1,8 +1,9 @@
 import asyncio
 import contextlib
+import hashlib
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
@@ -24,6 +25,34 @@ async def _exited(proc: asyncio.subprocess.Process) -> None:
     """
     while proc.returncode is None:
         await asyncio.sleep(_POLL)
+
+
+COMMAND_LOG_BUDGET = 1800  # bytes of the command kept in an event; the limit of an event is 4096
+ARGUMENT_LOG_LIMIT = 300
+
+
+def command_for_log(command: Sequence[str]) -> list[str]:
+    """The command as an event records it: whole when it fits, otherwise its start and a count.
+
+    A command that names every file of a large repository does not fit in an event. The start
+    says what ran, and a hash of the whole line tells two different long commands apart.
+    """
+    whole = [
+        arg if len(arg) <= ARGUMENT_LOG_LIMIT else arg[:ARGUMENT_LOG_LIMIT] + "..."
+        for arg in command
+    ]
+    if sum(len(arg) + 4 for arg in whole) <= COMMAND_LOG_BUDGET and whole == list(command):
+        return whole
+    kept: list[str] = []
+    used = 0
+    for arg in whole:
+        if used + len(arg) + 4 > COMMAND_LOG_BUDGET:
+            break
+        kept.append(arg)
+        used += len(arg) + 4
+    digest = hashlib.sha256(chr(0).join(command).encode("utf-8", "replace")).hexdigest()[:16]
+    kept.append(f"... ({len(command) - len(kept)} more arguments, sha256 {digest})")
+    return kept
 
 
 class ProcessRunner:
@@ -55,7 +84,7 @@ class ProcessRunner:
         self._sink.intent(
             operation_id,
             {
-                "command": list(spec.command),
+                "command": command_for_log(spec.command),
                 "cwd": str(spec.cwd),
                 "env_names": sorted(spec.env),
                 "timeout": spec.timeout,
