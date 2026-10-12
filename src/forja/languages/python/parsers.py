@@ -110,19 +110,7 @@ def parse_tests(output: ToolOutput) -> ParseResult:
         return Parsed((_draft("test.collected", TargetKind.MODULE, "tests", 0, "tests"),))
     if code not in (0, 1, 2):
         return Unparseable(f"pytest ended with {code}")
-    outcomes: dict[str, str] = {}
-    skipped = 0
-    lines = _lines(output)
-    # what a test prints while it runs comes before the summary; only the summary is the verdict
-    summary = [i for i, line in enumerate(lines) if _SUMMARY.match(line)]
-    for line in lines[summary[-1] + 1 :] if summary else lines:
-        found = _TEST_LINE.match(line)
-        if found:
-            outcomes[found["id"]] = found["outcome"].lower()
-            continue
-        counted = _SKIPPED.match(line)
-        if counted:
-            skipped += int(counted["count"])
+    outcomes, skipped = _scan_tests(_summary_lines(_lines(output)))
     drafts = [
         _draft("test.outcome", TargetKind.SYMBOL, test_id, outcome, "outcome")
         for test_id, outcome in sorted(outcomes.items())
@@ -135,3 +123,23 @@ def parse_tests(output: ToolOutput) -> ParseResult:
     if code == 0 and failed:
         return Unparseable("pytest passed but its output lists failures")
     return Parsed(tuple(drafts))
+
+
+def _summary_lines(lines: list[str]) -> list[str]:
+    # what a test prints while it runs comes before the summary; only the summary is the verdict
+    summary = [i for i, line in enumerate(lines) if _SUMMARY.match(line)]
+    return lines[summary[-1] + 1 :] if summary else lines
+
+
+def _scan_tests(lines: list[str]) -> tuple[dict[str, str], int]:
+    outcomes: dict[str, str] = {}
+    skipped = 0
+    for line in lines:
+        found = _TEST_LINE.match(line)
+        if found:
+            outcomes[found["id"]] = found["outcome"].lower()
+            continue
+        counted = _SKIPPED.match(line)
+        if counted:
+            skipped += int(counted["count"])
+    return outcomes, skipped
