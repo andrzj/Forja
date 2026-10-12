@@ -49,6 +49,7 @@ markers = [
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["scripts/medicao/repos"]  # the experiment's repositories: data, not code
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
