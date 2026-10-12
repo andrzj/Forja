@@ -69,6 +69,15 @@ def remove_tree(path: Path) -> None:
         shutil.rmtree(path, onexc=writable)
 
 
+def clear_unfinished(repo: Path) -> None:
+    """Forja refuses a second run on a repository that has an incomplete one: end those first."""
+    from forja.cli.resume import discard, find_unfinished  # noqa: PLC0415
+    from forja.core.paths import forja_home  # noqa: PLC0415
+
+    for leftover in find_unfinished(forja_home(), repo):
+        discard(leftover.directory)
+
+
 class InvalidRun(Exception):
     """The run did not measure the arm: the account hit its limit or the CLI never started."""
 
@@ -162,6 +171,7 @@ def arm_b(
         'tema = ""\nascii = false\nredimensionar = false\n',
         encoding="utf-8",
     )
+    clear_unfinished(repo)
     started = time.monotonic()
     try:
         done = subprocess.run(
@@ -173,6 +183,7 @@ def arm_b(
     except subprocess.TimeoutExpired as error:
         code, text = 124, str(error.stdout or "")
     seconds = time.monotonic() - started
+    clear_unfinished(repo)  # a run that paused must not block the next one
     (out / "forja-output.txt").write_text(text, encoding="utf-8")
     branch = re.search(r"forja-run/[0-9a-f]+", text)
     summary = re.search(r"summary in (\S.*?resumo\.md)", text) or re.search(
@@ -214,6 +225,9 @@ def one(name: str, arm: str, rep: int, tokens: int = DEFAULT_TOKENS) -> dict[str
     signs = " ".join(str(info.get(key, "")) for key in ("cli_error",)).lower()
     if arm == "B":
         signs += (out / "forja-output.txt").read_text(encoding="utf-8").lower()
+    if arm == "B" and info.get("exit_code") == 2:  # the Forja did not even start
+        remove_tree(out)
+        raise InvalidRun(f"{name} {arm}{rep}: the Forja could not start")
     if any(sign in signs for sign in LIMIT_SIGNS):
         remove_tree(out)
         raise InvalidRun(
