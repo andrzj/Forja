@@ -12,7 +12,13 @@ from typing import Any
 import pytest
 
 from forja.core.adapters.common import CommandPlan
-from forja.core.adapters.executor import AgentRequest, ErrorKind, PermissionSetup, RolePermissions
+from forja.core.adapters.executor import (
+    AgentRequest,
+    ErrorKind,
+    PermissionSetup,
+    RolePermissions,
+    UsageActivity,
+)
 from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog, OpenOperation
 from forja.core.idempotency import Decision
@@ -22,7 +28,9 @@ from forja.executors import ClaudeCodeAdapter
 from forja.orchestrator.agent_runner import (
     PACKAGE,
     ExecutorAgentRunner,
+    _payload,
     _refuse_links_on_the_way,
+    _wipe,
     touches_git,
     workcopy_of,
 )
@@ -165,6 +173,8 @@ def test_the_cli_is_called_in_the_copy_with_the_package_on_stdin(tmp_path: Path)
     assert Path(recorded["cwd"]).resolve() == r.workcopy.resolve()
     assert "reduce the complexity of f" in recorded["stdin"]
     assert "--tools" in recorded["argv"]
+    tools = recorded["argv"][recorded["argv"].index("--tools") + 1].split(",")
+    assert "Edit" in tools  # a runner built without permissions may edit files
     assert "PATH" in recorded["env"] and "NO_COLOR" in recorded["env"]
 
 
@@ -220,6 +230,39 @@ def test_a_cli_that_goes_quiet_is_ended_and_reported(tmp_path: Path) -> None:
     assert "printed nothing" in result.error.message
 
 
+def test_a_usage_report_without_counts_is_counted_as_zero() -> None:
+    assert _payload(UsageActivity(None, None)) == {"type": "usage", "input": 0, "output": 0}
+    assert _payload(UsageActivity(7, 3)) == {"type": "usage", "input": 7, "output": 3}
+
+
+def test_a_cli_that_prints_something_is_never_called_quiet_however_late_the_clock_is(
+    tmp_path: Path,
+) -> None:
+    ticks = iter(range(0, 10**9, 1000))
+    r = rig(tmp_path, GOOD, idle_limit=5.0, poll=30.0, clock=lambda: float(next(ticks)))
+
+    result = go(work(r))
+
+    assert result == AgentResult(reason="the name says what it does")
+
+
+def test_a_cli_is_quiet_only_when_the_silence_is_longer_than_the_limit(tmp_path: Path) -> None:
+    # the clock does not move: the silence is 0 seconds, which is not longer than 0
+    r = rig(tmp_path, {**GOOD, "sleep": 1}, idle_limit=0.0, poll=0.05, clock=lambda: 100.0)
+
+    assert go(work(r)) == AgentResult(reason="the name says what it does")
+
+
+def test_a_cli_that_goes_quiet_is_ended_and_nothing_is_left_running(tmp_path: Path) -> None:
+    r = rig(tmp_path, {"sleep": 60}, idle_limit=0.4, poll=0.05)
+
+    async def scenario() -> list[asyncio.Task[Any]]:
+        await work(r)
+        return [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+    assert go(scenario()) == []
+
+
 # -- the way back ----------------------------------------------------------------------------------
 
 
@@ -232,6 +275,44 @@ def test_the_work_comes_back_when_it_was_declared_and_nothing_else_does(tmp_path
     assert (r.ctx.worktree / "src" / "a.py").read_text("utf-8") == AFTER
     assert not (r.ctx.worktree / ".forja-agent").exists()
     assert (r.ctx.worktree / ".git" / "HEAD").is_file()
+
+
+def test_a_file_the_agent_removed_is_removed_from_the_worktree_too(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    (r.ctx.worktree / "src" / "sub").mkdir()
+    (r.ctx.worktree / "src" / "sub" / "b.py").write_text("x = 1\n", encoding="utf-8")
+    go(work(r))
+    (r.workcopy / "src" / "sub" / "b.py").unlink()
+    (r.workcopy / "src" / "a.py").unlink()
+    files = [
+        {"path": "src/a.py", "change": "removed"},
+        {"path": "src/sub/b.py", "change": "removed"},
+    ]
+    declared = {"actions": [{"summary": "s", "reason": "r", "files": files}]}
+    (r.workcopy / ".forja-agent" / "saida.json").write_text(json.dumps(declared), encoding="utf-8")
+
+    go(settle(r.runner.apply_diff(r.ctx)))
+
+    assert not (r.ctx.worktree / "src" / "a.py").exists()
+    assert not (r.ctx.worktree / "src" / "sub" / "b.py").exists()
+    assert (r.ctx.worktree / ".git" / "HEAD").is_file()
+
+
+def test_clearing_a_directory_does_not_go_into_a_link_to_another(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "x.txt").write_text("not ours\n", encoding="utf-8")
+    root = tmp_path / "root"
+    root.mkdir()
+    try:
+        (root / "link").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks need a privilege here")
+
+    _wipe(root, frozenset())
+
+    assert list(root.iterdir()) == []
+    assert (outside / "x.txt").is_file()
 
 
 def test_work_that_was_not_declared_is_rejected_with_both_sides(tmp_path: Path) -> None:
@@ -540,6 +621,8 @@ def test_a_link_on_the_way_stops_the_copy_even_if_everything_before_missed_it(
     with pytest.raises(RuntimeError, match="through a link"):
         _refuse_links_on_the_way(tmp_path / "wt", "link/x.txt")
     _refuse_links_on_the_way(tmp_path / "wt", "other/x.txt")
+    with pytest.raises(RuntimeError, match="through a link"):
+        _refuse_links_on_the_way(tmp_path / "wt", "link")  # the last part counts too
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="junctions exist on Windows")

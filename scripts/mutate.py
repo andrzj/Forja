@@ -38,7 +38,9 @@ LCOV = COVERAGE / "lcov.info"  # where the engine looks for the coverage of a Py
 OUTCOME = re.compile(
     r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
 )
-FAST = {"FORJA_FAST": "1"}
+# The integration tests run too: without them the code they alone reach (the call to the agent CLI,
+# the way back) counts as untested. Each file only runs the test files that reach it.
+TESTS_ENV: dict[str, str] = {}
 TEST_TIMEOUT = 30  # seconds for one test; the slowest of the project takes a few
 
 
@@ -93,7 +95,7 @@ def measure_coverage(data: Path, report: Path) -> None:
     tested = run(
         sys.executable, "-m", "coverage", "run", f"--data-file={data}", "-m", "pytest", "-q",
         "-p", "no:cacheprovider", "--no-header", "-n0", "-m", "not slow", *deselected(), "tests",
-        env=FAST,
+        env=TESTS_ENV,
     )  # fmt: skip
     if tested.returncode != 0:
         print(tested.stdout[-3000:], file=sys.stderr)
@@ -231,7 +233,7 @@ def mutate(
     command = f"{base} {skipped} {' '.join(tests)}"
     done = run(
         str(engine), "--use-existing-coverage", *(["--mutate-all"] if fresh else []),
-        "--max-workers", str(workers), "--test-command", command, file, env=FAST,
+        "--max-workers", str(workers), "--test-command", command, file, env=TESTS_ENV,
     )  # fmt: skip
     survived, uncovered = [], []
     for text in done.stdout.splitlines():
@@ -266,7 +268,7 @@ def canary(engine: Path) -> bool:
             )
             done = run(
                 str(engine), "--no-coverage", "--mutate-all", "--test-command", command,
-                "src/canary.py", cwd=root, env=FAST,
+                "src/canary.py", cwd=root, env=TESTS_ENV,
             )  # fmt: skip
             results[kind] = (done.returncode, done.stdout.count("SURVIVED"))
     return results["loose"][1] >= 1 and results["tight"] == (0, 0)

@@ -83,3 +83,19 @@ def test_a_fence_is_longer_than_any_run_of_backticks_inside() -> None:
     assert _fence("plain") == "```"
     assert _fence("a ``` b") == "````"
     assert _fence("a ```` b") == "`````"
+
+
+def test_the_agent_is_told_it_cannot_run_commands_unless_the_facade_is_on(tmp_path: Path) -> None:
+    plain = build_package(context(tmp_path, ("src/a.py",)), Redactor())
+    facade = build_package(context(tmp_path, ("src/a.py",)), Redactor(), facade=True)
+
+    assert "You cannot run commands. " in plain and "forja agente" not in plain
+    assert "except exactly `forja agente lint`" in facade
+
+
+def test_the_files_section_is_there_for_files_and_for_directories_and_only_then(
+    tmp_path: Path,
+) -> None:
+    assert "## Files in scope" in package(tmp_path)
+    assert "## Files in scope" in package(tmp_path, ("src",))
+    assert "## Files in scope" not in package(tmp_path, ())
