@@ -36,9 +36,10 @@ class Execucao(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    objetivo: Literal["refatorar"] = "refatorar"
+    objetivo: Literal["refatorar", "corrigir"] = "refatorar"
     descricao: str = ""
     arquivo: str = ""
+    criterios: str = ""  # corrigir: the criteria file (CriteriaBody as JSON)
     cli: str = ""
     executavel: str = ""
     escopo: list[str] = Field(default_factory=list)

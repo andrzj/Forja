@@ -33,7 +33,7 @@ from forja.executors import ClaudeCodeAdapter
 from forja.languages.python import PythonAdapter
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
-from forja.orchestrator.config import RunConfig, load_config
+from forja.orchestrator.config import FixRequest, RunConfig, load_config
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
 from forja.orchestrator.phases import confirm_run
@@ -143,13 +143,15 @@ def new_config(
     agent_runs_tests: bool = True,
     tasks: int = 5,
     policy_version: str = POLICY_VERSION,
+    fix: FixRequest | None = None,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
 
     return RunConfig(
         repo=str(repo),
         base_commit=base_commit,
-        objective=Objective.REFACTOR,
+        objective=Objective.REFACTOR if fix is None else Objective.FIX,
+        fix=fix,
         implementer=ExecutorRef(
             name=executor_name, path=str(executor_path), version=executor_version
         ),

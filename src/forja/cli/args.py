@@ -26,6 +26,7 @@ class Arguments:
     command: str = ""  # "", a verb, "doctor" or "agente"
     text: str = ""
     file: Path | None = None
+    criteria: Path | None = None
     scope: tuple[str, ...] = ()
     cli: str = ""
     plan_only: bool = False
@@ -50,6 +51,10 @@ def parser() -> argparse.ArgumentParser:
         item = sub.add_parser(verb, help=help_text)
         item.add_argument("texto", nargs="?", default="", help="descrição, se o comando pedir")
         item.add_argument("-f", "--arquivo", type=Path, help="ler a descrição deste arquivo")
+        if verb == "corrigir":
+            item.add_argument(
+                "--criterios", type=Path, metavar="ARQUIVO", help="critérios (JSON) do conserto"
+            )
         item.add_argument("--escopo", action="append", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--cli", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--plano", action="store_true", default=argparse.SUPPRESS)
@@ -68,6 +73,7 @@ def parse(argv: list[str] | None = None) -> Arguments:
         command=command,
         text=getattr(found, "texto", "") or "",
         file=getattr(found, "arquivo", None),
+        criteria=getattr(found, "criterios", None),
         scope=tuple(found.escopo or ()),
         cli=found.cli or "",
         plan_only=bool(found.plano),

@@ -5,10 +5,12 @@ The isolation levels keep living in the core's ``Confirmation``; this adds the r
 """
 
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, model_validator
 
 from forja.core.artifacts.models import NonEmpty
+from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import Confirmation, ConfirmationError, confirmation_payload
 from forja.core.events.state import RunState
 from forja.core.states import ExecutionState, Level
@@ -16,6 +18,7 @@ from forja.core.states import ExecutionState, Level
 
 class Objective(StrEnum):
     REFACTOR = "refactor"
+    FIX = "fix"
 
 
 class ExecutorRef(BaseModel):
@@ -26,6 +29,15 @@ class ExecutorRef(BaseModel):
     name: NonEmpty
     path: NonEmpty
     version: NonEmpty
+
+
+class FixRequest(BaseModel):
+    """What a fix is asked to do: the defect in words and the criteria its tests must cover."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    description: NonEmpty
+    criteria: CriteriaBody
 
 
 class Budget(BaseModel):
@@ -48,11 +60,19 @@ class RunConfig(BaseModel):
     base_commit: NonEmpty
     objective: Objective
     implementer: ExecutorRef
+    test_author: ExecutorRef | None = None  # None: the implementer's executor writes the tests too
+    fix: FixRequest | None = None  # what to fix; present exactly when the objective is FIX
     budget: Budget = Budget()
     forja_version: NonEmpty
     policy_version: NonEmpty
     agent_runs_tests: bool = True  # the agent may call `forja agente testar` in its copy
     scope: tuple[str, ...] = ()  # only code under these paths is planned; empty is all of it
+
+    @model_validator(mode="after")
+    def _fix_goes_with_the_fix_objective(self) -> Self:
+        if (self.objective is Objective.FIX) != (self.fix is not None):
+            raise ValueError("a fix request is required for, and only for, the fix objective")
+        return self
 
 
 def confirmed_payload(config: RunConfig, confirmation: Confirmation) -> dict[str, JsonValue]:

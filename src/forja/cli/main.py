@@ -33,6 +33,7 @@ from forja.cli.settings import (
 from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
 from forja.core.policy.config import PolicyConfigError
+from forja.orchestrator.config import Objective
 from forja.orchestrator.outcome import ExitCode
 from forja.ui import terminal
 from forja.ui.full import FullRenderer
@@ -149,6 +150,8 @@ async def start(
         for line in prepared.summary:
             console.say(line)
         return 0
+    if prepared.config.objective is Objective.FIX:  # until the two-stage task exists (3a, step 4)
+        raise Refused("`forja corrigir` já prepara o conserto, mas ainda não o executa.")
     if not confirmed(console, prepared, automatic=automatic):
         console.say("Cancelado. Nada foi alterado.")
         return 0

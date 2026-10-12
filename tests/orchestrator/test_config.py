@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import (
     Confirmation,
     ConfirmationError,
@@ -15,6 +16,7 @@ from forja.core.states import ExecutionState, Level
 from forja.orchestrator.config import (
     Budget,
     ExecutorRef,
+    FixRequest,
     Objective,
     RunConfig,
     confirmed_payload,
@@ -140,3 +142,43 @@ def test_the_exit_code_follows_the_state_the_run_was_left_in(
 
 def test_the_codes_are_the_ones_the_users_scripts_can_rely_on() -> None:
     assert [int(c) for c in ExitCode] == [0, 1, 2, 3, 4, 130]
+
+
+FIX = FixRequest(
+    description="page 1 returns the wrong items",
+    criteria=CriteriaBody.model_validate(
+        {"criteria": [{"id": 1, "text": "t", "level": "unit", "origin": "task description"}]}
+    ),
+)
+
+
+def test_a_fix_run_carries_what_to_fix_and_reads_back() -> None:
+    config = CONFIG.model_copy(update={"objective": Objective.FIX, "fix": FIX})
+
+    assert RunConfig.model_validate(config.model_dump(mode="json")) == config
+
+
+def test_a_fix_objective_without_a_request_is_refused() -> None:
+    with pytest.raises(ValidationError, match="fix request"):
+        RunConfig(**{**CONFIG.model_dump(), "objective": Objective.FIX})
+
+
+def test_a_request_to_fix_on_a_refactoring_is_refused() -> None:
+    with pytest.raises(ValidationError, match="fix request"):
+        RunConfig(**{**CONFIG.model_dump(), "fix": FIX.model_dump()})
+
+
+def test_a_fix_without_a_description_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        FixRequest(description="", criteria=FIX.criteria)
+
+
+def test_the_test_author_is_optional_and_an_old_config_still_reads() -> None:
+    assert CONFIG.test_author is None
+    old = {
+        k: v for k, v in CONFIG.model_dump(mode="json").items() if k not in ("test_author", "fix")
+    }
+
+    assert RunConfig.model_validate(old) == CONFIG
+    author = ExecutorRef(name="claude-code", path="/usr/bin/claude", version="2.1.0")
+    assert CONFIG.model_copy(update={"test_author": author}).test_author == author

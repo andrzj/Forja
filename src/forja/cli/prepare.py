@@ -9,18 +9,22 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
 from forja.cli.session import new_config, policy_digest, repo_policy, standard_settings
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
+from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
 from forja.executors.probe import executable_version, run_probe, version_problem
-from forja.orchestrator.config import RunConfig
+from forja.orchestrator.config import FixRequest, Objective, RunConfig
 
-AVAILABLE = frozenset({"refatorar"})
+AVAILABLE = frozenset({"refatorar", "corrigir"})
+CRITERIA_FILE = "criterios.json"
 LOW_DISK_GIB = 2.0
 
 
@@ -54,6 +58,45 @@ def objective_of(args: Arguments, saved: Execucao | None, console: Console) -> s
     if verb not in AVAILABLE:
         raise Refused(f"`forja {verb}` ainda não está disponível: {VERBS[verb]}.")
     return verb
+
+
+def _read_text(path: Path, what: str) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        reason = error.strerror if isinstance(error, OSError) and error.strerror else "não é UTF-8"
+        raise Refused(f"Não consegui ler {what} ({path}): {reason}.") from None
+
+
+def read_fix(args: Arguments, saved: Execucao | None) -> tuple[FixRequest, str, str]:
+    """The defect and the criteria of ``forja corrigir``, with where each one came from.
+
+    The description is the text on the command line, else the ``-f`` file. The criteria are the
+    ``--criterios`` file, else ``criterios.json`` beside the ``-f`` file. Both come back also
+    as the strings ``execucao.toml`` keeps, so ``--config`` reproduces the run.
+    """
+    file = args.file or (Path(saved.arquivo) if saved and saved.arquivo else None)
+    description = args.text.strip() or (saved.descricao.strip() if saved else "")
+    if not description and file is not None:
+        description = _read_text(file, "a descrição do erro").strip()
+    if not description:
+        raise Refused('Descreva o erro: `forja corrigir "texto"` ou `forja corrigir -f arquivo`.')
+    path = args.criteria or (Path(saved.criterios) if saved and saved.criterios else None)
+    if path is None and file is not None and (file.parent / CRITERIA_FILE).is_file():
+        path = file.parent / CRITERIA_FILE
+    if path is None:
+        raise Refused(
+            "Faltam os critérios do conserto: passe `--criterios arquivo.json` "
+            f"(ou deixe um `{CRITERIA_FILE}` ao lado do arquivo dado em -f). "
+            'Formato: {"criteria": [{"id": 1, "text": "...", "level": "unit", "origin": "..."}]}.'
+        )
+    try:
+        criteria = CriteriaBody.model_validate_json(_read_text(path, "os critérios"))
+    except ValidationError as error:
+        first = error.errors()[0]
+        where = ".".join(str(part) for part in first["loc"]) or "arquivo"
+        raise Refused(f"Os critérios em {path} não servem: {where}: {first['msg']}.") from None
+    return FixRequest(description=description, criteria=criteria), description, str(path.resolve())
 
 
 def check_repository(detection: Detection) -> Path:
@@ -204,9 +247,16 @@ def summary_of(
         if config.agent_runs_tests
         else "o agente não roda os testes; só edita e consulta lint e complexidade"
     )
+    fix = config.fix
+    verb = "corrigir" if config.objective is Objective.FIX else "refatorar"
     return (
-        f"Vou refatorar {detection.repo.name if detection.repo else ''} "
+        f"Vou {verb} {detection.repo.name if detection.repo else ''} "
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
+        *(
+            (f"  erro: {fix.description}", f"  critérios: {len(fix.criteria.criteria)}")
+            if fix
+            else ()
+        ),
         f"  agente: {config.implementer.name} {config.implementer.version}",
         f"  onde: {where}",
         f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
@@ -231,7 +281,8 @@ async def prepare(
     *,
     saved: Execucao | None = None,
 ) -> Prepared:
-    objective_of(args, saved, console)
+    verb = objective_of(args, saved, console)
+    fixing = read_fix(args, saved) if verb == "corrigir" else None
     repo = check_repository(detection)
     try:
         policy = repo_policy(repo)
@@ -251,9 +302,13 @@ async def prepare(
         executor_version=version, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks,
         policy_version=policy_digest(policy),
+        fix=fixing[0] if fixing else None,
     )  # fmt: skip
     lines = summary_of(detection, config, scope, tokens, notes)
     execucao = Execucao(
+        objetivo="corrigir" if fixing else "refatorar",
+        descricao=fixing[1] if fixing else "",
+        criterios=fixing[2] if fixing else "",
         cli=name,
         executavel=str(choice.path),
         escopo=list(scope),
