@@ -113,3 +113,49 @@ def test_what_the_renderer_writes_by_itself_is_ascii() -> None:
     renderer.stop(view)
 
     assert out.getvalue().isascii()
+
+
+def test_a_second_task_is_announced_and_a_second_attempt_of_the_same_task_is_not() -> None:
+    out = io.StringIO()
+    renderer = PlainRenderer(out)
+
+    def step(task: str, attempt: int) -> None:
+        renderer.update(busy(task_id=task, attempt=attempt, feed=(), feed_total=0))
+
+    step("t3", 1)
+    step("t3", 2)
+    step("t4", 1)
+
+    shown = [
+        line.split("] ", 1)[1] for line in lines(out) if "tarefa" in line or "tentativa" in line
+    ]
+    assert shown == [
+        "tarefa 3/5: reduzir a complexidade de calcular_frete (CCN 31)",
+        "tentativa 1/3 de t3",
+        "tentativa 2/3 de t3",
+        "tarefa 3/5: reduzir a complexidade de calcular_frete (CCN 31)",
+        "tentativa 1/3 de t4",
+    ]
+
+
+def test_the_first_tenth_of_the_tokens_is_reported() -> None:
+    out = io.StringIO()
+    renderer = PlainRenderer(out)
+
+    renderer.update(busy(tokens_used=99, tokens_limit=1000, feed=(), feed_total=0))
+    renderer.update(busy(tokens_used=100, tokens_limit=1000, feed=(), feed_total=0))
+
+    assert [line.split("tokens: ")[1] for line in lines(out) if "tokens:" in line] == [
+        "10% do limite"
+    ]
+
+
+def test_the_end_tells_how_many_tasks_were_integrated_and_how_many_blocked() -> None:
+    out = io.StringIO()
+    renderer = PlainRenderer(out)
+
+    renderer.stop(
+        busy(state="delivered", tasks_total=3, tasks_done=3, tasks_integrated=1, tasks_blocked=2)
+    )
+
+    assert "3/3 tarefas (1 integrada(s), 2 bloqueada(s))" in lines(out)[-1]

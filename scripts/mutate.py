@@ -33,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUPPRESSIONS = ROOT / "mutation-suppressions.toml"
 COVERAGE = ROOT / "target" / "coverage" / "python"
+NL = chr(10)
 LCOV = COVERAGE / "lcov.info"  # where the engine looks for the coverage of a Python project
 OUTCOME = re.compile(
     r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
@@ -105,6 +106,54 @@ def measure_coverage(data: Path, report: Path) -> None:
         if exported.returncode != 0:
             print(exported.stderr, file=sys.stderr)
             raise SystemExit(2)
+    LCOV.write_text(widen(LCOV.read_text(encoding="utf-8")), encoding="utf-8")
+
+
+def statement_spans(source: str) -> list[tuple[int, int]]:
+    """First and last line of each statement; of a compound one, only its header."""
+    spans = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.stmt):
+            continue
+        body = getattr(node, "body", None)
+        if body and isinstance(body, list) and isinstance(body[0], ast.stmt):
+            header_end = max(node.lineno, body[0].lineno - 1)
+            spans.append((node.lineno, header_end))
+        else:
+            spans.append((node.lineno, node.end_lineno or node.lineno))
+    return spans
+
+
+def widen(lcov: str) -> str:
+    """Make a statement that spans several lines count as covered on all of them.
+
+    ``coverage`` records the first line of a statement, so a mutation on the second line of a
+    call or of a condition would be called uncovered although the statement runs. A statement is
+    reached or it is not: the lines after the first take the hits of the first.
+    """
+    out, records = [], lcov.split("end_of_record\n")
+    for record in records:
+        lines = record.splitlines()
+        name = next((line[3:] for line in lines if line.startswith("SF:")), None)
+        if name is None:
+            continue
+        path = Path(name) if Path(name).is_absolute() else ROOT / name
+        hits: dict[int, int] = {}
+        for line in lines:
+            if line.startswith("DA:"):
+                number, count = line[3:].split(",")[:2]
+                hits[int(number)] = int(count)
+        if path.is_file():
+            for first, last in statement_spans(path.read_text(encoding="utf-8")):
+                if hits.get(first, 0) > 0:
+                    for number in range(first + 1, last + 1):
+                        hits[number] = max(hits.get(number, 0), hits[first])
+        kept = [line for line in lines if not line.startswith(("DA:", "LF:", "LH:"))]
+        end = kept.index("end_of_record") if "end_of_record" in kept else len(kept)
+        body = [f"DA:{number},{count}" for number, count in sorted(hits.items())]
+        body += [f"LF:{len(hits)}", f"LH:{sum(1 for c in hits.values() if c > 0)}"]
+        out.append(NL.join([*kept[:end], *body, "end_of_record"]) + NL)
+    return "".join(out)
 
 
 def ordered(source: str, tests: set[str]) -> list[str]:

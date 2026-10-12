@@ -136,3 +136,19 @@ def test_ascii_keeps_the_colors_and_changes_the_symbols() -> None:
 
     assert plain.glyphs is ASCII
     assert plain.colors == THEMES["neon"].colors
+
+
+def test_a_style_has_no_emphasis_unless_asked_and_each_emphasis_is_independent() -> None:
+    theme = THEMES["escuro"]
+    plain = theme.style(Role.TEXT)
+
+    assert (plain.bold, plain.underline, plain.reverse) == (None, None, None)
+    assert theme.style(Role.TEXT, bold=True).bold is True
+    assert theme.style(Role.TEXT, underline=True).underline is True
+    assert theme.style(Role.TEXT, reverse=True).reverse is True
+    only = theme.style(Role.TEXT, bold=True)
+    assert (only.underline, only.reverse) == (None, None)
+    only = theme.style(Role.TEXT, underline=True)
+    assert (only.bold, only.reverse) == (None, None)
+    only = theme.style(Role.TEXT, reverse=True)
+    assert (only.bold, only.underline) == (None, None)

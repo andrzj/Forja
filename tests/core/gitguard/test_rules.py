@@ -149,3 +149,16 @@ def test_forja_never_pushes_whatever_the_branch_or_the_flags(args: list[str]) ->
         check(args)
 
     assert info.value.reason == "Forja never pushes; publishing is for the user"
+
+
+def test_a_long_option_with_its_value_attached_does_not_take_the_next_word() -> None:
+    command = parse(["merge", "--strategy=ours", "x"])
+
+    assert command.positionals == ("x",)
+
+
+def test_a_long_option_with_its_value_apart_takes_the_next_word() -> None:
+    command = parse(["merge", "--strategy", "ours", "x"])
+
+    assert command.positionals == ("x",)
+    assert command.flags == {"--strategy"}

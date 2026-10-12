@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from forja.core.isolation import DEFAULT_SENSITIVE_PATTERNS, SensitivePaths, compile_pattern
@@ -112,3 +114,13 @@ def test_split_keeps_the_order_of_the_paths() -> None:
 
     assert kept == ["b.py", "a.py"]
     assert excluded == [".env", "x/id_rsa"]
+
+
+def test_matching_follows_the_platform_when_not_told_otherwise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert SensitivePaths(["Secret.txt"]).matches("secret.txt")
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert not SensitivePaths(["Secret.txt"]).matches("secret.txt")
