@@ -44,6 +44,7 @@ class Execucao(BaseModel):
     escopo: list[str] = Field(default_factory=list)
     tokens: int = Field(default=DEFAULT_TOKENS, ge=1)
     agente_roda_testes: bool = True
+    tarefas: int = Field(default=5, ge=1)  # how many of the worst functions one run takes on
     base: str = ""
     interface: Interface = Field(default_factory=Interface)
 

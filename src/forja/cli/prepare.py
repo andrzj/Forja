@@ -159,7 +159,7 @@ def summary_of(
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
         f"  agente: {config.implementer.name} {config.implementer.version}",
         f"  onde: {where}",
-        f"  limite: {tokens:,} tokens".replace(",", "."),
+        f"  limite: {tokens:,} tokens, até {config.budget.tasks} tarefas".replace(",", "."),
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
         "são garantidas pelo seu ambiente",
         "  a Forja impõe: ambiente filtrado para a CLI, cópia sem .git e sem arquivos sensíveis, "
@@ -188,10 +188,11 @@ async def prepare(
     scope = args.scope or tuple(saved.escopo if saved else ())
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
+    tasks = saved.tarefas if saved else 5
     config = new_config(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
         executor_version=version, tokens=tokens, scope=scope,
-        agent_runs_tests=runs_tests,
+        agent_runs_tests=runs_tests, tasks=tasks,
     )  # fmt: skip
     lines = summary_of(detection, config, scope, tokens)
     execucao = Execucao(
@@ -200,6 +201,7 @@ async def prepare(
         escopo=list(scope),
         tokens=tokens,
         agente_roda_testes=runs_tests,
+        tarefas=tasks,
         interface=saved.interface if saved else profile.interface,
     )
     return Prepared(config, execucao, lines, (name, str(choice.path)) if offer else None)

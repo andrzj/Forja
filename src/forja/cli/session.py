@@ -123,6 +123,7 @@ def new_config(
     tokens: int,
     scope: tuple[str, ...] = (),
     agent_runs_tests: bool = True,
+    tasks: int = 5,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
 
@@ -133,7 +134,7 @@ def new_config(
         implementer=ExecutorRef(
             name=executor_name, path=str(executor_path), version=executor_version
         ),
-        budget=Budget(tokens=tokens),
+        budget=Budget(tokens=tokens, tasks=tasks),
         forja_version=FORJA_VERSION,
         policy_version=POLICY_VERSION,
         scope=scope,
