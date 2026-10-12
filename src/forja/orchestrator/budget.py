@@ -36,34 +36,44 @@ def read_consumption(log_path: Path) -> Consumption:
     """Time and tokens spent according to the log; a torn last line is ignored."""
     if not log_path.exists():
         return Consumption(0.0, 0)
-    seconds = 0.0
-    tokens = 0
-    started: datetime | None = None
-    last: datetime | None = None  # read only after the first event sets it
+    tally = _Tally()
     for raw in [line for line in log_path.read_bytes().split(b"\n") if line]:
         try:
             event = parse_line(raw)
         except BadLine:
             break
+        tally.add(event)
+    tally.close_open_session()
+    return Consumption(tally.seconds, tally.tokens)
+
+
+class _Tally:
+    def __init__(self) -> None:
+        self.seconds = 0.0
+        self.tokens = 0
+        self._started: datetime | None = None
+        self._last: datetime | None = None  # read only after the first event sets it
+
+    def add(self, event: Event) -> None:
         moment = _moment(event)
+        if event.type == "progress":
+            self._progress(event, moment)
+        self._last = moment
+
+    def close_open_session(self) -> None:
+        if self._started is not None and self._last is not None:
+            self.seconds += (self._last - self._started).total_seconds()
+
+    def _progress(self, event: Event, moment: datetime) -> None:
         kind = event.payload.get("kind")
-        if event.type == "progress" and kind == SESSION_STARTED:
-            if started is not None and last is not None:
-                seconds += (last - started).total_seconds()  # the earlier session never ended
-            started = moment
-        elif event.type == "progress" and kind == SESSION_ENDED and started is not None:
-            seconds += (moment - started).total_seconds()
-            started = None
-        elif (
-            event.type == "progress"
-            and kind == AGENT_ACTIVITY
-            and event.payload.get("type") == USAGE
-        ):
-            tokens += _count(event.payload.get("input")) + _count(event.payload.get("output"))
-        last = moment
-    if started is not None and last is not None:
-        seconds += (last - started).total_seconds()
-    return Consumption(seconds, tokens)
+        if kind == SESSION_STARTED:
+            self.close_open_session()  # the earlier session never ended
+            self._started = moment
+        elif kind == SESSION_ENDED and self._started is not None:
+            self.seconds += (moment - self._started).total_seconds()
+            self._started = None
+        elif kind == AGENT_ACTIVITY and event.payload.get("type") == USAGE:
+            self.tokens += _count(event.payload.get("input")) + _count(event.payload.get("output"))
 
 
 def _count(value: object) -> int:
