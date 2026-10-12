@@ -222,17 +222,17 @@ class Orchestrator:
         )
         planned = await ctx.planner.plan(ctx.workspace.run_worktree, baseline, ctx.config.budget)
         for number, task in enumerate(planned[: ctx.config.budget.tasks], start=1):
+            payload: dict[str, JsonValue] = {
+                "intent": task.intent,
+                "scope": list(task.scope),
+                "max_files": task.max_files,
+                "max_lines": task.max_lines,
+            }
+            if task.stages != (Producer.IMPLEMENTER,):  # a log with one stage reads as it did
+                payload["stages"] = [role.value for role in task.stages]
+                payload["test_root"] = task.test_root
             journal.enter(
-                Level.TASK,
-                f"t{number}",
-                TaskState.PENDING,
-                parent=self._run_id,
-                payload={
-                    "intent": task.intent,
-                    "scope": list(task.scope),
-                    "max_files": task.max_files,
-                    "max_lines": task.max_lines,
-                },
+                Level.TASK, f"t{number}", TaskState.PENDING, parent=self._run_id, payload=payload
             )
         self._go(ExecutionState.EXECUTING)
 

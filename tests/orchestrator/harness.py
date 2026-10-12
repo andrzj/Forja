@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from forja.core.artifacts.models import Producer
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog
@@ -131,6 +132,7 @@ class World:
         budget: Budget | None = None,
         token_limit: int = 2_000_000,
         hook: Hook | None = None,
+        agents: Mapping[Producer, Any] | None = None,
     ) -> RunContext:
         config = self.config.model_copy(update={"budget": budget or Budget()})
         journal = Journal(log, hook=hook) if hook is not None else Journal(log)
@@ -140,6 +142,7 @@ class World:
             workspace=self.workspace,
             measurer=measurer,
             agent=agent,
+            agents=agents or {},
             planner=planner,
             meter=Meter(token_limit, log.path, enforce=True),
             run_dir=self.run_dir,
@@ -157,8 +160,12 @@ class World:
         token_limit: int = 2_000_000,
         log: EventLog | None = None,
         hook: Hook | None = None,
+        agents: Mapping[Producer, Any] | None = None,
+        config: RunConfig | None = None,
     ) -> tuple[Outcome, EventLog]:
         opened = log or self.open()
+        if config is not None:
+            self.config = config
         if not opened.state.has_target(Level.EXECUTION, RUN):
             config = self.config.model_copy(update={"budget": budget or Budget()})
             confirm_run(opened, config, ISOLATION)
@@ -170,6 +177,7 @@ class World:
             budget=budget,
             token_limit=token_limit,
             hook=hook,
+            agents=agents,
         )
         return asyncio.run(Orchestrator(ctx).run()), opened
 

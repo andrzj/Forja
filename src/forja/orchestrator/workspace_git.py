@@ -165,7 +165,14 @@ class CommitMessage:
     def refactor(
         cls, intent: str, reason: str, *, agent: str, policy_version: str
     ) -> "CommitMessage":
-        subject = f"refactor: {' '.join(intent.split())}"[:SUBJECT_LIMIT].rstrip()
+        return cls.of("refactor", intent, reason, agent=agent, policy_version=policy_version)
+
+    @classmethod
+    def of(
+        cls, kind: str, intent: str, reason: str, *, agent: str, policy_version: str
+    ) -> "CommitMessage":
+        """``kind`` is the conventional-commit type: refactor, fix or test."""
+        subject = f"{kind}: {' '.join(intent.split())}"[:SUBJECT_LIMIT].rstrip()
         lines = reason.strip().splitlines()[:BODY_LINES]
         body = "\n".join(_defuse(line.rstrip()) for line in lines)
         return cls(subject, body.strip(), agent, policy_version)

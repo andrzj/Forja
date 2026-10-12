@@ -13,6 +13,7 @@ from types import TracebackType
 from typing import Protocol
 
 from forja.core.adapters.executor import ErrorActivity
+from forja.core.artifacts.models import Producer
 from forja.core.events import LogEventSink, OpenOperation
 from forja.core.gates import PipelineOutcome
 from forja.core.gitguard.snapshot import Difference
@@ -37,6 +38,8 @@ class PlannedTask:
     scope: tuple[str, ...]
     max_files: int
     max_lines: int
+    stages: tuple[Producer, ...] = (Producer.IMPLEMENTER,)  # in order; a fix writes tests first
+    test_root: str = ""  # where the test author may put tests; only for tasks that have one
 
 
 @dataclass(frozen=True)
@@ -50,12 +53,17 @@ class Baseline:
 
 @dataclass(frozen=True)
 class TaskInfo:
+    """A task seen through one of its stages: ``stage_id`` and ``role`` are that stage's."""
+
     task_id: str
     stage_id: str
     intent: str
     scope: tuple[str, ...]
     max_files: int
     max_lines: int
+    role: Producer = Producer.IMPLEMENTER
+    test_root: str = ""
+    attempt_prefix: str = ""  # attempts are ``<prefix><n>``; empty means ``<task>-a``
 
 
 @dataclass(frozen=True)
@@ -178,7 +186,7 @@ class RunContext:
     config: RunConfig
     workspace: Workspace
     measurer: Measurer
-    agent: AgentRunner
+    agent: AgentRunner  # the implementer's, and the default for a role without its own
     planner: Planner
     meter: Meter
     run_dir: Path
@@ -187,6 +195,10 @@ class RunContext:
     backoff: tuple[float, ...] = (30.0, 60.0, 120.0)
     probe_interval: float = 60.0
     max_network_probes: int | None = None  # None waits for the network as long as it takes
+    agents: Mapping[Producer, AgentRunner] = field(default_factory=dict)
+
+    def runner(self, role: Producer) -> AgentRunner:
+        return self.agents.get(role, self.agent)
 
     def sinks(self, level: Level, target_id: str, operation: str) -> EventSink:
         return LogEventSink(self.journal.log, level, target_id, operation)

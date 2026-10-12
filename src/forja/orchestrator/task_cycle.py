@@ -1,15 +1,18 @@
 """One task from its branch to its integration, written so it can start again from any log.
 
 Every step asks the journal first, so running this after a crash continues where the log stops.
-Attempts are numbered ``<task>-a<n>``; a task has one stage, ``<task>-s``, because increment 1 has
-only the implementer.
+The implementer's attempts are numbered ``<task>-a<n>`` and its stage is ``<task>-s``. A fix task
+has the test author first, with stage ``<task>-t`` and attempts ``<task>-ta<n>``; the task joins the
+run only after its last stage is committed.
 """
 
 from forja.core.adapters.executor import ErrorKind
+from forja.core.artifacts.models import Producer
 from forja.core.events.state import RunState
 from forja.core.gates import CheckRun, Inconclusive, Rejected, Verdict
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
+from forja.orchestrator.config import Objective
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
     AgentResult,
@@ -53,21 +56,33 @@ class TaskCycle:
 
     # -- the task -------------------------------------------------------------------------------
 
-    def info(self, task_id: str) -> TaskInfo:
+    def roles(self, task_id: str) -> tuple[Producer, ...]:
+        """The stages of the task, in order; a task whose plan names none has the implementer's."""
+        payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
+        named = payload.get("stages")
+        roles = tuple(Producer(str(name)) for name in named) if isinstance(named, list) else ()
+        return roles or (Producer.IMPLEMENTER,)
+
+    def info(self, task_id: str, role: Producer = Producer.IMPLEMENTER) -> TaskInfo:
+        """The task as seen by the stage of ``role``. The implementer's ids are the ones a task
+        with a single stage always had, so a log from before two-stage tasks reads the same."""
         payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
         scope = payload.get("scope")
+        author = role is Producer.TEST_AUTHOR
         return TaskInfo(
             task_id,
-            f"{task_id}-s",
+            f"{task_id}-t" if author else f"{task_id}-s",
             str(payload.get("intent", "")),
             tuple(str(p) for p in scope) if isinstance(scope, list) else (),
             _count(payload.get("max_files")),
             _count(payload.get("max_lines")),
+            role,
+            str(payload.get("test_root", "")),
+            f"{task_id}-ta" if author else f"{task_id}-a",
         )
 
     async def run(self, task_id: str) -> None:
         ctx, journal = self._ctx, self._journal
-        info = self.info(task_id)
         journal.enter(Level.TASK, task_id, TaskState.IN_PROGRESS)
         await journal.operate(
             "create_task_branch",
@@ -76,7 +91,16 @@ class TaskCycle:
             task_id,
             ctx.workspace.create_task_branch(task_id),
         )
-        journal.enter(Level.STAGE, info.stage_id, StageState.PENDING, parent=task_id)
+        for role in self.roles(task_id):
+            info = self.info(task_id, role)
+            if not await self._stage(info):
+                return
+        await self._integrate(self.info(task_id))
+
+    async def _stage(self, info: TaskInfo) -> bool:
+        """Work one stage until it is committed or stops the task; ``True`` if it was committed."""
+        journal = self._journal
+        journal.enter(Level.STAGE, info.stage_id, StageState.PENDING, parent=info.task_id)
         journal.enter(Level.STAGE, info.stage_id, StageState.IN_PROGRESS)
         if self._state.state_of(Level.STAGE, info.stage_id) is StageState.INFRA_PAUSED:
             self._log.append_transition(
@@ -84,7 +108,13 @@ class TaskCycle:
             )
         while (attempt := self._next_attempt(info)) is not None:
             await self._attempt(info, attempt)
-        await self._finish(info)
+        stage = self._state.state_of(Level.STAGE, info.stage_id)
+        if stage is StageState.EXHAUSTED:
+            payload = self._state.transition_payload(
+                Level.STAGE, info.stage_id, StageState.EXHAUSTED
+            )
+            journal.enter(Level.TASK, info.task_id, TaskState.BLOCKED, payload=payload)
+        return stage is StageState.COMMITTED
 
     def _next_attempt(self, info: TaskInfo) -> str | None:
         state, journal = self._state, self._journal
@@ -101,7 +131,7 @@ class TaskCycle:
         if self._ctx.meter.exhausted():
             self._exhaust(info, "token_budget_exhausted")
             return None
-        return f"{info.task_id}-a{len(children) + 1}"
+        return f"{info.attempt_prefix}{len(children) + 1}"
 
     def _exhaust(self, info: TaskInfo, reason: str) -> None:
         self._log.append_transition(
@@ -153,7 +183,11 @@ class TaskCycle:
             run.workspace.create_attempt_worktree(task, attempt),
         )
         await journal.operate(
-            "prepare_workcopy", Level.ATTEMPT, attempt, attempt, run.agent.prepare_workcopy(ctx)
+            "prepare_workcopy",
+            Level.ATTEMPT,
+            attempt,
+            attempt,
+            run.runner(ctx.task.role).prepare_workcopy(ctx),
         )
         journal.enter(Level.ATTEMPT, attempt, AttemptState.WORKCOPY_READY)
         journal.enter(Level.ATTEMPT, attempt, AttemptState.AGENT_RUNNING)
@@ -192,7 +226,7 @@ class TaskCycle:
         if op_id is None:
             return None
         async with run.workspace.watch() as watch:
-            result = await run.agent.call(
+            result = await run.runner(ctx.task.role).call(
                 ctx, op_id, run.sinks(Level.ATTEMPT, ctx.attempt_id, "call_agent_cli")
             )
         return result, [difference.describe() for difference in watch.differences]
@@ -211,7 +245,11 @@ class TaskCycle:
         attempt = ctx.attempt_id
         try:
             await journal.operate(
-                "apply_diff", Level.ATTEMPT, attempt, attempt, run.agent.apply_diff(ctx)
+                "apply_diff",
+                Level.ATTEMPT,
+                attempt,
+                attempt,
+                run.runner(ctx.task.role).apply_diff(ctx),
             )
         except RejectedWork as rejected:
             self._reject(attempt, str(rejected))
@@ -251,10 +289,18 @@ class TaskCycle:
         validating = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.VALIDATING)
         assert validating is not None  # _work records the agent's reason on the way in
         reason = str(validating["reason"])
-        message = CommitMessage.refactor(
+        author = info.role is Producer.TEST_AUTHOR
+        executor = (
+            (run.config.test_author or run.config.implementer)
+            if author
+            else (run.config.implementer)
+        )
+        kind = "test" if author else "fix" if run.config.objective is Objective.FIX else "refactor"
+        message = CommitMessage.of(
+            kind,
             info.intent,
             reason,
-            agent=f"{run.config.implementer.name} {run.config.implementer.version}",
+            agent=f"{executor.name} {executor.version}",
             policy_version=run.config.policy_version,
         )
         await journal.operate(
@@ -339,18 +385,10 @@ class TaskCycle:
 
     # -- the end of the task --------------------------------------------------------------------
 
-    async def _finish(self, info: TaskInfo) -> None:
+    async def _integrate(self, info: TaskInfo) -> None:
+        """Only after the last stage: a task with tests and no fix is not ready to join the run."""
         run, journal = self._ctx, self._journal
         task = info.task_id
-        stage = self._state.state_of(Level.STAGE, info.stage_id)
-        if stage is StageState.EXHAUSTED:
-            payload = self._state.transition_payload(
-                Level.STAGE, info.stage_id, StageState.EXHAUSTED
-            )
-            journal.enter(Level.TASK, task, TaskState.BLOCKED, payload=payload)
-            return
-        if stage is not StageState.COMMITTED:
-            return
         await journal.operate(
             "integrate_task",
             Level.TASK,

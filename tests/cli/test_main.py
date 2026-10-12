@@ -194,17 +194,6 @@ def test_a_saved_fix_is_read_back_from_execucao(tmp_path: Path) -> None:
     assert Path(where) == criteria.resolve()
 
 
-def test_fixing_is_prepared_but_not_run_yet(
-    repo: Path, tmp_path: Path, environ: dict[str, str]
-) -> None:
-    criteria = tmp_path / "c.json"
-    criteria.write_text(CRITERIA, encoding="utf-8")
-    talk = Talk()
-    assert go(["corrigir", "page 1 is wrong", "--criterios", str(criteria)], talk, environ) == 2
-    assert "ainda não o executa" in talk.text
-    assert not (Path(environ["FORJA_HOME"]) / "runs").exists()
-
-
 def test_outside_a_repository_it_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, environ: dict[str, str]
 ) -> None:

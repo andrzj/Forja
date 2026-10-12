@@ -14,6 +14,7 @@ from pathlib import Path
 
 from forja.checks.specs import default_registry
 from forja.core.adapters.executor import RolePermissions, locate_in_path
+from forja.core.artifacts.models import Producer
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog, LogEventSink
@@ -33,12 +34,12 @@ from forja.executors import ClaudeCodeAdapter
 from forja.languages.python import PythonAdapter
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
-from forja.orchestrator.config import FixRequest, RunConfig, load_config
+from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig, load_config
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
 from forja.orchestrator.phases import confirm_run
-from forja.orchestrator.planner import ComplexityPlanner
-from forja.orchestrator.ports import RunContext
+from forja.orchestrator.planner import ComplexityPlanner, FixPlanner
+from forja.orchestrator.ports import AgentRunner, Planner, RunContext
 from forja.orchestrator.workspace_git import (
     GitWorkspace,
     Layout,
@@ -281,22 +282,34 @@ async def _context(
         if config.agent_runs_tests:
             commands = (*commands, "forja agente testar")
     sensitive = SensitivePaths.with_defaults(policy.sensitive_paths)
-    agent = ExecutorAgentRunner(
-        ClaudeCodeAdapter(),
-        Path(config.implementer.path),
-        {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
-        log,
-        sensitive=sensitive,
-        redactor=Redactor(policy.redaction, sensitive),
-        permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
-    )
+
+    def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
+        return ExecutorAgentRunner(
+            ClaudeCodeAdapter(),
+            Path(executor.path),
+            {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
+            log,
+            sensitive=sensitive,
+            redactor=Redactor(policy.redaction, sensitive),
+            role=role,
+            permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
+        )
+
+    agents: dict[Producer, AgentRunner] = {}
+    planner: Planner = ComplexityPlanner(functions)
+    if config.fix is not None:
+        agents[Producer.TEST_AUTHOR] = runner(
+            config.test_author or config.implementer, Producer.TEST_AUTHOR
+        )
+        planner = FixPlanner(config.fix, config.scope)
     return RunContext(
         journal=Journal(log),
         config=config,
         workspace=workspace,
         measurer=measurer,
-        agent=agent,
-        planner=ComplexityPlanner(functions),
+        agent=runner(config.implementer, Producer.IMPLEMENTER),
+        agents=agents,
+        planner=planner,
         meter=Meter(config.budget.tokens, log.path, enforce=not interactive),
         run_dir=directory,
         max_network_probes=None if interactive else NETWORK_PROBES_WITHOUT_A_PERSON,

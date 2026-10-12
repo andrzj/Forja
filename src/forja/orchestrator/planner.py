@@ -8,7 +8,8 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 
 from forja.checks.complexity import DEFAULT_MAX_CCN
-from forja.orchestrator.config import Budget
+from forja.core.artifacts.models import Producer
+from forja.orchestrator.config import Budget, FixRequest
 from forja.orchestrator.ports import Baseline, PlannedTask
 
 # (file, function) -> cyclomatic complexity
@@ -36,4 +37,32 @@ class ComplexityPlanner:
                 max_lines=budget.lines_per_task,
             )
             for _, file, name in worst[: budget.tasks]
+        ]
+
+
+TEST_ROOT = (
+    "tests"  # where the test author may put tests; the Python layout the 3a repositories use
+)
+
+
+class FixPlanner:
+    """The plan of a fix run: one task, the tests first and then the code that makes them pass."""
+
+    def __init__(self, fix: FixRequest, scope: Sequence[str], test_root: str = TEST_ROOT) -> None:
+        self._fix = fix
+        self._scope = tuple(scope)
+        self._test_root = test_root
+
+    async def plan(
+        self, worktree: Path, baseline: Baseline, budget: Budget
+    ) -> Sequence[PlannedTask]:
+        return [
+            PlannedTask(
+                intent=self._fix.description,
+                scope=self._scope,
+                max_files=budget.files_per_task,
+                max_lines=budget.lines_per_task,
+                stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER),
+                test_root=self._test_root,
+            )
         ]
