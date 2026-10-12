@@ -482,6 +482,33 @@ def _validate_limits(raw: Any, spec: CheckSpec, where: str, bad: Any) -> None:
 # -- merge and validation of the result --------------------------------------------------------
 
 
+def _merge_values(
+    raw: dict[str, Any],
+    promotion: dict[str, str],
+    thresholds: dict[str, dict[str, Number]],
+    commands: dict[str, tuple[str, ...]],
+    limits: dict[str, Number],
+) -> None:
+    for key, value in raw.get("promotion", {}).items():
+        promotion[key] = value.isoformat() if isinstance(value, date) else value.strip()
+    for language, names in raw.get("thresholds", {}).items():
+        thresholds.setdefault(language, {}).update(names)
+    for name, argv in raw.get("commands", {}).items():
+        commands[name] = tuple(argv)
+    limits.update(raw.get("limits", {}))
+
+
+def _promotion_problem(where: str, promotion: dict[str, str], promoted: bool) -> str | None:
+    if promoted and set(promotion) != {"date", "reason"}:
+        return (
+            f"{where}: promoting a check from observation to blocking needs a recorded decision: "
+            "promotion = { date = ..., reason = ... }"
+        )
+    if promotion and not promoted:
+        return f"{where}: promotion is only valid on a check promoted to blocking"
+    return None
+
+
 def _merge(spec: CheckSpec, layers: Sequence[Layer], problems: list[str]) -> EffectiveCheck | None:
     mode = spec.default_mode
     on_inconclusive = spec.default_on_inconclusive
@@ -497,13 +524,7 @@ def _merge(spec: CheckSpec, layers: Sequence[Layer], problems: list[str]) -> Eff
             mode = Mode(raw["mode"])
         if "on_inconclusive" in raw:
             on_inconclusive = InconclusivePolicy(raw["on_inconclusive"])
-        for key, value in raw.get("promotion", {}).items():
-            promotion[key] = value.isoformat() if isinstance(value, date) else value.strip()
-        for language, names in raw.get("thresholds", {}).items():
-            thresholds.setdefault(language, {}).update(names)
-        for name, argv in raw.get("commands", {}).items():
-            commands[name] = tuple(argv)
-        limits.update(raw.get("limits", {}))
+        _merge_values(raw, promotion, thresholds, commands, limits)
 
     where = f"checks.{spec.id}"
     try:
@@ -513,14 +534,9 @@ def _merge(spec: CheckSpec, layers: Sequence[Layer], problems: list[str]) -> Eff
         return None
 
     promoted = mode is Mode.BLOCKING and spec.default_mode is Mode.OBSERVATION
-    if promoted and set(promotion) != {"date", "reason"}:
-        problems.append(
-            f"{where}: promoting a check from observation to blocking needs a recorded decision: "
-            "promotion = { date = ..., reason = ... }"
-        )
-        return None
-    if promotion and not promoted:
-        problems.append(f"{where}: promotion is only valid on a check promoted to blocking")
+    promotion_problem = _promotion_problem(where, promotion, promoted)
+    if promotion_problem is not None:
+        problems.append(promotion_problem)
         return None
     return EffectiveCheck(
         spec.id,
