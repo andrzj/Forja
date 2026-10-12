@@ -131,29 +131,42 @@ def widen(lcov: str) -> str:
     call or of a condition would be called uncovered although the statement runs. A statement is
     reached or it is not: the lines after the first take the hits of the first.
     """
-    out, records = [], lcov.split("end_of_record\n")
-    for record in records:
+    out = []
+    for record in lcov.split("end_of_record\n"):
         lines = record.splitlines()
         name = next((line[3:] for line in lines if line.startswith("SF:")), None)
         if name is None:
             continue
         path = Path(name) if Path(name).is_absolute() else ROOT / name
-        hits: dict[int, int] = {}
-        for line in lines:
-            if line.startswith("DA:"):
-                number, count = line[3:].split(",")[:2]
-                hits[int(number)] = int(count)
+        hits = line_hits(lines)
         if path.is_file():
-            for first, last in statement_spans(path.read_text(encoding="utf-8")):
-                if hits.get(first, 0) > 0:
-                    for number in range(first + 1, last + 1):
-                        hits[number] = max(hits.get(number, 0), hits[first])
-        kept = [line for line in lines if not line.startswith(("DA:", "LF:", "LH:"))]
-        end = kept.index("end_of_record") if "end_of_record" in kept else len(kept)
-        body = [f"DA:{number},{count}" for number, count in sorted(hits.items())]
-        body += [f"LF:{len(hits)}", f"LH:{sum(1 for c in hits.values() if c > 0)}"]
-        out.append(NL.join([*kept[:end], *body, "end_of_record"]) + NL)
+            spread_hits(hits, statement_spans(path.read_text(encoding="utf-8")))
+        out.append(render_record(lines, hits))
     return "".join(out)
+
+
+def line_hits(lines: list[str]) -> dict[int, int]:
+    hits: dict[int, int] = {}
+    for line in lines:
+        if line.startswith("DA:"):
+            number, count = line[3:].split(",")[:2]
+            hits[int(number)] = int(count)
+    return hits
+
+
+def spread_hits(hits: dict[int, int], spans: list[tuple[int, int]]) -> None:
+    for first, last in spans:
+        if hits.get(first, 0) > 0:
+            for number in range(first + 1, last + 1):
+                hits[number] = max(hits.get(number, 0), hits[first])
+
+
+def render_record(lines: list[str], hits: dict[int, int]) -> str:
+    kept = [line for line in lines if not line.startswith(("DA:", "LF:", "LH:"))]
+    end = kept.index("end_of_record") if "end_of_record" in kept else len(kept)
+    body = [f"DA:{number},{count}" for number, count in sorted(hits.items())]
+    body += [f"LF:{len(hits)}", f"LH:{sum(1 for c in hits.values() if c > 0)}"]
+    return NL.join([*kept[:end], *body, "end_of_record"]) + NL
 
 
 def ordered(source: str, tests: set[str]) -> list[str]:
