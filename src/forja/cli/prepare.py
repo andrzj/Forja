@@ -160,7 +160,7 @@ def summary_of(
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
         f"  agente: {config.implementer.name} {config.implementer.version}",
         f"  onde: {where}",
-        f"  limite: {tokens:,} tokens, até {config.budget.tasks} tarefas".replace(",", "."),
+        f"  limite: {format(tokens, ',').replace(',', '.')} tokens, até {config.budget.tasks} tarefas",
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
         "são garantidas pelo seu ambiente",
         "  a Forja impõe: ambiente filtrado para a CLI, cópia sem .git e sem arquivos sensíveis, "
