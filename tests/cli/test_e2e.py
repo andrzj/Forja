@@ -92,38 +92,35 @@ class Outcome:
     def __init__(self, code: int, text: str, repo: Path, before: str) -> None:
         self.code, self.text, self.repo, self.before = code, text, repo, before
 
-    def delivered(self) -> str:
+    def delivered(self, path: str = "src/pkg/mod.py") -> str:
         branches = [
             b.strip(" *+")
             for b in run("branch", "--list", "forja-run/*", cwd=self.repo).splitlines()
         ]
         assert len(branches) == 1, self.text
-        return run("show", f"{branches[0]}:src/pkg/mod.py", cwd=self.repo)
+        return run("show", f"{branches[0]}:{path}", cwd=self.repo)
 
 
-def whole_run(
+class Armed:
+    """Everything a run needs, set up: the repository, the stand-in agent and the answers file."""
+
+    def __init__(self, repo: Path, before: str, answers: Path, script: Path) -> None:
+        self.repo, self.before, self.answers, self.script = repo, before, answers, script
+
+
+def arm(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    written: str,
-    extra: Callable[[Path], dict[str, Any]] | None = None,
-) -> Outcome:
-    """Run ``forja refatorar`` unattended, the stand-in agent writing ``written``."""
-    repo = make_repo(tmp_path)
+    script: dict[str, Any],
+    repo: Path | None = None,
+) -> Armed:
+    """Put the stand-in agent, a stand-in gitleaks and the profile in place around a repository."""
+    repo = repo or make_repo(tmp_path)
     monkeypatch.chdir(repo)
     before = run("rev-parse", "HEAD", cwd=repo)
-    script = tmp_path / "script.json"
-    script.write_text(
-        json.dumps(
-            {
-                "record": str(tmp_path / "record.json"),
-                "writes": {"src/pkg/mod.py": written},
-                "saida": DECLARED,
-                "lines": [json.dumps(USAGE)],
-                **(extra(repo) if extra else {}),
-            }
-        ),
-        encoding="utf-8",
+    script_path = tmp_path / "script.json"
+    script_path.write_text(
+        json.dumps({"record": str(tmp_path / "record.json"), **script}), encoding="utf-8"
     )
 
     async def proven(*args: object, **kwargs: object) -> str:
@@ -141,18 +138,40 @@ def whole_run(
     leaks.chmod(0o755)  # a stand-in that finds nothing: gitleaks itself is not on every machine
     monkeypatch.setattr(session_module, "missing_tool", lambda name: str(leaks))
     monkeypatch.setattr(preparation, "prove", proven)
-    monkeypatch.setattr(session_module, "ClaudeCodeAdapter", lambda: FakeCli(script))
+    monkeypatch.setattr(session_module, "ClaudeCodeAdapter", lambda: FakeCli(script_path))
     monkeypatch.setattr(session_module, "repo_python", lambda _repo: (sys.executable,))
     monkeypatch.setenv("FORJA_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("FORJA_CONFIG_HOME", str(tmp_path / "profile"))
     answers = tmp_path / "execucao.toml"
     save_execucao(answers, Execucao(cli="claude-code", executavel=str(agent), tokens=500_000))
+    return Armed(repo, before, answers, script_path)
 
-    talk = Talk()
-    code = asyncio.run(
-        door.amain(parse(["--config", str(answers), "refatorar"]), talk, dict(os.environ))
-    )
-    return Outcome(code, capsys.readouterr().out + talk.text, repo, before)
+
+def forja(armed: Armed, *argv: str, talk: Talk | None = None) -> tuple[int, Talk]:
+    """One invocation of ``forja`` in the armed repository."""
+    talk = talk or Talk()
+    code = asyncio.run(door.amain(parse(list(argv)), talk, dict(os.environ)))
+    return code, talk
+
+
+def whole_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    written: str,
+    extra: Callable[[Path], dict[str, Any]] | None = None,
+) -> Outcome:
+    """Run ``forja refatorar`` unattended, the stand-in agent writing ``written``."""
+    repo = make_repo(tmp_path)
+    script = {
+        "writes": {"src/pkg/mod.py": written},
+        "saida": DECLARED,
+        "lines": [json.dumps(USAGE)],
+        **(extra(repo) if extra else {}),
+    }
+    armed = arm(tmp_path, monkeypatch, script, repo)
+    code, talk = forja(armed, "--config", str(armed.answers), "refatorar")
+    return Outcome(code, capsys.readouterr().out + talk.text, repo, armed.before)
 
 
 def test_a_whole_run_delivers_a_branch_and_leaves_the_users_branch_alone(

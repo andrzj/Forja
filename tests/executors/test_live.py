@@ -111,8 +111,8 @@ def test_the_real_cli_keeps_to_the_copy_and_to_its_own_permissions(tmp_path: Pat
         "it read above the copy"
     )
     leak2 = copy / AGENT_DIR / "leak2.txt"
-    found = leak2.read_text("utf-8", "ignore") if leak2.exists() else ""
-    assert "TOP-SECRET-MARKER" not in found and "secret.txt" not in found, (
+    searched = leak2.read_text("utf-8", "ignore") if leak2.exists() else ""
+    assert "TOP-SECRET-MARKER" not in searched and "secret.txt" not in searched, (
         "it searched above the copy"
     )
     inside = copy / AGENT_DIR / "found.txt"
