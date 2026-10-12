@@ -91,3 +91,29 @@ file = "src/forja/ui/plain.py"
 function = "PlainRenderer._update_rejections"
 change = "> -> >="
 reason = "With no new rejections the slice starts at the end of the list and is empty, so nothing is printed either way."
+
+# Approved by the person who owns the repository on 2026-10-12, after the core was covered (phase C).
+
+[[suppress]]
+file = "src/forja/orchestrator/agent_runner.py"
+function = "build_package"
+change = "True -> False"
+reason = "The essential mark of a file only matters for the assumptions of the redaction result, which the package never reads."
+
+[[suppress]]
+file = "src/forja/core/process/runner.py"
+function = "ProcessRunner._supervise"
+change = "0 -> 1"
+reason = "In the final drain every reader is already finished or cancelled on all paths, so there is nothing pending to wait for and the wait has no effect."
+
+[[suppress]]
+file = "src/forja/core/locking/index_locks.py"
+function = "remove_orphan_index_locks"
+change = "False -> True"
+reason = "With no lock present the loop that reads the flag does not run, so its value is never used."
+
+[[suppress]]
+file = "src/forja/core/gitguard/guarded.py"
+function = "GuardedGit.run"
+change = "or -> and"
+reason = "The constructor refuses a mutex without a timeout and the reverse, so the conditions never differ and or and and give the same result."
