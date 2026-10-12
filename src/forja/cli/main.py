@@ -19,7 +19,7 @@ from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
 from forja.cli.run import Ended, ForcedExit, Renderer, closing_lines, execute, exit_code
-from forja.cli.session import Session, open_session
+from forja.cli.session import PolicyChanged, Session, open_session
 from forja.cli.settings import (
     Execucao,
     Perfil,
@@ -32,6 +32,7 @@ from forja.cli.settings import (
 )
 from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
+from forja.core.policy.config import PolicyConfigError
 from forja.orchestrator.outcome import ExitCode
 from forja.ui import terminal
 from forja.ui.full import FullRenderer
@@ -170,6 +171,9 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
     except Refused as refused:
         console.say(refused.message)
         return refused.code
+    except (PolicyChanged, PolicyConfigError) as error:
+        console.say(str(error))
+        return int(ExitCode.INVALID_CONFIG)
     except SettingsError as error:
         console.say(str(error))
         return int(ExitCode.INVALID_CONFIG)

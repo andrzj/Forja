@@ -95,3 +95,19 @@ def test_a_discarded_run_stays_on_disk_and_a_new_one_starts_clean(
     branches = run("branch", "--list", "forja-run/*", cwd=armed.repo).splitlines()
     assert len(branches) == 2, branches  # the old branch is the person's to remove
     assert run("rev-parse", "HEAD", cwd=armed.repo) == armed.before
+
+
+def test_a_run_does_not_resume_under_a_policy_other_than_the_one_it_was_confirmed_with(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    armed = arm(tmp_path, monkeypatch, script(pause=60))
+    cut_while_the_agent_works(armed, tmp_path)
+    (armed.repo / "forja.toml").write_text(
+        "[checks.secrets]" + chr(10) + 'mode = "observation"' + chr(10), encoding="utf-8"
+    )
+
+    code, talk = forja(armed, "refatorar", talk=Talk(interactive=True))
+
+    assert code == 2, talk.text
+    assert "forja.toml mudou" in talk.text
+    assert find_unfinished(Path(os.environ["FORJA_HOME"]), armed.repo) != []

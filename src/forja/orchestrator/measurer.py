@@ -11,7 +11,7 @@ from typing import Protocol
 
 from pydantic import JsonValue
 
-from forja.checks.base import Undecided, measure
+from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
 from forja.checks.changes import read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
@@ -151,6 +151,10 @@ class PipelineMeasurer:
         metrics = await self._metrics(tools, worktree, len(first), len(unstable))
         return Baseline(not problems, tuple(problems), metrics)
 
+    def _overrides(self, check_id: str) -> dict[str, dict[str, tuple[str, ...]]]:
+        """The repository's own command for this check, if its ``forja.toml`` names one."""
+        return overrides_from(self._adapter, self._values.get(check_id, {}))
+
     def _save_base(self, unstable: list[str], passing: list[str]) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
         document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
@@ -158,13 +162,23 @@ class PipelineMeasurer:
 
     async def _build_problems(self, tools: Tools, worktree: Path) -> list[str]:
         parsed = await measure(
-            tools, self._adapter, Operation.BUILD, "build", OperationRequest(root=worktree)
+            tools,
+            self._adapter,
+            Operation.BUILD,
+            "build",
+            OperationRequest(root=worktree),
+            self._overrides("build"),
         )
         return [f"build: {d.target.id} does not compile" for d in parsed.drafts]
 
     async def _outcomes(self, tools: Tools, worktree: Path) -> dict[str, str]:
         parsed = await measure(
-            tools, self._adapter, Operation.TEST, "tests", OperationRequest(root=worktree)
+            tools,
+            self._adapter,
+            Operation.TEST,
+            "tests",
+            OperationRequest(root=worktree),
+            self._overrides("tests"),
         )
         return {d.target.id: str(d.value) for d in parsed.drafts if d.measurement == "test.outcome"}
 
@@ -174,7 +188,12 @@ class PipelineMeasurer:
         metrics: dict[str, float] = {"tests": float(tests), "unstable_tests": float(unstable)}
         try:
             lint = await measure(
-                tools, self._adapter, Operation.LINT, "lint", OperationRequest(root=worktree)
+                tools,
+                self._adapter,
+                Operation.LINT,
+                "lint",
+                OperationRequest(root=worktree),
+                self._overrides("lint"),
             )
             metrics["lint_violations"] = float(sum(violations(lint.drafts).values()))
         except Undecided:

@@ -12,10 +12,10 @@ from pathlib import Path
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
-from forja.cli.session import new_config, repo_policy
+from forja.cli.session import new_config, policy_digest, repo_policy, standard_settings
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
-from forja.core.policy.config import PolicyConfigError
+from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.executors.probe import executable_version, run_probe, version_problem
 from forja.orchestrator.config import RunConfig
 
@@ -145,8 +145,34 @@ async def prove(
     return version
 
 
+def policy_changes(policy: EffectivePolicy) -> tuple[str, ...]:
+    """What the repository's ``forja.toml`` changes from the Forja's own defaults, in words.
+
+    A repository can loosen a gate or run its own command in place of the Forja's, so the person
+    who confirms has to see it: it is the repository's decision, not the Forja's.
+    """
+    defaults = standard_settings()
+    notes = []
+    for check_id, check in sorted(policy.checks.items()):
+        if check.settings != defaults.get(check_id):
+            mode = check.settings.mode.value
+            notes.append(f"{check_id}: modo ou política diferente do padrão ({mode})")
+        if check.commands:
+            names = ", ".join(sorted(check.commands))
+            notes.append(f"{check_id}: roda comando próprio do repositório ({names})")
+        if check.thresholds or check.limits:
+            notes.append(f"{check_id}: limites próprios do repositório")
+    if policy.redaction.allow or policy.redaction.allow_patterns:
+        notes.append("redação: valores liberados pelo repositório")
+    return tuple(notes)
+
+
 def summary_of(
-    detection: Detection, config: RunConfig, scope: tuple[str, ...], tokens: int
+    detection: Detection,
+    config: RunConfig,
+    scope: tuple[str, ...],
+    tokens: int,
+    policy_notes: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
     limit = format(tokens, ",").replace(",", ".")
@@ -168,7 +194,9 @@ def summary_of(
         "ferramentas de arquivo do agente confinadas à cópia, git conferido a cada chamada",
         f"  testes: {tests}",
         "  entrega: uma branch nova `forja-run/…`; sua branch não é alterada e nada é enviado",
-    )
+        *(("  forja.toml do repositório muda o padrão:", *(f"    {note}" for note in policy_notes))
+          if policy_notes else ()),
+    )  # fmt: skip
 
 
 async def prepare(
@@ -184,7 +212,8 @@ async def prepare(
     objective_of(args, saved, console)
     repo = check_repository(detection)
     try:
-        repo_policy(repo)
+        policy = repo_policy(repo)
+        notes = policy_changes(policy)
     except PolicyConfigError as error:
         raise Refused(f"O forja.toml deste repositório tem erros:\n{error}") from None
     if detection.disk_free_gib < LOW_DISK_GIB:
@@ -199,8 +228,9 @@ async def prepare(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
         executor_version=version, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks,
+        policy_version=policy_digest(policy),
     )  # fmt: skip
-    lines = summary_of(detection, config, scope, tokens)
+    lines = summary_of(detection, config, scope, tokens, notes)
     execucao = Execucao(
         cli=name,
         executavel=str(choice.path),

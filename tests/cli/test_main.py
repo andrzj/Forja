@@ -176,3 +176,28 @@ def test_the_repositorys_own_policy_is_read_when_it_is_valid(
     talk = Talk()
 
     assert go(["refatorar", "--plano"], talk, environ) == 0
+
+
+def test_what_the_repositorys_policy_changes_is_told_before_the_confirmation(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    commit_policy(
+        repo,
+        "[checks.secrets]" + chr(10) + 'mode = "observation"' + chr(10) + chr(10)
+        + "[checks.tests.commands]" + chr(10) + 'test = ["python", "-m", "pytest"]' + chr(10),
+    )  # fmt: skip
+    talk = Talk()
+
+    assert go(["refatorar", "--plano"], talk, environ) == 0
+    assert "forja.toml do repositório muda o padrão" in talk.text
+    assert "secrets: modo ou política diferente do padrão (observation)" in talk.text
+    assert "tests: roda comando próprio do repositório (test)" in talk.text
+
+
+def test_a_repository_without_a_policy_file_says_nothing_about_one(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    talk = Talk()
+
+    assert go(["refatorar", "--plano"], talk, environ) == 0
+    assert "forja.toml" not in talk.text

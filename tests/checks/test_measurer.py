@@ -731,3 +731,16 @@ def test_a_lizard_that_fails_stops_the_planning_with_a_reason(scene: Scene) -> N
 
     with pytest.raises(RuntimeError, match="the complexity could not be measured: complexity: "):
         asyncio.run(scene.measurer.functions(scene.repo.path, scene.recorder.sinks))
+
+
+def test_the_repositorys_own_test_command_is_the_one_the_base_is_measured_with(
+    repo: Repo, tmp_path: Path
+) -> None:
+    command = [sys.executable, "-c", "print('PASSED tests/test_x.py::only_one')"]
+    values = {"tests": {"commands": {"test": command}}}
+    scene = Scene(repo, tmp_path / "scene", values=values)
+
+    measured = base_of(scene)
+
+    assert measured.ok
+    assert measured.metrics["tests"] == 1.0

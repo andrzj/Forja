@@ -5,6 +5,7 @@ A new run and a resumed one go through the same door, because everything the run
 the work; this only connects the pieces the orchestrator is written against.
 """
 
+import hashlib
 import os
 import sys
 from collections.abc import Mapping
@@ -16,6 +17,7 @@ from forja.core.adapters.executor import RolePermissions, locate_in_path
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog, LogEventSink
+from forja.core.events.models import canonical_json
 from forja.core.gates import CheckSettings
 from forja.core.gitguard import GuardedGit
 from forja.core.idempotency.git import Git
@@ -70,6 +72,15 @@ def repo_python(repo: Path) -> tuple[str, ...]:
             return (str(repo / relative),)
     found = locate_in_path("python") or locate_in_path("python3")
     return (str(found) if found else sys.executable,)
+
+
+class PolicyChanged(Exception):
+    """The repository's ``forja.toml`` is not the one the run was confirmed with."""
+
+
+def policy_digest(policy: EffectivePolicy) -> str:
+    """A short name for exactly this policy, kept in the confirmation of the run."""
+    return "sha256:" + hashlib.sha256(canonical_json(policy.to_dict())).hexdigest()[:16]
 
 
 def repo_policy(repo: Path) -> EffectivePolicy:
@@ -131,6 +142,7 @@ def new_config(
     scope: tuple[str, ...] = (),
     agent_runs_tests: bool = True,
     tasks: int = 5,
+    policy_version: str = POLICY_VERSION,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
 
@@ -143,7 +155,7 @@ def new_config(
         ),
         budget=Budget(tokens=tokens, tasks=tasks),
         forja_version=FORJA_VERSION,
-        policy_version=POLICY_VERSION,
+        policy_version=policy_version,
         scope=scope,
         agent_runs_tests=agent_runs_tests,
     )
@@ -172,6 +184,15 @@ async def open_session(
     log = EventLog.open(directory / "events.jsonl", run_id)
     if resumed:
         config = load_config(log.state)
+        recorded = config.policy_version
+        if recorded.startswith("sha256:") and recorded != policy_digest(
+            repo_policy(Path(config.repo))
+        ):
+            log.close()
+            raise PolicyChanged(
+                "O forja.toml mudou desde que esta execução foi confirmada. Restaure o arquivo "
+                "como estava ou descarte a execução; a Forja não retoma com outra política."
+            )
     if config is None:
         raise ValueError("a new run needs the configuration the person confirmed")
     repo = Path(config.repo)
