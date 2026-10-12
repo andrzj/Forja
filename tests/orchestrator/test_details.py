@@ -37,6 +37,7 @@ from forja.orchestrator.ports import (
     AgentResult,
     AttemptContext,
     Baseline,
+    Expectations,
     PlannedTask,
     RunContext,
     SinkFactory,
@@ -136,7 +137,9 @@ class Spy(ScriptedMeasurer):
         self.baselines.append((worktree, sinks))
         return await super().baseline(worktree, sinks)
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> Any:
         self.judged_with.append(sinks)
         return await super().judge(ctx, sinks)
 
@@ -287,7 +290,9 @@ def test_a_task_whose_tokens_run_out_between_attempts_is_blocked_for_them(
     world: MemoryWorld,
 ) -> None:
     class Slow(ScriptedMeasurer):
-        async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
+        async def judge(
+            self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+        ) -> Any:
             # the first attempt spends all the tokens there are
             usage: dict[str, JsonValue] = {"type": "usage", "input": 10_000, "output": 0}
             log.append_progress(Level.ATTEMPT, ctx.attempt_id, "agent_activity", payload=usage)

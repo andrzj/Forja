@@ -16,6 +16,7 @@ from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
 from forja.checks.changes import read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
+from forja.checks.red_green import RedGreenCheck
 from forja.checks.scope import ScopeCheck
 from forja.checks.secrets import SecretsCheck
 from forja.checks.tooling import Tools
@@ -26,6 +27,7 @@ from forja.core.adapters import (
     Operation,
     OperationRequest,
 )
+from forja.core.artifacts.models import Producer
 from forja.core.atomic import atomic_write_bytes
 from forja.core.events import EventLog, LogEventSink, OpenOperation
 from forja.core.gates import (
@@ -38,7 +40,7 @@ from forja.core.gates import (
 )
 from forja.core.idempotency import Decision, Reconciliation
 from forja.core.states import Level
-from forja.orchestrator.ports import AttemptContext, Baseline, SinkFactory
+from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, SinkFactory
 
 BASE_FILE = "base.json"
 UNSTABLE = "unstable"
@@ -238,7 +240,9 @@ class PipelineMeasurer:
 
     # -- attempts and integration -------------------------------------------------------------
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> PipelineOutcome:
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> PipelineOutcome:
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         before = await read_before(git, changes, SOURCE_SUFFIXES)
@@ -256,12 +260,35 @@ class PipelineMeasurer:
             FormatCheck(tools, adapter, worktree, changes),
             LintCheck(tools, adapter, worktree, changes, before),
             BuildCheck(tools, adapter, worktree),
-            TestsCheck(tools, adapter, worktree, unstable, passing),
+            self._tests_check(ctx, tools, expectations, unstable, passing),
             ComplexityCheck(tools, worktree, changes, production, before, self._lizard),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(adapter))
+
+    def _tests_check(
+        self,
+        ctx: AttemptContext,
+        tools: Tools,
+        expectations: Expectations | None,
+        unstable: frozenset[str],
+        passing: frozenset[str],
+    ) -> Check:
+        """The test author's tests are red on purpose, so its stage has its own judge of them."""
+        if ctx.task.role is not Producer.TEST_AUTHOR:
+            return TestsCheck(tools, self._adapter, ctx.worktree, unstable, passing)
+        assert expectations is not None  # the cycle gives them to every test author stage
+        return RedGreenCheck(
+            tools,
+            self._adapter,
+            ctx.worktree,
+            self._classify,
+            expectations.criteria,
+            expectations.declared,
+            unstable,
+            passing,
+        )
 
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome:
         git = self._git.at(worktree)

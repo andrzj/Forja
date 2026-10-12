@@ -13,6 +13,7 @@ from types import TracebackType
 from typing import Protocol
 
 from forja.core.adapters.executor import ErrorActivity
+from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.artifacts.models import Producer
 from forja.core.events import LogEventSink, OpenOperation
 from forja.core.gates import PipelineOutcome
@@ -75,6 +76,14 @@ class AttemptContext:
 
 
 @dataclass(frozen=True)
+class Expectations:
+    """What the test author owes: a test for each criterion, declared in its answer."""
+
+    criteria: frozenset[int]
+    declared: tuple[DeclaredTest, ...]
+
+
+@dataclass(frozen=True)
 class AgentResult:
     """How a call to the agent ended: why it says it did what it did, or what went wrong around it.
 
@@ -101,7 +110,9 @@ class Measurer(Protocol):
 
     async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline: ...
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> PipelineOutcome: ...
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> PipelineOutcome: ...
 
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome: ...
 
@@ -116,6 +127,8 @@ class AgentRunner(Protocol):
     ) -> AgentResult: ...
 
     def apply_diff(self, ctx: AttemptContext) -> Step: ...
+
+    def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]: ...
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 

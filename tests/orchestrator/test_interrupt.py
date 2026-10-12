@@ -14,7 +14,7 @@ from forja.core.states import AttemptState, ExecutionState, Level, StageState, T
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import Orchestrator, confirm_run
-from forja.orchestrator.ports import AgentResult, AttemptContext, SinkFactory
+from forja.orchestrator.ports import AgentResult, AttemptContext, Expectations, SinkFactory
 from tests.orchestrator.fakes import ScriptedAgent, ScriptedMeasurer, ScriptedPlanner
 from tests.orchestrator.harness import ISOLATION, RUN, MemoryWorld
 
@@ -35,7 +35,9 @@ class Waiting(ScriptedAgent):
 class SlowJudge(ScriptedMeasurer):
     started: asyncio.Event | None = None
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> Any:
         assert self.started is not None
         self.started.set()
         await asyncio.sleep(3600)

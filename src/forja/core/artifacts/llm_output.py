@@ -103,6 +103,21 @@ class Action(BaseModel):
     files: tuple[DeclaredFile, ...] = Field(min_length=1)
 
 
+class DeclaredTest(BaseModel):
+    """A test the test author says covers a criterion; ``test_id`` is the runner's own id."""
+
+    model_config = _strict()
+
+    criterion_id: int = Field(ge=1)
+    test_id: NonEmpty
+    path: str
+
+    @field_validator("path")
+    @classmethod
+    def _path(cls, value: str) -> str:
+        return check_relative_path(value)
+
+
 class LlmOutput(BaseModel):
     """The only shape a role may answer with."""
 
@@ -111,6 +126,7 @@ class LlmOutput(BaseModel):
     claims: tuple[Claim, ...] = ()
     actions: tuple[Action, ...] = ()
     assumptions: tuple[Assumption, ...] = ()
+    tests: tuple[DeclaredTest, ...] = ()  # only the test author declares these
 
 
 class ChangeDeclaration(BaseModel):

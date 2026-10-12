@@ -18,6 +18,7 @@ def default_registry() -> CheckRegistry:
         CheckSpec("lint", 3, Mode.BLOCKING, BLOCK, commands=frozenset({"lint"})),
         CheckSpec("build", 4, Mode.BLOCKING, BLOCK, commands=frozenset({"build"})),
         CheckSpec("tests", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
+        CheckSpec("red_green", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
         CheckSpec("complexity", 8, Mode.BLOCKING, PREMISE, thresholds=frozenset({"max_ccn"})),
     ):
         registry.register(spec)

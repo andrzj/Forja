@@ -34,6 +34,7 @@ from forja.core.adapters.executor import (
 from forja.core.artifacts.errors import InvalidLlmOutput
 from forja.core.artifacts.llm_output import (
     ChangeDeclaration,
+    DeclaredTest,
     LlmOutput,
     compare_with_diff,
     parse_llm_output,
@@ -378,6 +379,10 @@ class ExecutorAgentRunner:
                 raise RuntimeError("a file that was to stay untouched changed on the way back")
 
         return Step(payload, run)
+
+    def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]:
+        """The tests the agent says it wrote; the work copy outlives the attempt's judging."""
+        return _declared(workcopy_of(ctx)).tests
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload

@@ -222,3 +222,17 @@ def test_an_empty_path_is_not_a_path_inside_the_repository() -> None:
 
     with pytest.raises(ValueError, match="not a relative POSIX path"):
         check_relative_path("")
+
+
+def test_the_tests_a_role_declares_are_parsed_and_default_to_none() -> None:
+    declared = {"tests": [{"criterion_id": 1, "test_id": "tests/a.py::t", "path": "tests/a.py"}]}
+
+    assert parse_llm_output(json.dumps(declared)).tests[0].test_id == "tests/a.py::t"
+    assert parse_llm_output("{}").tests == ()
+
+
+@pytest.mark.parametrize("path", ["../a.py", "/a.py", "a" + chr(92) + "b.py"])
+def test_a_declared_test_must_stay_inside_the_repository(path: str) -> None:
+    declared = {"tests": [{"criterion_id": 1, "test_id": "a::t", "path": path}]}
+
+    assert any("tests" in p for p in problems(declared))

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from forja.core.adapters.executor import ErrorActivity, ErrorKind
+from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.events import OpenOperation
 from forja.core.gates import (
     Approved,
@@ -38,6 +39,7 @@ from forja.orchestrator.ports import (
     AgentResult,
     AttemptContext,
     Baseline,
+    Expectations,
     PlannedTask,
     RejectedWork,
     SinkFactory,
@@ -71,6 +73,7 @@ class ScriptedMeasurer:
     baseline_ok: bool = True
     integration_verdicts: Sequence[PipelineOutcome] = (PASSED,)
     judged: list[str] = field(default_factory=list)
+    expected: list[Expectations | None] = field(default_factory=list)
     metrics: Mapping[str, float] = field(default_factory=lambda: {"complexity": 12.0})
     formatted: bool = True
 
@@ -83,8 +86,11 @@ class ScriptedMeasurer:
             return Baseline(False, ("tests fail on the base",))
         return Baseline(True, (), self.metrics)
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> PipelineOutcome:
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> PipelineOutcome:
         self.judged.append(ctx.attempt_id)
+        self.expected.append(expectations)
         return self.verdicts[min(len(self.judged), len(self.verdicts)) - 1]
 
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome:
@@ -125,6 +131,7 @@ class ScriptedAgent:
     pause: float = 0.0
     meddle: Callable[[], object] | None = None
     reject_diff: str | None = None
+    tests: tuple[DeclaredTest, ...] = ()
     die_after_the_call: bool = False
     by_feedback: bool = False
     in_process: bool = True  # False starts a real process, as the resume tests need
@@ -221,6 +228,9 @@ class ScriptedAgent:
 
         return Step(payload, run)
 
+    def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]:
+        return self.tests
+
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload
         if operation.operation == "prepare_workcopy":
@@ -231,6 +241,8 @@ class ScriptedAgent:
 class ContentMeasurer(ScriptedMeasurer):
     """Judges by what the agent wrote, so a restarted run judges the same way."""
 
-    async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> PipelineOutcome:
+    async def judge(
+        self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
+    ) -> PipelineOutcome:
         written = (ctx.worktree / "src" / f"{ctx.task.task_id}.py").read_text(encoding="utf-8")
         return REJECTED if written.startswith("bad") else PASSED

@@ -4,12 +4,13 @@ from pathlib import Path
 
 import pytest
 
+from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.config import Budget, ExecutorRef, FixRequest, Objective
 from forja.orchestrator.planner import FixPlanner
-from forja.orchestrator.ports import PlannedTask
+from forja.orchestrator.ports import Expectations, PlannedTask
 from tests.orchestrator.fakes import (
     PASSED,
     REJECTED,
@@ -141,3 +142,22 @@ def test_the_fix_planner_makes_one_task_with_the_tests_first() -> None:
             test_root="tests",
         )
     ]
+
+
+def test_only_the_test_author_is_judged_against_the_criteria_it_declared_tests_for(
+    world: MemoryWorld,
+) -> None:
+    declared = (
+        DeclaredTest(criterion_id=1, test_id="tests/test_a.py::test_a", path="tests/test_a.py"),
+    )
+    author = ScriptedAgent(edits=[TESTS], tests=declared)
+    measurer = ScriptedMeasurer()
+
+    world.run(
+        measurer=measurer,
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.TEST_AUTHOR: author},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    assert measurer.expected == [Expectations(frozenset({1}), declared), None]

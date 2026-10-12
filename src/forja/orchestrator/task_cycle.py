@@ -17,6 +17,7 @@ from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
     AgentResult,
     AttemptContext,
+    Expectations,
     RejectedWork,
     RunContext,
     TaskInfo,
@@ -254,7 +255,7 @@ class TaskCycle:
         except RejectedWork as rejected:
             self._reject(attempt, str(rejected))
             return
-        outcome = await run.measurer.judge(ctx, run.sinks)
+        outcome = await run.measurer.judge(ctx, run.sinks, self._expectations(ctx))
         for assumption in outcome.assumptions:
             journal.note(
                 "premise",
@@ -267,6 +268,13 @@ class TaskCycle:
             self._reject(attempt, describe_stop(stopper))
         else:
             self._block(ctx.task, attempt, describe_stop(stopper))
+
+    def _expectations(self, ctx: AttemptContext) -> Expectations | None:
+        fix = self._ctx.config.fix
+        if ctx.task.role is not Producer.TEST_AUTHOR or fix is None:
+            return None
+        declared = self._ctx.runner(ctx.task.role).declared_tests(ctx)
+        return Expectations(frozenset(int(c.id) for c in fix.criteria.criteria), declared)
 
     def _block(self, info: TaskInfo, attempt: str, detail: str) -> None:
         """A gate could not judge and its policy is to block: not the agent's fault, not counted."""
