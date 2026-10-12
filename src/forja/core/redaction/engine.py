@@ -208,6 +208,13 @@ class Redactor:
         return "".join(pieces), findings
 
     def _matches(self, text: str) -> list[_Match]:
+        return [
+            *self._rule_matches(text),
+            *self._extra_matches(text),
+            *self._pii_matches(text),
+        ]
+
+    def _rule_matches(self, text: str) -> list[_Match]:
         lowered = text.lower()
         matches: list[_Match] = []
         for rule in RULES:
@@ -226,6 +233,10 @@ class Redactor:
                     continue
                 start, end = hit.span(rule.group)
                 matches.append(_Match(start, end, Category.SECRET, rule.id, value))
+        return matches
+
+    def _extra_matches(self, text: str) -> list[_Match]:
+        matches: list[_Match] = []
         for name, pattern in self._extra:
             for hit in pattern.finditer(text):
                 group = 1 if pattern.groups else 0
@@ -233,6 +244,10 @@ class Redactor:
                 if value and not self._allowed(value):
                     start, end = hit.span(group)
                     matches.append(_Match(start, end, Category.SECRET, name, value))
+        return matches
+
+    def _pii_matches(self, text: str) -> list[_Match]:
+        matches: list[_Match] = []
         for detector in self._detectors:
             for pattern in detector.patterns:
                 for hit in pattern.finditer(text):
