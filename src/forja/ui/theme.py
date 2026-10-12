@@ -112,30 +112,34 @@ def contrast(foreground: str, background: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+# the 16-color name of each role, as (dark, light)
+_ANSI_BASE = {
+    Role.BACKGROUND: ("black", "white"),
+    Role.SURFACE: ("bright_black", "white"),
+    Role.SURFACE_TEXT: ("white", "black"),
+    Role.BORDER: ("bright_black", "bright_black"),
+    Role.TEXT: ("white", "black"),
+    Role.MUTED: ("bright_black", "bright_black"),
+    Role.ACCENT: ("bright_blue", "blue"),
+    Role.SUCCESS: ("bright_green", "green"),
+    Role.WARNING: ("bright_yellow", "yellow"),
+    Role.ERROR: ("bright_red", "red"),
+    Role.INFO: ("bright_cyan", "blue"),
+    Role.SELECTION: ("blue", "blue"),
+    Role.SELECTION_TEXT: ("bright_white", "bright_white"),
+    Role.BAR: ("blue", "blue"),
+    Role.BAR_TEXT: ("bright_white", "bright_white"),
+    Role.TASKS: ("bright_blue", "blue"),
+    Role.TOKENS: ("bright_blue", "blue"),
+    Role.GATES: ("bright_blue", "blue"),
+    Role.ACTIVITY: ("bright_blue", "blue"),
+    Role.REJECTED: ("bright_blue", "blue"),
+}
+
+
 def _ansi(dark: bool, **overrides: str) -> dict[Role, str]:
-    base = {
-        Role.BACKGROUND: "black" if dark else "white",
-        Role.SURFACE: "bright_black" if dark else "white",
-        Role.SURFACE_TEXT: "white" if dark else "black",
-        Role.BORDER: "bright_black" if dark else "bright_black",
-        Role.TEXT: "white" if dark else "black",
-        Role.MUTED: "bright_black",
-        Role.ACCENT: "bright_blue" if dark else "blue",
-        Role.SUCCESS: "bright_green" if dark else "green",
-        Role.WARNING: "bright_yellow" if dark else "yellow",
-        Role.ERROR: "bright_red" if dark else "red",
-        Role.INFO: "bright_cyan" if dark else "blue",
-        Role.SELECTION: "blue",
-        Role.SELECTION_TEXT: "bright_white",
-        Role.BAR: "blue",
-        Role.BAR_TEXT: "bright_white",
-        Role.TASKS: "bright_blue" if dark else "blue",
-        Role.TOKENS: "bright_blue" if dark else "blue",
-        Role.GATES: "bright_blue" if dark else "blue",
-        Role.ACTIVITY: "bright_blue" if dark else "blue",
-        Role.REJECTED: "bright_blue" if dark else "blue",
-    }
-    return {role: overrides.get(role.value, color) for role, color in base.items()}
+    side = 0 if dark else 1
+    return {role: overrides.get(role.value, pair[side]) for role, pair in _ANSI_BASE.items()}
 
 
 def _colors(**values: str) -> dict[Role, str]:
