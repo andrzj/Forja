@@ -20,7 +20,7 @@ Cada repositório nasce de um commit fixo, com testes visíveis que passam. As f
 
 ## Braços
 
-Nos dois: mesmo Claude Code, mesma versão e mesmo modelo, mesmo commit inicial, mesmo escopo (o repositório inteiro), mesmo teto de tokens por execução.
+Nos dois: mesmo Claude Code, mesma versão e mesmo modelo, mesmo commit inicial, mesmo escopo (o repositório inteiro), mesmo teto de 200 mil tokens por execução (decidido pelo dono em 12/10; uma execução que passe do teto não é aceita).
 
 - **A, só prompt.** `claude -p` na raiz de uma cópia do repositório, com um prompt único e fixo (abaixo), ferramentas de arquivo e os comandos `python -m pytest` e `python -m ruff` liberados. Sem portões, sem tentativas guiadas, sem retomada. O que o agente deixar na cópia é a entrega.
 - **B, Forja.** `forja refatorar` com o `forja.toml` do repositório, `agente_roda_testes` ligado (o padrão), 5 tarefas, 3 tentativas. A entrega é a branch `forja-run/...`; sem branch integrada, nada foi entregue.
@@ -48,7 +48,9 @@ Execução sem alteração, sem branch integrada (código de saída 4 da Forja) 
 
 ## Regressão
 
-Para cada repositório, testes de caracterização com saídas gravadas do **código original** em uma grade de entradas (valores comuns, limites, vazios, tipos errados, exceções), guardados fora do repositório e nunca mostrados a nenhum braço. Uma entrega é regressão se algum deles falhar na árvore final, mesmo que ela passe nos testes visíveis. Conta-se por execução (houve ou não) e por caso falho.
+Para cada repositório médio (`inventory`, `scanner`), testes de caracterização com saídas gravadas do **código original** em uma grade de entradas (valores comuns, limites, vazios, tipos errados, exceções), guardados fora do repositório e nunca mostrados a nenhum braço. Uma entrega é regressão se algum deles falhar na árvore final, mesmo que ela passe nos testes visíveis. Conta-se por execução (houve ou não) e por caso falho.
+
+Os controles não têm oráculo oculto: neles a regressão é só a falha dos testes visíveis, que já reprova a entrega.
 
 ## O que se mede por execução
 
@@ -56,11 +58,20 @@ Aceita ou não (e qual item falhou), regressão (sim ou não, casos que falharam
 
 ## Decisão (fixada antes)
 
-- **Seguir:** taxa de aceitação da Forja pelo menos 15 pontos percentuais acima da linha de base, regressões da Forja menores ou iguais às da linha de base, e tokens da Forja no máximo 2× os da linha de base.
-- **Ajustar:** a Forja vence em aceitação e regressões, mas custa mais de 2×; ou vence em um dos dois e empata no outro.
-- **Parar:** a Forja não vence em aceitação nem em regressões.
+A ordem de avaliação é esta; vale a primeira que se aplicar.
+
+1. **Inconclusivo:** os dois braços têm taxa de aceitação de pelo menos 90% e nenhuma regressão nas execuções das tarefas médias. As tarefas são fáceis demais para separar os braços (efeito teto) e nada se conclui sobre a tese. Segue uma segunda rodada com tarefas mais difíceis (repositórios maiores ou funções com mais armadilhas), com o protocolo registrado antes, e o dono decide.
+2. **Seguir:** taxa de aceitação da Forja pelo menos 15 pontos percentuais acima da linha de base, regressões da Forja menores ou iguais às da linha de base, e tokens da Forja no máximo 2× os da linha de base.
+3. **Ajustar:** a Forja vence em aceitação e regressões, mas custa mais de 2×; ou vence em um dos dois e empata no outro.
+4. **Parar:** a Forja não vence em aceitação nem em regressões, e ao menos um braço ficou abaixo de 90% de aceitação ou teve regressão.
 
 Os controles não entram na taxa de decisão, só aparecem no relatório (se algum braço errar um controle, isso é um achado por si só). A decisão final é do dono do repositório; quem mede apresenta os números e uma recomendação.
+
+Esta regra do "inconclusivo" foi acrescentada em 12/10, depois do piloto e antes de qualquer execução contada, ao se ver que uma única execução média já era aceita nos dois braços.
+
+## Piloto (fora dos números)
+
+Uma execução de cada braço no controle `plain` e no `inventory` (repetição 0, excluída do relatório): `plain` A 9.486 tokens em 22 s e B 7.256 em 27 s; `inventory` A 20.788 tokens em 67 s (1 tentativa) e B 30.521 em 76 s (3 tentativas). Os quatro foram aceitos, sem regressão. Estimativa das 30 execuções: cerca de 470 mil tokens e 40 minutos.
 
 ## Limitações declaradas
 
@@ -71,7 +82,7 @@ Os controles não entram na taxa de decisão, só aparecem no relatório (se alg
 
 ## Custo
 
-O custo em tokens só é conhecido depois de uma execução piloto de cada braço. Antes de rodar as 30, apresento a estimativa e peço o teto de tokens ao dono.
+Medido no piloto (seção acima) e aprovado pelo dono: teto de 200 mil tokens por execução, cerca de 470 mil esperados no total.
 
 ## Entregas deste incremento
 

@@ -2,6 +2,7 @@
 
     python run.py plan                       the shuffled order of every execution
     python run.py one <repo> <arm> <rep>     one execution, judged, appended to results.jsonl
+    python run.py batch                      every execution not yet done, in the planned order
     python run.py report                     the numbers so far
 
 Arm ``A`` is the CLI with one fixed prompt; arm ``B`` is the Forja. Both get the same tools, the
@@ -52,7 +53,7 @@ PROMPT = (
     "altere testes nem dependências. Você pode rodar `forja agente testar`, `forja agente lint` e "
     "`forja agente medir`. Rode os testes e o lint ao terminar e deixe tudo passando.\n"
 )
-DEFAULT_TOKENS = 600_000
+DEFAULT_TOKENS = 200_000
 TIMEOUT = 3600
 
 
@@ -238,6 +239,23 @@ if __name__ == "__main__":
     elif command == "one":
         budget = int(os.environ.get("MEDICAO_TOKENS", DEFAULT_TOKENS))
         print(json.dumps(one(sys.argv[2], sys.argv[3].upper(), int(sys.argv[4]), budget), indent=1))
+    elif command == "batch":
+        budget = int(os.environ.get("MEDICAO_TOKENS", DEFAULT_TOKENS))
+        done = (
+            {
+                (r["repo"], r["arm"], r["rep"])
+                for r in map(
+                    json.loads, (work_dir() / "results.jsonl").read_text("utf-8").splitlines()
+                )
+            }
+            if (work_dir() / "results.jsonl").exists()
+            else set()
+        )
+        for item in plan():
+            if item in done:
+                continue
+            row = one(*item, budget)
+            print(item, "accepted" if row["accepted"] else row["failed_criteria"], flush=True)
     elif command == "report":
         print(report())
     else:
