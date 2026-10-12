@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from forja.core.process import Outcome, ProcessSpec, UnsafeCommand, check_command_safety
-from forja.core.process.model import MAX_ARGUMENT_CHARS
+from forja.core.process.model import MAX_ARGUMENT_CHARS, MAX_COMMAND_CHARS
 from tests.core.process.support import minimal_env, run_to_end, spec
 
 SHELL_CHARACTERS = ["&", "|", "<", ">", "^", "%", '"', chr(10), chr(13)]
@@ -87,3 +87,29 @@ def test_a_missing_stdin_file_is_a_failure_to_start_not_a_crash(tmp_path: Path) 
 
     assert result.outcome is Outcome.SPAWN_FAILED
     assert sink.kinds() == ["intent", "effect"]
+
+
+def test_the_whole_command_line_may_be_exactly_as_long_as_the_limit_and_not_longer() -> None:
+    # every argument counts its own length and one separator
+    full = ["t", *["x" * 7999] * 3]
+    rest = MAX_COMMAND_CHARS - sum(len(a) + 1 for a in full) - 1
+
+    check_command_safety([*full, "y" * rest])
+    with pytest.raises(UnsafeCommand, match="too long"):
+        check_command_safety([*full, "y" * (rest + 1)])
+
+
+def test_the_program_of_a_batch_file_is_not_an_argument_to_check() -> None:
+    check_command_safety(["C:/tools/a&b/agent.cmd", "-p"])
+
+
+def test_the_refusal_of_a_batch_argument_names_the_program_and_shows_its_start() -> None:
+    argument = "a&" + "b" * 60
+
+    with pytest.raises(UnsafeCommand) as refused:
+        check_command_safety(["C:/tools/agent.cmd", "-p", argument])
+
+    assert str(refused.value).startswith("agent.cmd runs through cmd.exe")
+    assert repr(argument[:40]) in str(refused.value) and repr(argument[:41]) not in str(
+        refused.value
+    )

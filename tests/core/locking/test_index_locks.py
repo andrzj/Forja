@@ -102,3 +102,12 @@ def test_the_real_process_list_includes_this_process_and_no_invented_names() -> 
     assert "forja-no-such-program" not in names
     assert all(name == name.lower() for name in names)
     assert isinstance(git_is_running(), bool)
+
+
+def test_a_lock_exactly_as_old_as_the_limit_is_old_enough(repo: Repo) -> None:
+    path = lock_in(repo)
+    stamp = path.stat().st_mtime
+
+    report = run(repo, min_age=30, git_running=lambda: False, now=lambda: stamp + 30)
+
+    assert len(report.removed) == 1 and not path.exists()

@@ -8,6 +8,8 @@ import pytest
 
 from forja.core.idempotency import (
     Decision,
+    Git,
+    GitError,
     ReconciliationError,
     normalize_stage_id,
     reconcile_apply_diff,
@@ -361,3 +363,21 @@ def test_rollback_integration_with_the_integration_still_in_place_means_redo(rep
 def test_rollback_integration_cannot_be_verified_without_the_run_branch(repo: Repo) -> None:
     with pytest.raises(ReconciliationError):
         asyncio.run(reconcile_rollback_integration(repo.git, run_branch_name("r1"), "a" * 40))
+
+
+def test_the_logs_of_git_are_numbered_from_one(repo: Repo, tmp_path: Path) -> None:
+    asyncio.run(repo.git.run("rev-parse", "HEAD"))
+
+    assert (tmp_path / "logs" / "git-1.log").is_file()
+    assert not (tmp_path / "logs" / "git-0.log").exists()
+
+
+def test_a_git_that_takes_too_long_is_an_error_not_a_result(repo: Repo, tmp_path: Path) -> None:
+    import sys  # noqa: PLC0415
+
+    slow = Git(
+        repo.path, executable=sys.executable, env=repo.env, timeout=1, log_dir=tmp_path / "slow"
+    )
+
+    with pytest.raises(GitError, match="timed_out"):
+        asyncio.run(slow.run("-c", "import time; time.sleep(30)"))

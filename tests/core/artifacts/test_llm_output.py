@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from forja.core.artifacts import (
     Action,
@@ -199,3 +200,25 @@ def test_a_file_declared_under_two_kinds_never_matches() -> None:
 
 def test_no_declaration_and_no_diff_agree() -> None:
     assert compare_with_diff(ChangeDeclaration(), ManifestDiff((), (), ())) == []
+
+
+def test_a_citation_of_a_single_line_is_valid() -> None:
+    citation = {"kind": "file", "path": "a.py", "line_start": 5, "line_end": 5}
+
+    parse_llm_output(json.dumps({"claims": [{"statement": "s", "citations": [citation]}]}))
+
+
+def test_a_citation_cannot_be_changed_after_it_was_read() -> None:
+    from forja.core.artifacts.llm_output import FileCitation  # noqa: PLC0415
+
+    citation = FileCitation(kind="file", path="a.py", line_start=1, line_end=2)
+
+    with pytest.raises(ValidationError, match="frozen"):
+        citation.path = "b.py"
+
+
+def test_an_empty_path_is_not_a_path_inside_the_repository() -> None:
+    from forja.core.artifacts.llm_output import check_relative_path  # noqa: PLC0415
+
+    with pytest.raises(ValueError, match="not a relative POSIX path"):
+        check_relative_path("")

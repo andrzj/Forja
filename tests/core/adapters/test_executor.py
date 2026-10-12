@@ -342,3 +342,46 @@ def test_a_generic_cli_shows_each_output_line_as_text() -> None:
 
     assert adapter.parse_event("working on it") == TextActivity("working on it")
     assert adapter.parse_event("   ") is None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the executable bit is a POSIX idea")
+def test_a_file_that_is_not_executable_is_not_an_installation(tmp_path: Path) -> None:
+    plain = tmp_path / "bin" / "fake-agent"
+    plain.parent.mkdir()
+    plain.write_text("x", encoding="utf-8")
+    plain.chmod(0o644)
+
+    assert find_executors(ADAPTER, environ={"PATH": str(plain.parent)}) == []
+
+
+def test_a_directory_with_the_name_of_the_program_is_not_an_installation(tmp_path: Path) -> None:
+    (tmp_path / "bin" / "fake-agent").mkdir(parents=True)
+
+    assert find_executors(ADAPTER, environ={"PATH": str(tmp_path / "bin")}) == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="PATHEXT is a Windows idea")
+def test_off_windows_a_shim_with_an_extension_is_not_found_by_the_bare_name(
+    tmp_path: Path,
+) -> None:
+    shim = make_executable(tmp_path / "bin" / "fake-agent.cmd")
+
+    found = find_executors(ADAPTER, environ={"PATH": str(shim.parent), "PATHEXT": ".CMD"})
+
+    assert found == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows expands from the process")
+def test_extra_locations_take_their_variables_from_the_environment_given_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make_executable(tmp_path / "tools" / "bin" / "agent-x")
+    monkeypatch.setenv("TOOLS_ELSEWHERE", str(tmp_path / "tools"))
+    adapter = TemplateExecutorAdapter(
+        "x",
+        DiscoverySpec(("agent-x",), extra_locations=("${TOOLS_ELSEWHERE}/bin",)),
+        ("{executable}", "{package}"),
+        PROBE,
+    )
+
+    assert find_executors(adapter, environ={"PATH": ""}) == []

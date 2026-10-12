@@ -137,8 +137,7 @@ def check_relative_path(value: str) -> str:
     """A repository-relative POSIX path with no way out of the repository."""
     parts = value.split("/")
     if (
-        not value
-        or value.startswith(("/", "\\"))
+        value.startswith(("/", "\\"))
         or "\\" in value
         or _DRIVE.match(value)
         or any(part in ("", ".", "..") for part in parts)

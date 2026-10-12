@@ -38,3 +38,17 @@ def test_relative_entries_are_ignored(tmp_path: Path, monkeypatch: pytest.Monkey
 
 def test_a_missing_program_is_none(tmp_path: Path) -> None:
     assert locate_in_path("nothing-here", str(tmp_path)) is None
+
+
+def test_a_directory_with_the_name_of_the_program_is_not_the_program(tmp_path: Path) -> None:
+    (tmp_path / "bin" / "tool").mkdir(parents=True)
+
+    assert locate_in_path("tool", str(tmp_path / "bin")) is None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the executable bit is a POSIX idea")
+def test_a_file_that_is_not_executable_is_not_the_program(tmp_path: Path) -> None:
+    path = program(tmp_path / "bin")
+    path.chmod(0o644)
+
+    assert locate_in_path("tool", str(tmp_path / "bin")) is None

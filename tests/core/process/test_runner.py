@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import sys
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import pytest
 
 from forja.core.events.models import canonical_json
 from forja.core.process import Outcome, ProcessIdentity, ProcessRunner, ProcessSpec
-from forja.core.process.runner import command_for_log
+from forja.core.process.runner import ARGUMENT_LOG_LIMIT, COMMAND_LOG_BUDGET, command_for_log
 from tests.core.process.support import (
     RecordingSink,
     minimal_env,
@@ -213,3 +214,46 @@ def test_one_huge_argument_is_shortened() -> None:
     logged = command_for_log(["python", "-c", "x" * 10_000])
 
     assert len(logged[2]) < 400 and logged[2].endswith("...")
+
+
+def test_an_argument_is_shortened_only_when_it_is_longer_than_the_limit() -> None:
+    assert command_for_log(["x" * ARGUMENT_LOG_LIMIT]) == ["x" * ARGUMENT_LOG_LIMIT]
+    shortened = command_for_log(["x" * (ARGUMENT_LOG_LIMIT + 1)])
+    assert shortened[0] == "x" * ARGUMENT_LOG_LIMIT + "..."
+    assert "0 more arguments, sha256 " in shortened[1]
+
+
+def test_a_command_is_whole_up_to_the_budget_counting_four_for_each_argument() -> None:
+    each = COMMAND_LOG_BUDGET // 6 - 4
+    exact = ["x" * each] * 6
+
+    assert command_for_log(exact) == exact
+    over = [*exact, "y"]
+    logged = command_for_log(over)
+    assert logged != over and "more arguments" in logged[-1]
+
+
+def test_a_long_command_keeps_what_fits_and_counts_and_hashes_the_rest() -> None:
+    each = COMMAND_LOG_BUDGET // 6 - 4
+    command = [chr(97 + n) * each for n in range(10)]
+    digest = hashlib.sha256(chr(0).join(command).encode()).hexdigest()[:16]
+
+    assert command_for_log(command) == [*command[:6], f"... (4 more arguments, sha256 {digest})"]
+
+
+def test_ending_the_reading_of_a_stuck_stream_never_raises() -> None:
+    async def scenario() -> list[bool]:
+        stuck = [asyncio.create_task(asyncio.sleep(60)) for _ in range(2)]
+        await ProcessRunner._drain(stuck, 0.05)  # noqa: SLF001
+        return [task.cancelled() for task in stuck]
+
+    assert asyncio.run(scenario()) == [True, True]
+
+
+def test_what_fits_is_decided_by_the_length_plus_four_of_each_argument() -> None:
+    each = COMMAND_LOG_BUDGET // 6 - 4
+    command = [*["x" * each] * 5, "y" * (each + 1), "z" * each]
+
+    # five fit exactly in 1500; the sixth would make 1801
+    assert command_for_log(command)[:5] == ["x" * each] * 5
+    assert command_for_log(command)[5].startswith("... (2 more arguments")

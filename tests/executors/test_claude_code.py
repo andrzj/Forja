@@ -24,7 +24,7 @@ from forja.core.adapters.executor import (
 )
 from forja.core.artifacts.models import Producer
 from forja.executors import ClaudeCodeAdapter
-from forja.executors.claude_code import classify_error
+from forja.executors.claude_code import _count, _lines, _path, _tool, classify_error
 
 FIXTURE = Path(__file__).with_name("fixtures") / "claude_auth_failed.jsonl"
 adapter = ClaudeCodeAdapter()
@@ -186,6 +186,10 @@ def test_what_is_not_activity_is_left_alone(text: str) -> None:
         ("anything", 401, ErrorKind.BLOCKING),
         ("anything", 403, ErrorKind.BLOCKING),
         ("anything", 429, ErrorKind.TRANSIENT),
+        ("oauth expired", 429, ErrorKind.TRANSIENT),
+        ("oauth expired", 500, ErrorKind.TRANSIENT),
+        ("oauth expired", 499, ErrorKind.BLOCKING),
+        ("ENOTFOUND", 404, ErrorKind.PERSISTENT),
         ("anything", 503, ErrorKind.TRANSIENT),
         ("Failed to authenticate: OAuth session expired", None, ErrorKind.BLOCKING),
         ("Your credit balance is too low", None, ErrorKind.BLOCKING),
@@ -222,3 +226,40 @@ def test_the_real_stream_of_a_file_written_is_read_as_the_edit_and_the_tokens() 
     ]
     assert activities[1] == FileEditActivity("/work/probe.txt", 1, 0)
     assert activities[5] == UsageActivity(4 + 329, 223)  # what the cache gave back is not counted
+
+
+def test_a_message_with_an_error_or_of_another_kind_is_not_what_the_assistant_did() -> None:
+    content = {"content": [{"type": "text", "text": "hello"}]}
+
+    assert adapter.parse_event(json.dumps({"type": "assistant", "message": content})) is not None
+    assert (
+        adapter.parse_event(json.dumps({"type": "assistant", "error": "x", "message": content}))
+        is None
+    )
+    assert adapter.parse_event(json.dumps({"type": "system", "message": content})) is None
+
+
+def test_the_lines_of_a_text_are_counted_and_anything_else_has_none() -> None:
+    assert _lines("a" + chr(10) + "b") == 2
+    assert [_lines(value) for value in ("", None, 5, ["a"])] == [0, 0, 0, 0]
+
+
+def test_a_path_is_a_non_empty_text_with_forward_slashes() -> None:
+    assert _path("src" + chr(92) + "a.py") == "src/a.py"
+    assert [_path(value) for value in ("", None, 5)] == [None, None, None]
+
+
+def test_a_token_count_is_a_whole_number_of_zero_or_more() -> None:
+    assert _count(7) == 7 and _count(0) == 0
+    assert [_count(value) for value in (-3, True, "7", None, 1.5)] == [0, 0, 0, 0, 0]
+
+
+def test_only_the_tools_the_forja_knows_are_shown_and_only_with_what_they_need() -> None:
+    assert _tool("Glob", {"path": "src"}) is None
+    assert _tool("Write", {"content": "x"}) is None
+    assert _tool("Edit", {"new_string": "x"}) is None
+    assert _tool("Read", {}) is None
+    assert _tool("Unknown", {"command": "ls"}) is None
+    assert _tool("Bash", {}) is None
+    assert _tool("Bash", {"command": 5}) is None
+    assert _tool("Bash", {"command": "ls"}) == CommandActivity("ls")

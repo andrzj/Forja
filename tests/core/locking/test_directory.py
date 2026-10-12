@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -14,7 +15,8 @@ from forja.core.locking import (
     release,
     try_acquire,
 )
-from forja.core.locking.directory import OWNER_FILE
+from forja.core.locking import directory as directory_module
+from forja.core.locking.directory import OWNER_FILE, TakenOver, _judge, _take_over
 from forja.core.process import creation_token
 from tests.core.locking.support import NO_SLEEP, age, dead_owner, write_lock
 from tests.core.process.support import minimal_env
@@ -261,3 +263,132 @@ def test_many_processes_racing_for_an_abandoned_lock_produce_exactly_one_winner(
 
     assert sorted(answers) == ["HELD"] * 7 + ["OK"]
     assert not (tmp_path / "run.lock.takeover").exists()
+
+
+def at(directory: Path, stamp: float) -> None:
+    os.utime(directory, (stamp, stamp))
+
+
+def test_a_lock_without_owner_is_being_acquired_until_the_grace_has_passed(tmp_path: Path) -> None:
+    lock = tmp_path / "run.lock"
+    lock.mkdir()
+    at(lock, 1000.0)
+    settings = DirectoryLockSettings(grace=5.0, now=lambda: 1005.0)
+
+    assert type(_judge(lock, settings)).__name__ == "_Orphan"  # exactly the grace: it is over
+    assert (
+        type(_judge(lock, DirectoryLockSettings(grace=5.0, now=lambda: 1004.9))).__name__
+        == "_Alive"
+    )
+
+
+def test_a_takeover_guard_is_abandoned_only_when_older_than_its_ttl(tmp_path: Path) -> None:
+    lock = tmp_path / "run.lock"
+    guard = tmp_path / "run.lock.takeover"
+    guard.mkdir()
+    at(guard, 1000.0)
+
+    assert _take_over(lock, DirectoryLockSettings(guard_ttl=30.0, now=lambda: 1030.0)) is None
+    assert guard.exists()  # exactly the ttl: still somebody's
+    assert _take_over(lock, DirectoryLockSettings(guard_ttl=30.0, now=lambda: 1030.1)) is None
+    assert not guard.exists()
+
+
+@pytest.fixture
+def stubborn_removal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Removing a directory fails, as it can under a virus scanner, unless errors are ignored."""
+
+    def rmtree(path: object, ignore_errors: bool = False, **more: object) -> None:
+        if not ignore_errors:
+            raise PermissionError(str(path))
+
+    monkeypatch.setattr(shutil, "rmtree", rmtree)
+
+
+@pytest.mark.usefixtures("stubborn_removal")
+def test_a_stuck_removal_never_stops_the_takeover_of_an_abandoned_lock(tmp_path: Path) -> None:
+    lock = tmp_path / "run.lock"
+    write_lock(lock, dead_owner())
+    (tmp_path / "run.lock.takeover").mkdir()
+    at(tmp_path / "run.lock.takeover", 1.0)
+
+    assert _take_over(lock, DirectoryLockSettings()) is None  # the old guard could not be removed
+    (tmp_path / "run.lock.takeover").rmdir()
+    taken = _take_over(lock, DirectoryLockSettings())
+
+    assert isinstance(taken, TakenOver)
+    assert not lock.exists()
+
+
+@pytest.mark.usefixtures("stubborn_removal")
+def test_a_lock_that_could_not_be_written_is_removed_and_the_cause_is_what_is_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing(path: object, data: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(directory_module, "atomic_write_bytes", failing)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        try_acquire(tmp_path / "run.lock", owner(), NO_SLEEP)
+
+
+@pytest.mark.usefixtures("stubborn_removal")
+def test_giving_the_lock_back_does_not_depend_on_the_removal_of_what_was_moved(
+    tmp_path: Path,
+) -> None:
+    mine = owner()
+    lock = try_acquire(tmp_path / "run.lock", mine, NO_SLEEP).directory
+
+    assert release(lock, mine) is True
+    assert not lock.exists()
+
+
+def test_a_lock_that_vanishes_while_it_is_judged_is_gone(tmp_path: Path) -> None:
+    assert type(_judge(tmp_path / "nothing.lock", DirectoryLockSettings())).__name__ == "_Gone"
+
+
+def test_a_takeover_of_a_lock_that_vanished_has_nothing_to_take(tmp_path: Path) -> None:
+    assert _take_over(tmp_path / "nothing.lock", DirectoryLockSettings()) is None
+    assert not (tmp_path / "nothing.lock.takeover").exists()
+
+
+def test_a_takeover_that_cannot_move_the_lock_aside_looks_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = tmp_path / "run.lock"
+    write_lock(lock, dead_owner())
+
+    def refuse(source: object, target: object) -> None:
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(os, "rename", refuse)
+
+    assert _take_over(lock, DirectoryLockSettings()) is None
+    assert lock.exists()
+    assert not (tmp_path / "run.lock.takeover").exists()
+
+
+def test_a_guard_that_disappears_while_it_is_looked_at_is_not_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def exists(path: object) -> None:
+        raise FileExistsError
+
+    monkeypatch.setattr(os, "mkdir", exists)
+
+    assert _take_over(tmp_path / "run.lock", DirectoryLockSettings()) is None
+
+
+def test_giving_back_a_lock_that_is_already_gone_says_it_was_not_ours(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mine = owner()
+    lock = try_acquire(tmp_path / "run.lock", mine, NO_SLEEP).directory
+
+    def gone(source: object, target: object) -> None:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(os, "rename", gone)
+
+    assert release(lock, mine) is False

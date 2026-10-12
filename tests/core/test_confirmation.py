@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from forja.core.confirmation import (
     Confirmation,
@@ -86,3 +86,31 @@ def test_the_latest_transition_into_a_state_is_the_one_remembered(tmp_path: Path
             "why": "network"
         }
         assert state.transition_payload(Level.EXECUTION, RUN, ExecutionState.EXECUTING) is None
+
+
+def test_a_damaged_confirmation_says_what_is_wrong_with_it(tmp_path: Path) -> None:
+    with open_log(tmp_path / "events.jsonl") as log:
+        create_run(log)
+        confirm(log, {"isolation": {}})
+
+        with pytest.raises(ConfirmationError) as refused:
+            load_confirmation(log.state)
+
+    assert str(refused.value).startswith("the confirmation record is invalid: ")
+    assert len(str(refused.value)) > len("the confirmation record is invalid: ")
+
+
+def test_the_first_problem_of_a_damaged_confirmation_is_the_one_told(tmp_path: Path) -> None:
+    from forja.core.isolation import IsolationRecord  # noqa: PLC0415
+
+    broken: JsonValue = {"agent": "environment", "repo_code": "nonsense"}
+    with pytest.raises(ValidationError) as expected:
+        IsolationRecord.model_validate(broken)
+    with open_log(tmp_path / "events.jsonl") as log:
+        create_run(log)
+        confirm(log, {"isolation": broken})
+
+        with pytest.raises(ConfirmationError) as refused:
+            load_confirmation(log.state)
+
+    assert str(refused.value).endswith(expected.value.errors()[0]["msg"])

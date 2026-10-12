@@ -191,7 +191,11 @@ def meets_minimum(found: str, minimum: str) -> bool:
     if not have:
         return False
     width = max(len(have), len(need))
-    return have + (0,) * (width - len(have)) >= need + (0,) * (width - len(need))
+
+    def padded(parts: tuple[int, ...]) -> tuple[int, ...]:
+        return parts + (0,) * (width - len(parts))
+
+    return padded(have) >= padded(need)
 
 
 # -- choosing the executable -------------------------------------------------------------------

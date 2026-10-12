@@ -8,6 +8,7 @@ import pytest
 from forja.core.manifest import (
     EntryKind,
     Manifest,
+    ManifestDiff,
     ManifestEntry,
     ViolationKind,
     build_manifest,
@@ -306,3 +307,10 @@ def test_a_junction_is_recorded_like_a_link_and_never_followed(tmp_path: Path) -
 
     assert list(entries) == ["jn"]
     assert entries["jn"].kind is EntryKind.SYMLINK
+
+
+def test_a_difference_is_empty_only_when_nothing_was_created_modified_or_removed() -> None:
+    assert ManifestDiff((), (), ()).is_empty
+    assert not ManifestDiff(("a",), (), ()).is_empty
+    assert not ManifestDiff((), ("a",), ()).is_empty
+    assert not ManifestDiff((), (), ("a",)).is_empty

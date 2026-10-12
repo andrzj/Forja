@@ -426,3 +426,12 @@ def test_going_back_from_a_pause_clears_the_previous_state(log: EventLog) -> Non
     log.append_transition(Level.EXECUTION, RUN, E.PAUSED, E.MEASURING_BASELINE)
 
     assert log.state.previous_state(Level.EXECUTION, RUN) is None
+
+
+def test_the_previous_state_is_the_latest_one_left_when_a_pause_turns_into_a_failure(
+    log: EventLog,
+) -> None:
+    create_run(log)
+    to_execution_state(log, E.CONFIRMED, E.MEASURING_BASELINE, E.PAUSED, E.FAILED)
+
+    assert log.state.previous_state(Level.EXECUTION, RUN) is E.PAUSED

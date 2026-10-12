@@ -55,3 +55,12 @@ def test_the_plan_has_no_more_tasks_than_the_budget_allows() -> None:
 
 def test_nothing_to_do_is_an_empty_plan() -> None:
     assert plan(max_ccn=100) == []
+
+
+def test_equally_complex_functions_are_ordered_by_file_before_name() -> None:
+    async def functions(worktree: Path) -> dict[tuple[str, str], int]:
+        return {("src/b.py", "a_name"): 20, ("src/a.py", "z_name"): 20}
+
+    tasks = asyncio.run(ComplexityPlanner(functions, 15).plan(Path("."), Baseline(True), Budget()))
+
+    assert [t.scope for t in tasks] == [("src/a.py",), ("src/b.py",)]

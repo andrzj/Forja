@@ -163,3 +163,17 @@ def test_clones_for_other_directories_share_the_same_mutex(repo: Repo, tmp_path:
     asyncio.run(guard.at(worktree).run("add", "-A"))
 
     assert events == ["mutex in (timeout 5)", "mutex out"]
+
+
+def test_a_head_that_names_no_branch_is_not_checked_whatever_git_said_with_it(
+    repo: Repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forja.core.idempotency.git import GitResult  # noqa: PLC0415
+
+    async def failing(self: Git, *args: str) -> GitResult:
+        return GitResult(1, ["refs/heads/main"])  # an error that still printed something
+
+    monkeypatch.setattr(Git, "run", failing)
+    guard = make_guard(repo, tmp_path, None, None)
+
+    asyncio.run(guard._check_branch(("commit",), rewrites=False))  # noqa: SLF001

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -104,3 +105,25 @@ def test_run_dir_lives_under_runs() -> None:
     result = run_dir("abc", environ={"FORJA_HOME": "/x"}, platform="linux", home=Path("/h"))
 
     assert result == Path("/x/runs/abc")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a directory is flushed where it can be opened")
+def test_the_directory_is_flushed_to_disk_on_posix(tmp_path: Path) -> None:
+    from forja.core.atomic import _fsync_directory  # noqa: PLC0415
+
+    flushed: list[int] = []
+
+    _fsync_directory(tmp_path, flushed.append)
+
+    assert len(flushed) == 1 and isinstance(flushed[0], int)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows cannot open a directory to flush it")
+def test_on_windows_the_directory_is_not_flushed(tmp_path: Path) -> None:
+    from forja.core.atomic import _fsync_directory  # noqa: PLC0415
+
+    flushed: list[int] = []
+
+    _fsync_directory(tmp_path, flushed.append)
+
+    assert flushed == []

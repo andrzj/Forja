@@ -127,3 +127,22 @@ def test_a_closed_log_refuses_to_write(tmp_path: Path) -> None:
 
     with pytest.raises(LogUnusable):
         create_run(log)
+
+
+def test_a_payload_of_exactly_the_limit_is_accepted(tmp_path: Path) -> None:
+    import re  # noqa: PLC0415
+
+    from forja.core.events.models import MAX_PAYLOAD_BYTES  # noqa: PLC0415
+
+    with open_log(tmp_path / "events.jsonl") as log:
+        create_run(log)
+        # the event adds fields of its own to what is passed: the first refusal tells how many
+        with pytest.raises(InvalidEvent, match="payload is") as first:
+            log.append_progress(Level.EXECUTION, RUN, "output", payload={"line": "x" * 5000})
+        extra = int(re.search(r"payload is (\d+) bytes", str(first.value))[1]) - 5000 - 11  # type: ignore[index]
+        room = MAX_PAYLOAD_BYTES - 11 - extra
+
+        log.append_progress(Level.EXECUTION, RUN, "output", payload={"line": "x" * room})
+
+        with pytest.raises(InvalidEvent, match="payload is"):
+            log.append_progress(Level.EXECUTION, RUN, "output", payload={"line": "x" * (room + 1)})
