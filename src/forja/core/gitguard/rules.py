@@ -5,7 +5,7 @@ need the state of the repository (is this branch protected? is its tip already p
 applied by ``GuardedGit``; this module only decides from the words of the command.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 
@@ -132,10 +132,94 @@ def _refuse_flags(args: Sequence[str], command: Command, forbidden: set[str], wh
         raise GitCommandRefused(args, f"{', '.join(hit)} {why}")
 
 
+def _check_config(args: Sequence[str], command: Command) -> None:
+    reads = {"--get", "--get-all", "--get-regexp", "--list", "-l"}
+    if not command.flags & reads:
+        raise GitCommandRefused(args, "config is read-only")
+    _refuse_flags(
+        args,
+        command,
+        {"--add", "--unset", "--unset-all", "--replace-all", "--edit", "-e"},
+        "writes",
+    )
+
+
+def _check_symbolic_ref(args: Sequence[str], command: Command) -> None:
+    if len(command.positionals) != 1 or command.flags & {"-d", "--delete"}:
+        raise GitCommandRefused(args, "symbolic-ref may only read")
+
+
+def _check_remote(args: Sequence[str], command: Command) -> None:
+    positionals = command.positionals
+    if positionals and positionals[0] not in {"get-url", "show"}:
+        raise GitCommandRefused(args, "remote may only be read")
+
+
+def _check_branch(args: Sequence[str], command: Command) -> None:
+    _refuse_flags(
+        args,
+        command,
+        {"-d", "-D", "--delete", "-m", "-M", "--move", "-f", "--force", "-c", "-C", "--copy"},
+        "deletes, renames or moves a branch",
+    )
+    _refuse_flags(
+        args,
+        command,
+        {"--set-upstream-to", "-u", "--unset-upstream", "--edit-description"},
+        "edits configuration",
+    )
+
+
+def _check_tag(args: Sequence[str], command: Command) -> None:
+    _refuse_flags(args, command, {"-d", "--delete", "-f", "--force"}, "deletes or moves a tag")
+
+
+def _check_worktree(args: Sequence[str], command: Command) -> None:
+    positionals = command.positionals
+    if not positionals or positionals[0] not in {"add", "list", "remove", "prune"}:
+        raise GitCommandRefused(args, "worktree allows only add, list, remove and prune")
+    _refuse_flags(args, command, {"-B"}, "resets an existing branch")
+    if positionals[0] == "add":
+        _refuse_flags(args, command, {"--force", "-f"}, "bypasses worktree safety checks")
+
+
+def _check_notes(args: Sequence[str], command: Command) -> None:
+    positionals = command.positionals
+    if not positionals or positionals[0] not in {"add", "append", "show", "list"}:
+        raise GitCommandRefused(args, "notes allows only add, append, show and list")
+
+
+def _check_checkout(args: Sequence[str], command: Command) -> None:
+    _refuse_flags(args, command, {"-B"}, "resets an existing branch")
+
+
+def _check_switch(args: Sequence[str], command: Command) -> None:
+    _refuse_flags(args, command, {"-C", "--force-create"}, "resets an existing branch")
+
+
+def _check_fetch(args: Sequence[str], command: Command) -> None:
+    _refuse_flags(args, command, {"--prune", "-p", "--prune-tags", "--update-head-ok"}, "")
+
+
+# "commit" has no entry: --amend is judged against the state of the branch by GuardedGit.
+_CHECKERS: dict[str, Callable[[Sequence[str], Command], None]] = {
+    "config": _check_config,
+    "symbolic-ref": _check_symbolic_ref,
+    "remote": _check_remote,
+    "branch": _check_branch,
+    "tag": _check_tag,
+    "worktree": _check_worktree,
+    "notes": _check_notes,
+    "checkout": _check_checkout,
+    "switch": _check_switch,
+    "fetch": _check_fetch,
+}
+
+
 def check(args: Sequence[str]) -> Command:
     """Parse ``args`` and refuse what Forja must never do. Returns the parsed command."""
     command = parse(args)
-    sub, flags, positionals = command.sub, command.flags, command.positionals
+    sub = command.sub
     if sub == "push":
         raise GitCommandRefused(args, "Forja never pushes; publishing is for the user")
     if sub not in ALLOWED:
@@ -145,54 +229,9 @@ def check(args: Sequence[str]) -> Command:
         _refuse_flags(args, command, {"--output", "-o"}, "would write a file")
         return command
 
-    if sub == "config":
-        reads = {"--get", "--get-all", "--get-regexp", "--list", "-l"}
-        if not flags & reads:
-            raise GitCommandRefused(args, "config is read-only")
-        _refuse_flags(
-            args,
-            command,
-            {"--add", "--unset", "--unset-all", "--replace-all", "--edit", "-e"},
-            "writes",
-        )
-    elif sub == "symbolic-ref":
-        if len(positionals) != 1 or flags & {"-d", "--delete"}:
-            raise GitCommandRefused(args, "symbolic-ref may only read")
-    elif sub == "remote":
-        if positionals and positionals[0] not in {"get-url", "show"}:
-            raise GitCommandRefused(args, "remote may only be read")
-    elif sub == "branch":
-        _refuse_flags(
-            args,
-            command,
-            {"-d", "-D", "--delete", "-m", "-M", "--move", "-f", "--force", "-c", "-C", "--copy"},
-            "deletes, renames or moves a branch",
-        )
-        _refuse_flags(
-            args,
-            command,
-            {"--set-upstream-to", "-u", "--unset-upstream", "--edit-description"},
-            "edits configuration",
-        )
-    elif sub == "tag":
-        _refuse_flags(args, command, {"-d", "--delete", "-f", "--force"}, "deletes or moves a tag")
-    elif sub == "worktree":
-        if not positionals or positionals[0] not in {"add", "list", "remove", "prune"}:
-            raise GitCommandRefused(args, "worktree allows only add, list, remove and prune")
-        _refuse_flags(args, command, {"-B"}, "resets an existing branch")
-        if positionals[0] == "add":
-            _refuse_flags(args, command, {"--force", "-f"}, "bypasses worktree safety checks")
-    elif sub == "notes":
-        if not positionals or positionals[0] not in {"add", "append", "show", "list"}:
-            raise GitCommandRefused(args, "notes allows only add, append, show and list")
-    elif sub == "checkout":
-        _refuse_flags(args, command, {"-B"}, "resets an existing branch")
-    elif sub == "switch":
-        _refuse_flags(args, command, {"-C", "--force-create"}, "resets an existing branch")
-    elif sub == "fetch":
-        _refuse_flags(args, command, {"--prune", "-p", "--prune-tags", "--update-head-ok"}, "")
-    elif sub == "commit":
-        pass  # --amend is judged against the state of the branch by GuardedGit
+    checker = _CHECKERS.get(sub)
+    if checker is not None:
+        checker(args, command)
     return command
 
 
