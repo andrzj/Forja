@@ -300,7 +300,7 @@ def test_a_junction_is_recorded_like_a_link_and_never_followed(tmp_path: Path) -
     (outside / "secret.txt").write_text("not ours\n", encoding="utf-8")
     root = tmp_path / "root"
     root.mkdir()
-    _winapi.CreateJunction(str(outside), str(root / "jn"))  # type: ignore[attr-defined]
+    _winapi.CreateJunction(str(outside), str(root / "jn"))  # type: ignore[attr-defined,unused-ignore]
 
     entries = build_manifest(root).entries
 

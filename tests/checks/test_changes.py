@@ -1,6 +1,7 @@
 """Reading what git says about a change: status, size, quoting, and the lines a patch adds."""
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -224,7 +225,7 @@ def test_renames_are_found_even_when_the_user_turned_detection_off(repo: Repo) -
 
 def test_the_parent_commits_text_is_read_by_the_old_path_and_written_elsewhere(
     repo: Repo,  # noqa: F811
-    tmp_path,  # noqa: ANN001
+    tmp_path: Path,
 ) -> None:
     (repo.path / "a.py").write_text("one\ntwo\n", encoding="utf-8")
     (repo.path / "notes.md").write_text("x\n", encoding="utf-8")

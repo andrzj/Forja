@@ -9,9 +9,10 @@ import dataclasses
 import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from pydantic import JsonValue
 
 from forja.core.adapters.executor import ErrorActivity, ErrorKind
 from forja.core.artifacts.schemas import TaskOutcome, TaskOutcomeKind
@@ -262,7 +263,7 @@ def test_every_difference_git_shows_is_named_in_the_rejection(world: MemoryWorld
 
 
 def test_the_agent_is_handed_a_sink_for_its_own_call(world: MemoryWorld) -> None:
-    sinks: list[object] = []
+    sinks: list[Any] = []
 
     class Recording(ScriptedAgent):
         async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> Any:
@@ -272,11 +273,11 @@ def test_the_agent_is_handed_a_sink_for_its_own_call(world: MemoryWorld) -> None
     world.run(agent=Recording())
 
     (sink,) = sinks
-    assert (sink._level, sink._target_id, sink._operation) == (
+    assert (sink._level, sink._target_id, sink._operation) == (  # noqa: SLF001
         Level.ATTEMPT,
         "t1-a1",
         "call_agent_cli",
-    )  # type: ignore[attr-defined]  # noqa: SLF001
+    )
 
 
 # -- the token budget between attempts -------------------------------------------------------------
@@ -288,7 +289,7 @@ def test_a_task_whose_tokens_run_out_between_attempts_is_blocked_for_them(
     class Slow(ScriptedMeasurer):
         async def judge(self, ctx: AttemptContext, sinks: SinkFactory) -> Any:
             # the first attempt spends all the tokens there are
-            usage = {"type": "usage", "input": 10_000, "output": 0}
+            usage: dict[str, JsonValue] = {"type": "usage", "input": 10_000, "output": 0}
             log.append_progress(Level.ATTEMPT, ctx.attempt_id, "agent_activity", payload=usage)
             return await super().judge(ctx, sinks)
 
@@ -509,7 +510,7 @@ def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: Mem
 
 def line_count_at(root: Path, wanted: Callable[[Any], bool], **parts: Any) -> int:
     """How many lines an uninterrupted run has written when the first wanted event lands."""
-    counter, found = Counting(), []
+    counter, found = Counting(), list[int]()
     reference = MemoryWorld(root)
     log = reference.open(write=counter)
     log.subscribe(lambda e: found.append(counter.count) if wanted(e) and not found else None)
@@ -684,7 +685,7 @@ def test_a_task_never_started_is_cancelled_with_no_attempts(world: MemoryWorld) 
 def test_a_context_that_is_not_told_otherwise_takes_the_network_to_be_up() -> None:
     defaults = {f.name: f.default for f in dataclasses.fields(RunContext)}
 
-    assert asyncio.run(defaults["network_is_up"]()) is True
+    assert asyncio.run(cast(Any, defaults["network_is_up"])()) is True
 
 
 def test_a_stop_carries_its_reason_as_its_message() -> None:

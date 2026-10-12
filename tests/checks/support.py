@@ -1,9 +1,9 @@
 """A small Python project in a real git repository, and the pieces to judge changes made to it."""
 
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from forja.core.events import EventLog
 from forja.core.gates import CheckSettings, InconclusivePolicy, Mode
@@ -51,11 +51,11 @@ class Run:
     ) -> None:
         self.where = where
         self.operation_id = operation_id
-        self.command: tuple[str, ...] = tuple(details["command"])  # type: ignore[call-overload]
+        self.command: tuple[str, ...] = tuple(cast(Iterable[str], details["command"]))
         self.cwd = Path(str(details["cwd"]))
         self.timeout = details["timeout"]
         self.stdin_file = details["stdin_file"]
-        self.env_names = tuple(details["env_names"])  # type: ignore[call-overload]
+        self.env_names: tuple[str, ...] = tuple(cast(Iterable[str], details["env_names"]))
 
     @property
     def check(self) -> str:

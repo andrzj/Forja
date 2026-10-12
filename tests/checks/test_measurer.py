@@ -9,6 +9,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -510,8 +511,8 @@ def test_a_tool_that_does_not_run_on_the_base_makes_it_not_green(
 
     assert not measured.ok
     assert measured.problems == (
-        f"build: {Path(scene.adapter.plan.__self__._python[0]).name} timed out",
-    )  # type: ignore[attr-defined]
+        f"build: {Path(cast(Any, scene.adapter.plan).__self__._python[0]).name} timed out",
+    )
 
 
 def test_a_test_that_changes_its_mind_between_two_runs_goes_to_quarantine(scene: Scene) -> None:

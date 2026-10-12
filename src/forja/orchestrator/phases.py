@@ -7,6 +7,7 @@ says which phase is next, and the journal skips what each phase already did. A r
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 from pydantic import JsonValue
 
@@ -15,6 +16,7 @@ from forja.core.artifacts.models import ArtifactType, Producer
 from forja.core.atomic import atomic_write_bytes
 from forja.core.confirmation import Confirmation
 from forja.core.events import EventLog
+from forja.core.events.state import OpenOperation
 from forja.core.idempotency import reconcile_call_agent_cli
 from forja.core.resume import resume
 from forja.core.states import (
@@ -93,7 +95,7 @@ class Orchestrator:
         await self._ctx.workspace.recover()
         await resume(self._log, self._reconcile)
 
-    async def _reconcile(self, operation):  # type: ignore[no-untyped-def]
+    async def _reconcile(self, operation: OpenOperation) -> Any:
         ctx = self._ctx
         name = operation.operation
         if name in HANDLED_OPERATIONS:

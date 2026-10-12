@@ -3,8 +3,10 @@
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
+from pydantic import JsonValue
 
 from forja.checks.base import MAX_FINDINGS, overrides_from, rejected
 from forja.checks.changes import AddedLine, Change, ChangeKind, Changes
@@ -46,8 +48,8 @@ def data(values: dict | None = None) -> GateInput:  # type: ignore[type-arg]
     ],
 )
 def test_the_complexity_limit_comes_from_the_policy_for_the_language(
-    values: dict,
-    expected: int,  # type: ignore[type-arg]
+    values: dict[str, Any],
+    expected: int,
 ) -> None:
     assert max_ccn(data(values), "python") == expected
 
@@ -58,7 +60,9 @@ def test_the_default_limit_is_the_one_lizard_itself_uses() -> None:
 
 def test_the_repositorys_own_commands_are_keyed_by_language_and_operation() -> None:
     adapter = PythonAdapter()
-    values = {"commands": {"test": ["make", "check"], "build": [], "lint": "no", "format": ["x"]}}
+    values: dict[str, JsonValue] = {
+        "commands": {"test": ["make", "check"], "build": [], "lint": "no", "format": ["x"]}
+    }
 
     assert overrides_from(adapter, values) == {
         "python": {"test": ("make", "check"), "format": ("x",)}
@@ -99,7 +103,8 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
     specs = {spec.id: spec for spec in default_registry()}
 
     assert {
-        i: (s.gate, s.default_mode, s.default_on_inconclusive.value) for i, s in specs.items()
+        i: (s.gate, s.default_mode, cast(Any, s.default_on_inconclusive).value)
+        for i, s in specs.items()
     } == {
         "scope": (1, Mode.BLOCKING, "block"),
         "secrets": (2, Mode.BLOCKING, "block"),

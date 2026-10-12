@@ -553,7 +553,7 @@ def test_a_junction_in_the_worktree_is_neither_followed_nor_written_through(
     (outside / "secret.txt").write_text("not ours\n", encoding="utf-8")
     through = {"writes": {"src/jn/x.txt": "planted\n"}, "saida": declare("src/jn/x.txt")}
     r = rig(tmp_path, through)
-    _winapi.CreateJunction(str(outside), str(r.ctx.worktree / "src" / "jn"))  # type: ignore[attr-defined]
+    _winapi.CreateJunction(str(outside), str(r.ctx.worktree / "src" / "jn"))  # type: ignore[attr-defined,unused-ignore]
     go(work(r))
 
     assert not (r.workcopy / "src" / "jn" / "secret.txt").exists()

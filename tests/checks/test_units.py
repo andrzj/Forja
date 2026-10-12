@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -288,13 +289,13 @@ def test_a_command_of_the_repository_replaces_the_adapters_in_every_check(
     adapter = PythonAdapter()
     changes = Changes((Change(ChangeKind.MODIFIED, "a.py"),), 1, ())
     values = {"commands": {operation: [sys.executable, "-c", "raise SystemExit(3)"]}}
-    arguments = {
+    arguments: tuple[object, ...] = {
         TestsCheck: (tools(log, tmp_path), adapter, tmp_path),
         FormatCheck: (tools(log, tmp_path), adapter, tmp_path, changes),
         LintCheck: (tools(log, tmp_path), adapter, tmp_path, changes, {}),
     }[check]
 
-    result = asyncio.run(check(*arguments).evaluate(data(values)))
+    result = asyncio.run(check(*cast(Any, arguments)).evaluate(data(values)))
 
     assert isinstance(result, Inconclusive)
     assert result.detail.startswith(name + ": ")

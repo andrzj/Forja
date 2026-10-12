@@ -150,7 +150,7 @@ class World:
     def run(
         self,
         *,
-        measurer: ScriptedMeasurer | None = None,
+        measurer: Any = None,
         agent: ScriptedAgent | None = None,
         planner: ScriptedPlanner | None = None,
         budget: Budget | None = None,

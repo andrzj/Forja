@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -32,8 +33,8 @@ def evaluate(
     max_files: int = 8,
     max_lines: int = 400,
     declared: tuple[str, ...] = (),
-    values: dict | None = None,  # type: ignore[type-arg]
-):  # type: ignore[no-untyped-def]
+    values: dict[str, Any] | None = None,
+) -> Any:
     task = TaskInfo("t1", "t1-s", "intent", scope, max_files, max_lines)
     data = GateInput(Path("."), "c" * 40, "t1", "t1-s", "t1-a1", values=values or {})
     return asyncio.run(ScopeCheck(changes, task, classify, declared).evaluate(data))

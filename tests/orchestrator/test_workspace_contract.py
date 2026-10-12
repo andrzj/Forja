@@ -102,7 +102,7 @@ def git_backend(root: Path, template: Path) -> Backend:
         lambda: set(
             repo.sh("for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines()
         ),
-        lambda name: repo.sh("branch", name),
+        lambda name: _ignore(repo.sh("branch", name)),
         lambda branch: repo.sh("rev-parse", branch),
     )
 
@@ -122,14 +122,22 @@ def go(step: Step) -> None:
     asyncio.run(both())
 
 
+def _ignore(value: object) -> None:
+    return None
+
+
 def verdict(workspace: Any, name: str, payload: dict[str, Any]) -> Decision:
     """The verdict on an operation whose intent was written, with this payload, and no effect."""
     operation = OpenOperation(name, f"{name}:x", Level.EXECUTION, "x", 1, payload=payload)
-    return asyncio.run(workspace.reconcile(operation)).decision
+    decision: Decision = asyncio.run(workspace.reconcile(operation)).decision
+    return decision
 
 
 def intent(step: Step) -> dict[str, Any]:
-    return asyncio.run(step.payload())
+    async def payload() -> dict[str, Any]:
+        return dict(await step.payload())
+
+    return asyncio.run(payload())
 
 
 def start(b: Backend) -> None:
@@ -360,7 +368,7 @@ def test_nothing_changing_while_watching_is_no_difference(backend: Backend) -> N
     async def watched() -> list[Any]:
         async with backend.workspace.watch() as watch:
             pass
-        return watch.differences
+        return list(watch.differences)
 
     assert asyncio.run(watched()) == []
 

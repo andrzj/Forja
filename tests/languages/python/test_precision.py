@@ -64,7 +64,7 @@ def test_anyone_else_gets_the_home_cache_whatever_the_environment_says(
     monkeypatch.setenv("LOCALAPPDATA", "/somewhere/else")
 
     assert default_cache_dir() == Path.home() / ".cache" / "forja" / "pycache"
-    assert adapter_module.sys is sys
+    assert vars(adapter_module)["sys"] is sys
 
 
 # -- finding and describing ------------------------------------------------------------------------

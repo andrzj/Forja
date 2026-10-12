@@ -1,0 +1,13 @@
+title = "Forja"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake secrets that the tests of the scanner and of the redaction need in order to exist. None is real; a person approved this list."
+paths = [
+  '''tests/checks/test_real_gitleaks\.py''',
+  '''tests/core/redaction/test_pii\.py''',
+  '''tests/core/redaction/test_engine\.py''',
+  '''tests/core/redaction/test_secrets\.py''',
+]

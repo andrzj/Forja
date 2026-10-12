@@ -18,7 +18,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks is not installed"),
 ]
 
-KEY = "AKIAZ7K3Q9X2M4V8B1NC"  # shaped like an AWS access key id, and not a real one
+KEY = "AKIAZ7K3QXM2M4VBQNCD"  # matches the rule of an AWS key id (A-Z, 2-7), and is not a real one
 
 
 def test_a_key_in_the_added_lines_is_found_and_a_clean_change_is_not(
