@@ -42,25 +42,30 @@ def _segment_regex(segment: str) -> str:
     return "".join(out)
 
 
-def compile_pattern(pattern: str, *, case_insensitive: bool) -> re.Pattern[str]:
-    """Translate one pattern; ``ValueError`` for anything that is not a plain relative glob."""
-    text = pattern.strip()
+def _split_segments(pattern: str, text: str) -> list[str]:
     if not text or "\\" in text or text.startswith("!") or text.endswith("/"):
         raise ValueError(f"invalid sensitive-file pattern {pattern!r}")
-    anchored = text.startswith("/") or "/" in text
     segments = text.lstrip("/").split("/")
     if any(s in ("", ".", "..") for s in segments):
         raise ValueError(f"invalid sensitive-file pattern {pattern!r}")
     if any("**" in s and s != "**" for s in segments):
         raise ValueError(f"'**' must be a whole path segment in {pattern!r}")
+    return segments
 
-    pieces = []
+
+def _piece_regex(segment: str, is_last: bool) -> str:
+    if segment == "**":
+        return ".+" if is_last else "(?:[^/]+/)*"
+    return _segment_regex(segment) + ("" if is_last else "/")
+
+
+def compile_pattern(pattern: str, *, case_insensitive: bool) -> re.Pattern[str]:
+    """Translate one pattern; ``ValueError`` for anything that is not a plain relative glob."""
+    text = pattern.strip()
+    segments = _split_segments(pattern, text)
+    anchored = text.startswith("/") or "/" in text
     last = len(segments) - 1
-    for index, segment in enumerate(segments):
-        if segment == "**":
-            pieces.append(".+" if index == last else "(?:[^/]+/)*")
-        else:
-            pieces.append(_segment_regex(segment) + ("" if index == last else "/"))
+    pieces = [_piece_regex(segment, index == last) for index, segment in enumerate(segments)]
     prefix = "" if anchored else "(?:.*/)?"
     flags = re.IGNORECASE if case_insensitive else 0
     return re.compile(prefix + "".join(pieces), flags)
