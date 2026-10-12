@@ -16,6 +16,7 @@ import os
 import random
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -55,6 +56,17 @@ PROMPT = (
 )
 DEFAULT_TOKENS = 200_000
 TIMEOUT = 3600
+
+
+def remove_tree(path: Path) -> None:
+    """Delete a directory even when git left read-only files in it (Windows refuses otherwise)."""
+
+    def writable(function: object, name: str, _error: object) -> None:
+        os.chmod(name, stat.S_IWRITE)
+        function(name)  # type: ignore[operator]
+
+    if path.exists():
+        shutil.rmtree(path, onexc=writable)
 
 
 class InvalidRun(Exception):
@@ -187,7 +199,7 @@ def arm_b(
 
 def one(name: str, arm: str, rep: int, tokens: int = DEFAULT_TOKENS) -> dict[str, object]:
     out = work_dir() / f"{name}-{arm}{rep}"
-    shutil.rmtree(out, ignore_errors=True)
+    remove_tree(out)
     out.mkdir(parents=True)
     initial = repos.materialize(name, out / "initial")
     env = environment()
@@ -203,7 +215,7 @@ def one(name: str, arm: str, rep: int, tokens: int = DEFAULT_TOKENS) -> dict[str
     if arm == "B":
         signs += (out / "forja-output.txt").read_text(encoding="utf-8").lower()
     if any(sign in signs for sign in LIMIT_SIGNS):
-        shutil.rmtree(out, ignore_errors=True)
+        remove_tree(out)
         raise InvalidRun(
             f"{name} {arm}{rep}: the account hit its usage limit; nothing was measured"
         )
