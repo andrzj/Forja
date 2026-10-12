@@ -71,3 +71,23 @@ file = "src/forja/ui/theme.py"
 function = "_luminance.channel"
 change = "<= -> <"
 reason = "value/255 is never exactly 0.03928 (that is 10.0164 of 255), so the two comparisons agree on every input."
+
+# Approved by the person who owns the repository on 2026-10-12, after the Forja refactored its last three complex functions.
+
+[[suppress]]
+file = "src/forja/languages/python/parsers.py"
+function = "_summary_lines"
+change = "1 -> 0"
+reason = "Keeping the summary header line in the scan changes nothing: no test-line pattern matches the header, so the outcomes and the skipped count are the same."
+
+[[suppress]]
+file = "src/forja/ui/plain.py"
+function = "PlainRenderer._update_feed"
+change = "> -> >="
+reason = "With no new items the slice starts at the end of the list and is empty, so nothing is printed either way."
+
+[[suppress]]
+file = "src/forja/ui/plain.py"
+function = "PlainRenderer._update_rejections"
+change = "> -> >="
+reason = "With no new rejections the slice starts at the end of the list and is empty, so nothing is printed either way."
