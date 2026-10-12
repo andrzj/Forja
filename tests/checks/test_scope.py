@@ -9,6 +9,7 @@ import pytest
 from forja.checks.changes import Change, ChangeKind, Changes
 from forja.checks.scope import ScopeCheck, disposable, in_scope
 from forja.core.adapters import FileClass
+from forja.core.artifacts.models import Producer
 from forja.core.gates import Approved, GateInput, Rejected
 from forja.languages.python import PythonAdapter
 from forja.orchestrator.ports import TaskInfo
@@ -289,3 +290,44 @@ def test_an_ordinary_comment_is_not_a_silencer(fine: str) -> None:
     patch = ("--- a/src/a.py", "+++ b/src/a.py", "@@ -0,0 +1 @@", f"+{fine}")
 
     assert evaluate(modified("src/a.py", patch=patch)) == Approved()
+
+
+def as_author(changes: Changes, test_root: str = "tests") -> Any:
+    task = TaskInfo("t1", "t1-t", "intent", ("src",), 8, 400, Producer.TEST_AUTHOR, test_root)
+    data = GateInput(Path("."), "c" * 40, "t1", "t1-t", "t1-ta1")
+    return asyncio.run(ScopeCheck(changes, task, classify).evaluate(data))
+
+
+def test_the_test_author_may_change_tests_and_fixtures_under_the_test_root() -> None:
+    changes = modified("tests/test_a.py", "tests/fixtures/data.py")
+
+    assert isinstance(as_author(changes), Approved)
+
+
+def test_the_test_author_may_not_change_production_or_other_files() -> None:
+    rule = "the test author may change only tests and fixtures"
+
+    assert described(as_author(modified("src/a.py", "pyproject.toml"))) == [
+        f"{rule} (this is production) [src/a.py]",
+        f"{rule} (this is other) [pyproject.toml]",
+    ]
+
+
+def test_the_test_author_may_not_leave_the_test_root() -> None:
+    assert described(as_author(modified("tests/test_a.py", "other/test_b.py"))) == [
+        "outside the test directory [other/test_b.py]"
+    ]
+
+
+def test_the_test_author_is_held_to_both_ends_of_a_rename() -> None:
+    changes = Changes((Change(ChangeKind.RENAMED, "tests/test_a.py", "src/a.py"),), 3, (), ())
+
+    assert described(as_author(changes)) == [
+        "the test author may change only tests and fixtures (this is production) [src/a.py]"
+    ]
+
+
+def test_the_implementer_may_not_touch_tests_in_a_fix_either() -> None:
+    assert described(evaluate(modified("tests/test_a.py"), scope=("tests",))) == [
+        "only production files may change in a refactoring (this is test) [tests/test_a.py]"
+    ]

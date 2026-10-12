@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from forja.checks.base import rejected
 from forja.checks.changes import Changes, added_lines
 from forja.core.adapters import FileClass
+from forja.core.artifacts.models import Producer
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.orchestrator.ports import TaskInfo
 
@@ -20,6 +21,7 @@ SUPPRESSIONS = re.compile(
 # Directories the tools write their caches to. The compiled files of Python are not here: the
 # adapter sends them outside the worktree, so any that turn up inside it are suspect.
 TOOL_CACHES = frozenset({".pytest_cache", ".ruff_cache", ".mypy_cache", ".hypothesis"})
+TEST_AUTHOR_CLASSES = frozenset({FileClass.TEST, FileClass.FIXTURE})
 CODE_SUFFIXES = (".py", ".pyi", ".pyw", ".pyz", ".pth", ".so", ".pyd", ".dll", ".zip")
 COMPILED_SUFFIXES = (".pyc", ".pyo")
 # What the interpreter names a cache file (PEP 3147): module.cpython-312.pyc, never importable
@@ -94,15 +96,32 @@ class ScopeCheck:
             for path in (change.old_path, change.path):
                 if path is None:
                     continue
-                kind = self.classify(path)
-                if kind is not FileClass.PRODUCTION:
-                    message = (
-                        f"only production files may change in a refactoring (this is {kind.value})"
-                    )
-                    findings.append(Finding(message=message, target=path))
-                elif not in_scope(path, self.task.scope):
-                    findings.append(Finding(message="outside the task scope", target=path))
+                finding = self._author(path) if self._writes_tests else self._implementer(path)
+                if finding:
+                    findings.append(finding)
         return findings
+
+    @property
+    def _writes_tests(self) -> bool:
+        return self.task.role is Producer.TEST_AUTHOR
+
+    def _implementer(self, path: str) -> Finding | None:
+        kind = self.classify(path)
+        if kind is not FileClass.PRODUCTION:
+            message = f"only production files may change in a refactoring (this is {kind.value})"
+            return Finding(message=message, target=path)
+        if not in_scope(path, self.task.scope):
+            return Finding(message="outside the task scope", target=path)
+        return None
+
+    def _author(self, path: str) -> Finding | None:
+        kind = self.classify(path)
+        if kind not in TEST_AUTHOR_CLASSES:
+            message = f"the test author may change only tests and fixtures (this is {kind.value})"
+            return Finding(message=message, target=path)
+        if self.task.test_root and not in_scope(path, (self.task.test_root,)):
+            return Finding(message="outside the test directory", target=path)
+        return None
 
     def _hidden(self) -> list[Finding]:
         """Files the ignore rules hide from the commit but not from the build and tests."""
