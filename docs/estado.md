@@ -136,6 +136,10 @@ Pedaços combinados: 1a orquestrador, 1b Python e gates, 1c gestor de git, 1d ex
 
 Atualizadas em `Especificação.md` e `Plano de execução.md`: sem PR (a entrega é a branch `forja-run/<execução>` mais `runs/<id>/resumo.md`), limiares na política, modo por check, Job Object por chamada, fachada restrita de git com fotografia e `GIT_DIR` inexistente, sessão única por repositório, decisões de eventos, redação, chave de cache e diretório de dados. "Não verificável" já era propriedade da operação na spec; não mudou.
 
+## Incremento 2 (feito, 12/10/2026): medição contra a linha de base
+
+Protocolo em `docs/medicao-2.md`, harness em `scripts/medicao/` (repositórios `inventory` e `scanner` com oráculo oculto, juiz, executor `plan|one|batch|report`), relatório em `docs/medicao-2-relatorio.md`, decisão no ADR 0019. 30 execuções contadas (5 repositórios, 2 braços, 3 repetições). Tarefas médias: Forja 6 de 6 aceitas, linha de base 4 de 6, nenhuma regressão, 1,37× os tokens. Decisão do dono: **Seguir, com ressalvas** (as 2 reprovações da linha de base foram só de formatação e a Forja normaliza o estilo; amostra pequena; só Python e refatoração). Pergunta aberta: o ganho sobrevive se a linha de base também formata?
+
 ## Próximos passos
 
 1. Fechar o incremento 0 (itens da seção "Onde estamos").
