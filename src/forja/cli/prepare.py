@@ -16,6 +16,7 @@ from forja.cli.session import new_config, policy_digest, repo_policy, standard_s
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
 from forja.core.policy.config import EffectivePolicy, PolicyConfigError
+from forja.core.redaction import RedactionSettings
 from forja.executors.probe import executable_version, run_probe, version_problem
 from forja.orchestrator.config import RunConfig
 
@@ -148,23 +149,44 @@ async def prove(
 def policy_changes(policy: EffectivePolicy) -> tuple[str, ...]:
     """What the repository's ``forja.toml`` changes from the Forja's own defaults, in words.
 
-    A repository can loosen a gate or run its own command in place of the Forja's, so the person
-    who confirms has to see it: it is the repository's decision, not the Forja's.
+    A repository can loosen a gate, run its own command in place of the Forja's or switch off a
+    detector, so the person who confirms has to see it all, with the values: it is the
+    repository's decision, not the Forja's.
     """
     defaults = standard_settings()
     notes = []
     for check_id, check in sorted(policy.checks.items()):
         if check.settings != defaults.get(check_id):
-            mode = check.settings.mode.value
-            notes.append(f"{check_id}: modo ou política diferente do padrão ({mode})")
-        if check.commands:
-            names = ", ".join(sorted(check.commands))
-            notes.append(f"{check_id}: roda comando próprio do repositório ({names})")
-        if check.thresholds or check.limits:
-            notes.append(f"{check_id}: limites próprios do repositório")
-    if policy.redaction.allow or policy.redaction.allow_patterns:
-        notes.append("redação: valores liberados pelo repositório")
+            on = check.settings.on_inconclusive
+            how = check.settings.mode.value + (f", se não puder medir: {on.value}" if on else "")
+            notes.append(f"{check_id}: modo ou política diferente do padrão ({how})")
+        for name, argv in sorted(check.commands.items()):
+            notes.append(f"{check_id}: roda no lugar do padrão ({name}): {' '.join(argv)}")
+        for language, limits in sorted(check.thresholds.items()):
+            for name, value in sorted(limits.items()):
+                notes.append(f"{check_id}: limite {name} de {language} = {value}")
+        for name, value in sorted(check.limits.items()):
+            notes.append(f"{check_id}: limite {name} = {value}")
+        if check.promotion is not None:
+            notes.append(f"{check_id}: promovido de observação a bloqueio ({check.promotion.date})")
+    for language, commands in sorted(policy.adapter_commands.items()):
+        for name, argv in sorted(commands.items()):
+            notes.append(f"{language}: roda no lugar do padrão ({name}): {' '.join(argv)}")
+    notes += _redaction_changes(policy)
     return tuple(notes)
+
+
+def _redaction_changes(policy: EffectivePolicy) -> list[str]:
+    redaction, standard = policy.redaction, RedactionSettings()
+    notes = []
+    if redaction.allow or redaction.allow_patterns:
+        notes.append("redação: valores liberados pelo repositório (nunca mascarados)")
+    off = sorted(kind.value for kind in standard.pii - redaction.pii)
+    if off:
+        notes.append(f"redação: detectores de dados pessoais desligados: {', '.join(off)}")
+    if redaction.entropy_threshold > standard.entropy_threshold:
+        notes.append(f"redação: limiar de entropia mais alto ({redaction.entropy_threshold})")
+    return notes
 
 
 def summary_of(

@@ -190,8 +190,8 @@ def test_what_the_repositorys_policy_changes_is_told_before_the_confirmation(
 
     assert go(["refatorar", "--plano"], talk, environ) == 0
     assert "forja.toml do repositório muda o padrão" in talk.text
-    assert "secrets: modo ou política diferente do padrão (observation)" in talk.text
-    assert "tests: roda comando próprio do repositório (test)" in talk.text
+    assert "secrets: modo ou política diferente do padrão (observation" in talk.text
+    assert "tests: roda no lugar do padrão (test): python -m pytest" in talk.text
 
 
 def test_a_repository_without_a_policy_file_says_nothing_about_one(
@@ -201,3 +201,21 @@ def test_a_repository_without_a_policy_file_says_nothing_about_one(
 
     assert go(["refatorar", "--plano"], talk, environ) == 0
     assert "forja.toml" not in talk.text
+
+
+def test_everything_a_policy_can_loosen_is_listed_with_its_values(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    commit_policy(
+        repo,
+        "[checks.complexity.thresholds.python]" + chr(10) + "max_ccn = 40" + chr(10) + chr(10)
+        + "[redaction]" + chr(10) + 'pii = ["email"]' + chr(10) + "entropy_threshold = 4.0"
+        + chr(10) + 'allow = ["abc"]' + chr(10),
+    )  # fmt: skip
+    talk = Talk()
+
+    assert go(["refatorar", "--plano"], talk, environ) == 0
+    assert "complexity: limite max_ccn de python = 40" in talk.text
+    assert "detectores de dados pessoais desligados" in talk.text
+    assert "limiar de entropia mais alto (4.0)" in talk.text
+    assert "valores liberados pelo repositório" in talk.text
