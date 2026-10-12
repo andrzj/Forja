@@ -9,3 +9,65 @@
 # function = "Class.method"
 # change = "== -> !="       # as the engine prints it
 # reason = "why no observable behaviour differs"
+
+# Approved by the person who owns the repository on 2026-10-12, after the full run of that day.
+
+[[suppress]]
+file = "src/forja/core/redaction/engine.py"
+function = "_shorten_long_lines"
+change = "<= -> <"
+reason = "Content of exactly the limit goes on to the line scan, which finds no line over the limit and returns the same text and the same empty list."
+
+[[suppress]]
+file = "src/forja/core/redaction/engine.py"
+function = "_merge_overlaps"
+change = "delete -"
+reason = "The initial group_end is never read (the group is empty, so the comparison short-circuits); and the order of two matches that start together does not change the joined span, which is a minimum and a maximum."
+
+[[suppress]]
+file = "src/forja/core/redaction/engine.py"
+function = "_merge_overlaps"
+change = "1 -> 0"
+reason = "The initial group_end is never read; and in the third use a new group always starts at or after the end of the previous one, so max() gives the end of the first match either way."
+
+[[suppress]]
+file = "src/forja/core/redaction/engine.py"
+function = "_merge_overlaps"
+change = "- -> +"
+reason = "The order of two matches that start together does not change the joined span, which is a minimum and a maximum."
+
+[[suppress]]
+file = "src/forja/core/redaction/engine.py"
+function = "_merge_overlaps"
+change = "> -> >="
+reason = "A group of one match always has a group_end at or below that match's end, so max() and the plain assignment give the same value."
+
+[[suppress]]
+file = "src/forja/ui/plain.py"
+function = "PlainRenderer.__init__"
+change = "0 -> 1"
+reason = "The initial attempt only matters when there is no task id, and the condition that reads it requires one."
+
+[[suppress]]
+file = "src/forja/ui/plain.py"
+function = "PlainRenderer.update"
+change = "> -> >="
+reason = "With zero new items the slice of the list is empty either way."
+
+[[suppress]]
+file = "src/forja/core/gitguard/rules.py"
+function = "check"
+change = "== -> !="
+reason = "The branch for commit is a pass: reversing the comparison runs nothing else."
+
+[[suppress]]
+file = "src/forja/core/policy/config.py"
+function = "_check_pattern"
+change = "False -> True"
+reason = "Case folding never changes whether a pattern compiles, and only validity is checked here."
+
+[[suppress]]
+file = "src/forja/ui/theme.py"
+function = "_luminance.channel"
+change = "<= -> <"
+reason = "value/255 is never exactly 0.03928 (that is 10.0164 of 255), so the two comparisons agree on every input."
