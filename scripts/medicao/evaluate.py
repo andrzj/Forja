@@ -17,6 +17,7 @@ HERE = Path(__file__).resolve().parent
 LIMIT = 15
 NOISE = {"__pycache__", ".pytest_cache", ".ruff_cache", ".git", ".forja-agent", ".venv"}
 TIMEOUT = 600
+CRLF, LF = bytes([13, 10]), bytes([10])
 
 
 def run(command: list[str], cwd: Path, timeout: int = TIMEOUT) -> tuple[int, str]:
@@ -35,7 +36,9 @@ def files_of(tree: Path) -> dict[str, str]:
     for path in sorted(tree.rglob("*")):
         relative = path.relative_to(tree)
         if path.is_file() and not (set(relative.parts) & NOISE) and path.suffix != ".pyc":
-            found[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            # a checkout on Windows may write CRLF; the comparison is of content
+            text = path.read_bytes().replace(CRLF, LF)
+            found[relative.as_posix()] = hashlib.sha256(text).hexdigest()
     return found
 
 
