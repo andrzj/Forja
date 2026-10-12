@@ -57,6 +57,13 @@ DEFAULT_TOKENS = 200_000
 TIMEOUT = 3600
 
 
+class InvalidRun(Exception):
+    """The run did not measure the arm: the account hit its limit or the CLI never started."""
+
+
+LIMIT_SIGNS = ("session limit", "usage limit", "usage_limit_reached", "rate limit")
+
+
 def work_dir() -> Path:
     base = os.environ.get("MEDICAO_DIR") or str(
         Path(os.environ.get("LOCALAPPDATA", Path.home())) / "forja-medicao"
@@ -192,6 +199,14 @@ def one(name: str, arm: str, rep: int, tokens: int = DEFAULT_TOKENS) -> dict[str
     else:
         repo = repos.materialize(name, out / "repo-b")
         info = arm_b(repo, out, env, executable, tokens)
+    signs = " ".join(str(info.get(key, "")) for key in ("cli_error",)).lower()
+    if arm == "B":
+        signs += (out / "forja-output.txt").read_text(encoding="utf-8").lower()
+    if any(sign in signs for sign in LIMIT_SIGNS):
+        shutil.rmtree(out, ignore_errors=True)
+        raise InvalidRun(
+            f"{name} {arm}{rep}: the account hit its usage limit; nothing was measured"
+        )
     base: dict[str, object] = {"repo": name, "arm": arm, "rep": rep, **info}
     tree = info.get("tree")
     if tree:
@@ -254,7 +269,11 @@ if __name__ == "__main__":
         for item in plan():
             if item in done:
                 continue
-            row = one(*item, budget)
+            try:
+                row = one(*item, budget)
+            except InvalidRun as error:
+                print("stopped:", error, flush=True)
+                raise SystemExit(75) from None
             print(item, "accepted" if row["accepted"] else row["failed_criteria"], flush=True)
     elif command == "report":
         print(report())
