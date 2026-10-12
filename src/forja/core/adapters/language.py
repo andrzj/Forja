@@ -139,6 +139,11 @@ def plan_with_override(
     replacement = overrides.get(adapter.language, {}).get(operation.value)
     if replacement is None:
         return plan
+    # "python -m pytest ..." in a repository's file means the repository's interpreter, which the
+    # adapter chose (its virtual environment), not whichever "python" the system finds first
+    own = Path(plan.argv[0]).stem.lower()
+    if own == "python" and replacement[0].lower() in ("python", "python3"):
+        replacement = (plan.argv[0], *replacement[1:])
     return dataclasses.replace(plan, argv=replacement)
 
 

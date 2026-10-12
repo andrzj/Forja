@@ -250,3 +250,37 @@ def test_progress_is_reported_only_when_the_tool_gives_a_real_count() -> None:
     assert parser.feed("[0/0] empty") is None
     assert ADAPTER.progress_parser(Operation.BUILD) is None
     assert LimitedAdapter().progress_parser(Operation.TEST) is not None
+
+
+def test_a_repository_command_that_starts_with_python_runs_in_the_adapters_interpreter(
+    project: Path,
+) -> None:
+    class InVenv(FakeLanguageAdapter):
+        def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan:
+            return CommandPlan(("/venv/bin/python", "-m", "pytest"), request.root)
+
+    for head in ("python", "python3", "Python"):
+        plan = plan_with_override(
+            InVenv(),
+            Operation.TEST,
+            OperationRequest(root=project),
+            {"python": {"test": (head, "-m", "pytest", "-n", "auto")}},
+        )
+        assert isinstance(plan, CommandPlan)
+        assert plan.argv == ("/venv/bin/python", "-m", "pytest", "-n", "auto")
+
+
+def test_other_commands_are_left_as_the_repository_wrote_them(project: Path) -> None:
+    class InVenv(FakeLanguageAdapter):
+        def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan:
+            return CommandPlan(("/venv/bin/python", "-m", "pytest"), request.root)
+
+    plan = plan_with_override(
+        InVenv(),
+        Operation.TEST,
+        OperationRequest(root=project),
+        {"python": {"test": ("make", "test")}},
+    )
+
+    assert isinstance(plan, CommandPlan)
+    assert plan.argv == ("make", "test")
