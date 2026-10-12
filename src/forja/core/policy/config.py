@@ -260,48 +260,55 @@ def _validate_redaction(section: Any, bad: Any) -> None:
     for key in sorted(set(section) - known):
         bad(f"redaction.{key}", "unknown key")
 
-    patterns = section.get("patterns")
-    if patterns is not None:
-        if not isinstance(patterns, dict) or not all(isinstance(v, str) for v in patterns.values()):
-            bad("redaction.patterns", "must be a table of name = regular expression")
-        else:
-            for name, regex in patterns.items():
-                try:
-                    compile_extra(name, regex)
-                except RedactionSettingsError as error:
-                    bad(f"redaction.patterns.{name}", str(error))
-
+    _validate_redaction_patterns(section.get("patterns"), bad)
     for key in ("allow", "allow_patterns"):
-        values = section.get(key)
-        if values is None:
-            continue
-        if not (
-            isinstance(values, list)
-            and all(isinstance(v, str) and 0 < len(v) <= 500 for v in values)
-        ):
-            bad(
-                f"redaction.{key}", "must be a list of non-empty strings, each up to 500 characters"
-            )
-        elif key == "allow_patterns":
-            for value in values:
-                try:
-                    re.compile(value)
-                except re.error as error:
-                    bad(
-                        "redaction.allow_patterns",
-                        f"{value!r} is not a valid regular expression: {error}",
-                    )
-
-    kinds = section.get("pii")
-    if kinds is not None:
-        allowed = sorted(kind.value for kind in PiiKind)
-        if not (isinstance(kinds, list) and all(k in allowed for k in kinds)):
-            bad("redaction.pii", f"must be a list drawn from: {', '.join(allowed)}")
-
+        _validate_redaction_allow(section.get(key), key, bad)
+    _validate_redaction_pii(section.get("pii"), bad)
     if "entropy_threshold" in section:
         threshold = section["entropy_threshold"]
         if not _is_number(threshold) or not 0 <= threshold <= 8:
             bad("redaction.entropy_threshold", "must be a number between 0 and 8")
+
+
+def _validate_redaction_patterns(patterns: Any, bad: Any) -> None:
+    if patterns is None:
+        return
+    if not isinstance(patterns, dict) or not all(isinstance(v, str) for v in patterns.values()):
+        bad("redaction.patterns", "must be a table of name = regular expression")
+        return
+    for name, regex in patterns.items():
+        try:
+            compile_extra(name, regex)
+        except RedactionSettingsError as error:
+            bad(f"redaction.patterns.{name}", str(error))
+
+
+def _validate_redaction_allow(values: Any, key: str, bad: Any) -> None:
+    if values is None:
+        return
+    if not (
+        isinstance(values, list) and all(isinstance(v, str) and 0 < len(v) <= 500 for v in values)
+    ):
+        bad(f"redaction.{key}", "must be a list of non-empty strings, each up to 500 characters")
+        return
+    if key != "allow_patterns":
+        return
+    for value in values:
+        try:
+            re.compile(value)
+        except re.error as error:
+            bad(
+                "redaction.allow_patterns",
+                f"{value!r} is not a valid regular expression: {error}",
+            )
+
+
+def _validate_redaction_pii(kinds: Any, bad: Any) -> None:
+    if kinds is None:
+        return
+    allowed = sorted(kind.value for kind in PiiKind)
+    if not (isinstance(kinds, list) and all(k in allowed for k in kinds)):
+        bad("redaction.pii", f"must be a list drawn from: {', '.join(allowed)}")
 
 
 def _merge_adapter_commands(layers: Sequence[Layer]) -> dict[str, dict[str, tuple[str, ...]]]:
