@@ -2,6 +2,7 @@
 
 import forja.core.redaction.engine as engine_module
 from forja.core.redaction import (
+    MAX_LINE_CHARS,
     Category,
     ItemKind,
     PackageItem,
@@ -140,8 +141,8 @@ def test_three_matches_chained_by_overlaps_join_into_one_and_a_gap_splits() -> N
 
 
 def test_a_line_of_exactly_the_limit_is_kept_and_only_a_longer_one_is_masked() -> None:
-    exact = "a" * engine_module.MAX_LINE_CHARS
-    longer = "b" * (engine_module.MAX_LINE_CHARS + 1)
+    exact = "a" * MAX_LINE_CHARS
+    longer = "b" * (MAX_LINE_CHARS + 1)
 
     shortened, long_lines = engine_module._shorten_long_lines(  # noqa: SLF001
         chr(10).join(["short", exact, longer])
