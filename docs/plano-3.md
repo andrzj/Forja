@@ -1,6 +1,6 @@
 # Incremento 3 — Prova forte: plano em sub-incrementos
 
-Escrito em 12/10/2026. Estado: fatiamento, ordem e **plano detalhado do 3a aprovados** (perguntas 11 a 15 respondidas "sim"). Próximo: implementar o 3a, começando pelo passo 1 (ler o que falta). Nada foi implementado. Cada sub-incremento terá seu plano detalhado e sua aprovação no começo dele; este documento fixa o fatiamento, a ordem, as entregas e os riscos.
+Escrito em 12/10/2026. Estado: fatiamento, ordem e **plano detalhado do 3a aprovados** (perguntas 11 a 15 respondidas "sim"). Passos 1 a 7 do 3a feitos; passo 8 em curso (retomada feita; mutação adiada para o 3b, ver abaixo). Cada sub-incremento terá seu plano detalhado e sua aprovação no começo dele; este documento fixa o fatiamento, a ordem, as entregas e os riscos.
 
 ## Referências lidas
 
@@ -187,7 +187,7 @@ Efeito no plano: passos 3 e 4 crescem (CLI e planner partem do zero; `_finish`, 
 5. **`ScopeCheck` por papel** e testes: cada classe de arquivo, por papel, aceita e recusada; renomear teste para produção e o inverso.
 6. **Check vermelho/verde** e **congelamento**, com o parser de pytest distinguindo falha de asserção de erro de coleta. Testes contra os "testes ruins" do passo 2.
 7. **Pacote e saída do autor de testes**, com gravação real do Claude Code (opt-in `live`, como `tests\executors\test_live.py`; exige login do dono e gasta tokens).
-8. **Retomada:** cortes nas fronteiras novas; mutação de `core\` e `orchestrator\` nas linhas alteradas, com `scripts\mutate.py` (gate diferencial já existente).
+8. **Retomada:** cortes nas fronteiras novas — feito em `tests\orchestrator\test_fix_resume.py` (101 casos, mundo em memória, fora do `slow`). Mutação diferencial: ADIADA para o 3b por decisão do dono (mutator e crapper devem ser reimplementados como versão da Forja, sem WSL). Alvos a mutar quando o motor existir: `checks\{scope,red_green,freeze}.py`, `core\artifacts\llm_output.py`, `orchestrator\{task_cycle,measurer,agent_runner,planner}.py`.
 9. **Aceitação do 3a** em `docs\aceitacao-3a.md`: cada teste ruim do passo 2 é rejeitado; o teste bom passa; alterar teste congelado reprova; uma execução viva com o Claude Code nos dois papéis em ao menos 2 dos 4 repositórios.
 
 ## Pronto quando
