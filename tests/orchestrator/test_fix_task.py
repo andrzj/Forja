@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from forja.checks.freeze import tree_digest
 from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog
@@ -161,3 +162,24 @@ def test_only_the_test_author_is_judged_against_the_criteria_it_declared_tests_f
     )
 
     assert measurer.expected == [Expectations(frozenset({1}), declared), None]
+
+
+def test_the_implementer_is_told_what_the_test_author_froze(
+    world: MemoryWorld, tmp_path: Path
+) -> None:
+    author, implementer = ScriptedAgent(edits=[TESTS]), ScriptedAgent(edits=[CODE])
+
+    world.run(
+        measurer=ScriptedMeasurer(),
+        agent=implementer,
+        agents={Producer.TEST_AUTHOR: author},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    first, second = author.seen[0].task, implementer.seen[0].task
+    assert first.frozen_digest == ""
+    assert second.frozen_digest
+    for name, text in TESTS.items():
+        (tmp_path / "expected" / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "expected" / name).write_text(text, encoding="utf-8")
+    assert second.frozen_digest == tree_digest(tmp_path / "expected", "tests")

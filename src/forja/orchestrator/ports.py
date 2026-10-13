@@ -65,6 +65,7 @@ class TaskInfo:
     role: Producer = Producer.IMPLEMENTER
     test_root: str = ""
     attempt_prefix: str = ""  # attempts are ``<prefix><n>``; empty means ``<task>-a``
+    frozen_digest: str = ""  # of the files under ``test_root`` the test author committed
 
 
 @dataclass(frozen=True)

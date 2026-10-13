@@ -13,6 +13,7 @@ def default_registry() -> CheckRegistry:
     registry = CheckRegistry()
     for spec in (
         CheckSpec("scope", 1, Mode.BLOCKING, BLOCK, limits=frozenset({"max_files", "max_lines"})),
+        CheckSpec("freeze", 1, Mode.BLOCKING, BLOCK),
         CheckSpec("secrets", 2, Mode.BLOCKING, BLOCK),
         CheckSpec("format", 3, Mode.BLOCKING, BLOCK, commands=frozenset({"format"})),
         CheckSpec("lint", 3, Mode.BLOCKING, BLOCK, commands=frozenset({"lint"})),

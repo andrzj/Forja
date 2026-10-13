@@ -6,6 +6,11 @@ has the test author first, with stage ``<task>-t`` and attempts ``<task>-ta<n>``
 run only after its last stage is committed.
 """
 
+from pathlib import Path
+
+from pydantic import JsonValue
+
+from forja.checks.freeze import tree_digest
 from forja.core.adapters.executor import ErrorKind
 from forja.core.artifacts.models import Producer
 from forja.core.events.state import RunState
@@ -70,6 +75,7 @@ class TaskCycle:
         payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
         scope = payload.get("scope")
         author = role is Producer.TEST_AUTHOR
+        test_root = str(payload.get("test_root", ""))
         return TaskInfo(
             task_id,
             f"{task_id}-t" if author else f"{task_id}-s",
@@ -78,9 +84,17 @@ class TaskCycle:
             _count(payload.get("max_files")),
             _count(payload.get("max_lines")),
             role,
-            str(payload.get("test_root", "")),
+            test_root,
             f"{task_id}-ta" if author else f"{task_id}-a",
+            "" if author else self._frozen_digest(task_id),
         )
+
+    def _frozen_digest(self, task_id: str) -> str:
+        """What the test author's stage froze, read from its commit; empty if it had none."""
+        if Producer.TEST_AUTHOR not in self.roles(task_id):
+            return ""
+        frozen = self._state.transition_payload(Level.STAGE, f"{task_id}-t", StageState.COMMITTED)
+        return str(frozen["frozen_digest"]) if frozen and "frozen_digest" in frozen else ""
 
     async def run(self, task_id: str) -> None:
         ctx, journal = self._ctx, self._journal
@@ -155,7 +169,12 @@ class TaskCycle:
             await self._work(attempt_ctx)
         elif self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.COMMITTED:
             # cut between the attempt's commit and the stage's: finish what _commit started
-            journal.enter(Level.STAGE, info.stage_id, StageState.COMMITTED)
+            journal.enter(
+                Level.STAGE,
+                info.stage_id,
+                StageState.COMMITTED,
+                payload=self._frozen(info, ctx.workspace.attempt_worktree(attempt)),
+            )
         await journal.operate(
             "remove_worktree",
             Level.ATTEMPT,
@@ -319,7 +338,19 @@ class TaskCycle:
             run.workspace.commit_stage(info.task_id, info.stage_id, attempt, message),
         )
         journal.enter(Level.ATTEMPT, attempt, AttemptState.COMMITTED)
-        journal.enter(Level.STAGE, info.stage_id, StageState.COMMITTED)
+        journal.enter(
+            Level.STAGE,
+            info.stage_id,
+            StageState.COMMITTED,
+            payload=self._frozen(info, ctx.worktree),
+        )
+
+    @staticmethod
+    def _frozen(info: TaskInfo, worktree: Path) -> dict[str, JsonValue] | None:
+        """The test author freezes its tests; the implementer must leave them as they are."""
+        if info.role is not Producer.TEST_AUTHOR or not info.test_root:
+            return None
+        return {"frozen_digest": tree_digest(worktree, info.test_root)}
 
     # -- infrastructure failures ----------------------------------------------------------------
 

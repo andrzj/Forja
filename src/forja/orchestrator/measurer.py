@@ -13,8 +13,9 @@ from pydantic import JsonValue
 
 from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
-from forja.checks.changes import read_before, read_changes
+from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
+from forja.checks.freeze import FreezeCheck
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
 from forja.checks.red_green import RedGreenCheck
 from forja.checks.scope import ScopeCheck
@@ -254,6 +255,7 @@ class PipelineMeasurer:
         adapter, worktree = self._adapter, ctx.worktree
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
+            *self._frozen(ctx, changes),
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks
             ),
@@ -266,6 +268,12 @@ class PipelineMeasurer:
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(adapter))
+
+    def _frozen(self, ctx: AttemptContext, changes: Changes) -> list[Check]:
+        task = ctx.task
+        if not (task.frozen_digest and task.test_root):
+            return []
+        return [FreezeCheck(ctx.worktree, changes, task.test_root, task.frozen_digest)]
 
     def _tests_check(
         self,
