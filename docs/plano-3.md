@@ -1,6 +1,6 @@
 # Incremento 3 — Prova forte: plano em sub-incrementos
 
-Escrito em 12/10/2026. Estado: fatiamento, ordem e **plano detalhado do 3a aprovados** (perguntas 11 a 15 respondidas "sim"). Passos 1 a 7 do 3a feitos; passo 8 em curso (retomada feita; mutação adiada para o 3b, ver abaixo). Cada sub-incremento terá seu plano detalhado e sua aprovação no começo dele; este documento fixa o fatiamento, a ordem, as entregas e os riscos.
+Escrito em 12/10/2026. Estado: fatiamento, ordem e **plano detalhado do 3a aprovados** (perguntas 11 a 15 respondidas "sim"). Passos 1 a 9 do 3a feitos (mutação diferencial adiada para o 3b; aceitação em `docs\aceitacao-3a.md`). Cada sub-incremento terá seu plano detalhado e sua aprovação no começo dele; este documento fixa o fatiamento, a ordem, as entregas e os riscos.
 
 ## Referências lidas
 
