@@ -1,4 +1,5 @@
-"""The Python adapter: ruff for format and lint, compileall for build, pytest for tests.
+"""The Python adapter: ruff for format and lint, compileall for build, pytest for tests and
+coverage.py (through a small driver) for coverage.
 
 It only describes commands and reads their output; the core runs them. The program for each tool
 is a parameter, because ruff comes from Forja's own environment while pytest must run in the
@@ -25,6 +26,7 @@ from forja.core.adapters import (
     Unparseable,
     VersionProbe,
 )
+from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.python import parsers
 
 MANIFEST = "pyproject.toml"
@@ -38,6 +40,12 @@ _TEST_DIRECTORIES = frozenset({"tests", "test"})
 _SOURCE_SUFFIXES = (".py", ".pyi")
 _RUFF_VERSION = r"ruff (\S+)"
 _PYTHON_VERSION = r"Python (\S+)"
+_COVERAGE_VERSION = r"Coverage\.py, version (\S+)"
+# Where the coverage report lands, relative to the repository (``target/`` is Forja's own
+# ignored directory; ``scripts/mutate.py`` already writes its coverage next to it)
+COVERAGE_REPORT = "target/coverage/python/coverage.json"
+COVERAGE_DRIVER = Path(__file__).with_name("coverage_driver.py")
+_PYTEST_OPTIONS = ("-p", "no:cacheprovider", "-q", "--color=no")
 _PYTEST_VERSION = r"pytest (\S+)"
 
 
@@ -53,7 +61,11 @@ class PythonAdapter:
     language = "python"
     grammar = "python"
     capabilities = frozenset(
-        {LanguageCapability.TEST_FILTER_BY_FILE, LanguageCapability.STRUCTURAL_METERS}
+        {
+            LanguageCapability.TEST_FILTER_BY_FILE,
+            LanguageCapability.COVERAGE,
+            LanguageCapability.STRUCTURAL_METERS,
+        }
     )
 
     def __init__(
@@ -107,6 +119,12 @@ class PythonAdapter:
                     self._plan(here, (*self._python, "-m", "pytest", "--version")), _PYTEST_VERSION
                 )
                 return ToolInfo("pytest", pytest, "python", python)
+            case Operation.COVERAGE:
+                coverage = VersionProbe(
+                    self._plan(here, (*self._python, "-m", "coverage", "--version")),
+                    _COVERAGE_VERSION,
+                )
+                return ToolInfo("coverage.py", coverage, "python", python)
         return NotSupported(operation.value, "the Python adapter does not offer it")
 
     def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
@@ -161,9 +179,24 @@ class PythonAdapter:
                     *("-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no"),
                     *(("--", *request.test_files) if request.test_files else ()),
                 )
+            case Operation.COVERAGE if request.tests:
+                return NotSupported("coverage", "filtering by test name is not offered")
+            case Operation.COVERAGE:
+                argv = (
+                    *self._python,
+                    str(COVERAGE_DRIVER),
+                    *("--report", COVERAGE_REPORT, "--"),
+                    *_PYTEST_OPTIONS,
+                    *(("--", *request.test_files) if request.test_files else ()),
+                )
             case _:
                 return NotSupported(operation.value, "the Python adapter does not offer it")
         return self._plan(request.root, argv, config_files=CONFIG_FILES)
+
+    def report(self, operation: Operation) -> ReportSpec | NotSupported:
+        if operation is Operation.COVERAGE:
+            return ReportSpec(ReportFormat.COVERAGE_PY_JSON, COVERAGE_REPORT)
+        return NotSupported(operation.value, "the Python adapter writes no such report")
 
     @staticmethod
     def _ruff_options() -> tuple[str, ...]:

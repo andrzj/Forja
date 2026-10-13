@@ -20,8 +20,10 @@ from forja.core.adapters import (
     read_output_lines,
 )
 from forja.core.evidence import TargetKind
+from forja.core.reports import ReportFormat, ReportSpec
+from forja.core.reports.readers import read_coverage
 from forja.languages.python import PythonAdapter
-from forja.languages.python.adapter import default_cache_dir
+from forja.languages.python.adapter import COVERAGE_DRIVER, COVERAGE_REPORT, default_cache_dir
 from tests.core.adapters.conformance import language_problems
 
 ADAPTER = PythonAdapter(python=("py",), ruff=("rf",), cache_dir=Path("cache-for-tests"))
@@ -149,6 +151,24 @@ def test_tests_run_in_the_repositorys_python_and_can_be_limited_to_files(project
     assert one_file == (*everything, "--", "tests/test_a.py")
 
 
+def test_coverage_runs_pytest_under_the_driver_and_names_its_report(project: Path) -> None:
+    everything = argv(Operation.COVERAGE, project)
+    one_file = argv(Operation.COVERAGE, project, test_files=("tests/test_a.py",))
+
+    assert everything[:2] == ("py", str(COVERAGE_DRIVER))
+    assert everything[2:5] == ("--report", COVERAGE_REPORT, "--")
+    assert everything[5:] == ("-p", "no:cacheprovider", "-q", "--color=no")
+    assert one_file == (*everything, "--", "tests/test_a.py")
+    assert ADAPTER.report(Operation.COVERAGE) == ReportSpec(
+        ReportFormat.COVERAGE_PY_JSON, COVERAGE_REPORT
+    )
+    assert isinstance(ADAPTER.report(Operation.MUTATION), NotSupported)
+    assert isinstance(
+        ADAPTER.plan(Operation.COVERAGE, OperationRequest(root=project, tests=("a::b",))),
+        NotSupported,
+    )
+
+
 def test_a_plan_runs_in_the_project_leaves_no_bytecode_behind_and_hashes_the_configuration(
     project: Path, tmp_path: Path
 ) -> None:
@@ -161,7 +181,7 @@ def test_a_plan_runs_in_the_project_leaves_no_bytecode_behind_and_hashes_the_con
     assert "pyproject.toml" in plan.config_files and "ruff.toml" in plan.config_files
 
 
-@pytest.mark.parametrize("operation", [Operation.COVERAGE, Operation.MUTATION, Operation.E2E])
+@pytest.mark.parametrize("operation", [Operation.MUTATION, Operation.E2E])
 def test_what_the_adapter_does_not_offer_is_said_so(operation: Operation, project: Path) -> None:
     assert isinstance(ADAPTER.plan(operation, OperationRequest(root=project)), NotSupported)
     assert isinstance(ADAPTER.tool_info(operation), NotSupported)
@@ -180,6 +200,7 @@ def test_each_operation_names_its_tool_and_how_to_ask_its_version() -> None:
         Operation.LINT_FIX: ("ruff", ("rf", "--version")),
         Operation.BUILD: ("compileall", ("py", "--version")),
         Operation.TEST: ("pytest", ("py", "-m", "pytest", "--version")),
+        Operation.COVERAGE: ("coverage.py", ("py", "-m", "coverage", "--version")),
     }
     for operation, (tool, probe) in expected.items():
         info = ADAPTER.tool_info(operation)
@@ -460,6 +481,29 @@ def test_the_real_pytest_outcomes_are_read_test_by_test(sample: Path, tmp_path: 
         ("test.outcome", "tests/test_m.py::test_p[2]", "passed"),
         ("test.skipped", "tests", 1),
     ]
+
+
+def test_the_real_coverage_driver_writes_a_report_the_reader_understands(
+    sample: Path, tmp_path: Path
+) -> None:
+    plan = REAL.plan(Operation.COVERAGE, OperationRequest(root=sample, test_files=("tests",)))
+    assert isinstance(plan, CommandPlan)
+    (sample / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (sample / "tests" / "test_m.py").write_text(
+        "from pkg.m import g\n\n\ndef test_g():\n    assert g(1) == 1\n", encoding="utf-8"
+    )
+
+    done = subprocess.run(plan.argv, cwd=sample, capture_output=True, text=True, check=False)
+    spec = REAL.report(Operation.COVERAGE)
+    assert isinstance(spec, ReportSpec)
+    report = read_coverage(spec.format, (sample / spec.path).read_text(encoding="utf-8"), sample)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    module = report.of("pkg/m.py")
+    assert module is not None
+    assert module.covered == frozenset({1, 4, 5}) and not module.missed  # import, def, return
+    assert module.tests[5] == frozenset({"test_m.test_g"})
+    assert not (sample / ".coverage").exists()  # recorded in memory: nothing else is left behind
 
 
 def test_the_real_tools_report_their_versions(sample: Path) -> None:
