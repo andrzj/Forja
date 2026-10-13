@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "thresholds": {"high": 80, "low": 60},
+  "files": {
+    "src/calc.js": {
+      "language": "javascript",
+      "source": "function add(a, b) {\n  return a + b;\n}\n",
+      "mutants": [
+        {"id": "0", "mutatorName": "ArithmeticOperator", "replacement": "a - b", "location": {"start": {"line": 2, "column": 10}, "end": {"line": 2, "column": 15}}, "status": "Killed"},
+        {"id": "1", "mutatorName": "EqualityOperator", "replacement": "a <= b", "location": {"start": {"line": 5, "column": 3}, "end": {"line": 5, "column": 8}}, "status": "Survived"},
+        {"id": "2", "mutatorName": "BooleanLiteral", "replacement": "false", "location": {"start": {"line": 8, "column": 3}, "end": {"line": 8, "column": 7}}, "status": "NoCoverage"},
+        {"id": "3", "mutatorName": "BlockStatement", "replacement": "{}", "location": {"start": {"line": 9, "column": 1}, "end": {"line": 11, "column": 2}}, "status": "Timeout"},
+        {"id": "4", "mutatorName": "StringLiteral", "replacement": "\"\"", "location": {"start": {"line": 10, "column": 1}, "end": {"line": 10, "column": 5}}, "status": "CompileError"},
+        {"id": "5", "mutatorName": "ArrayDeclaration", "replacement": "[]", "location": {"start": {"line": 12, "column": 1}, "end": {"line": 12, "column": 5}}, "status": "RuntimeError"}
+      ]
+    }
+  }
+}
