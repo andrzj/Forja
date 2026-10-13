@@ -645,3 +645,38 @@ def test_a_junction_in_the_worktree_is_neither_followed_nor_written_through(
     assert sorted(p.name for p in outside.iterdir()) == ["secret.txt"]
     with pytest.raises(RuntimeError, match="through a link"):
         _refuse_links_on_the_way(r.ctx.worktree, "src/jn/x.txt")
+
+
+# -- the test author ---------------------------------------------------------------------------
+
+
+def test_what_the_test_author_declares_comes_back_with_the_work(tmp_path: Path) -> None:
+    declared = {
+        "actions": [
+            {
+                "summary": "a test for the criterion",
+                "reason": "it shows the defect",
+                "files": [{"path": "tests/test_a.py", "change": "created"}],
+            }
+        ],
+        "tests": [
+            {"criterion_id": 1, "test_id": "tests/test_a.py::test_add", "path": "tests/test_a.py"}
+        ],
+    }
+    script = {
+        "writes": {"tests/test_a.py": "def test_add():\n    assert False\n"},
+        "saida": declared,
+        "lines": [USAGE],
+    }
+    r = rig(tmp_path, script, role=Producer.TEST_AUTHOR)
+    author = replace(r.ctx.task, role=Producer.TEST_AUTHOR, test_root="tests")
+    r = replace(r, ctx=replace(r.ctx, task=author))
+
+    go(work(r))
+    go(settle(r.runner.apply_diff(r.ctx)))
+
+    assert [(t.criterion_id, t.test_id, t.path) for t in r.runner.declared_tests(r.ctx)] == [
+        (1, "tests/test_a.py::test_add", "tests/test_a.py")
+    ]
+    assert "must FAIL" in (r.workcopy / ".forja-agent" / PACKAGE).read_text(encoding="utf-8")
+    assert (r.ctx.worktree / "tests" / "test_a.py").is_file()

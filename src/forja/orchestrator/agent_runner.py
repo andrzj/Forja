@@ -90,6 +90,47 @@ every file you created, modified or removed (the list is checked against what re
 had to guess. Then answer with one short sentence.
 """
 
+AUTHOR_INSTRUCTIONS = """\
+You are writing tests for a defect. You do not fix it and you do not touch production code: the
+defect stays, and your tests must show it.
+
+{commands}Read the files you need and write the tests with the edit tools, only under `{test_root}`.
+Write at least one test for each numbered criterion of the task. Every test you declare must FAIL
+on the code as it is now, by an assertion about the behaviour in the criterion. Your work is
+rejected if a declared test passes now, if it errors out (an import, a syntax or a collection
+error is not a failing test), if it asserts nothing about the code, or if a test that exists now
+stops passing. Do not change the tests that exist; add new files or new tests. Do not add
+dependencies.
+
+When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. List
+every file you created, modified or removed in `actions` (the list is checked against what really
+changed) and, in `tests`, the tests that cover each criterion; `test_id` is the id pytest prints
+for the test (`path::name`) and `path` is its file:
+
+{{"actions": [{{"summary": "what changed", "reason": "why", "files": [{{"path": "tests/test_x.py",
+"change": "created"}}]}}], "tests": [{{"criterion_id": 1, "test_id": "tests/test_x.py::test_name",
+"path": "tests/test_x.py"}}]}}
+
+`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
+had to guess. Then answer with one short sentence.
+"""
+
+FIX_INSTRUCTIONS = """\
+You are fixing a defect. The tests under `{test_root}` were written for it and are frozen: they
+fail now and must pass when you are done. Do not change, add, move or remove anything under
+`{test_root}`, and do not add dependencies. Change only what the defect needs.
+
+{commands}Read the tests and the files you need and change the code with the edit tools.
+
+When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else, listing
+every file you created, modified or removed (the list is checked against what really changed):
+
+{{"actions": [{{"summary": "what changed", "reason": "why it fixes the defect",
+"files": [{{"path": "relative/path.py", "change": "modified"}}]}}]}}
+
+`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
+had to guess. Then answer with one short sentence.
+"""
 
 _SHORT_NAME = re.compile(r"~\d")
 
@@ -158,15 +199,22 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         else:
             notes.append(f"`{name}` is a directory: read the files you need from it.")
     result = redactor.redact(items)
+    author = task.role is Producer.TEST_AUTHOR
+    commands = FACADE_COMMANDS if facade else NO_COMMANDS
+    template = (
+        AUTHOR_INSTRUCTIONS if author else FIX_INSTRUCTIONS if task.test_root else INSTRUCTIONS
+    )
     parts = [
         f"# Task\n\n{task.intent}\n",
-        INSTRUCTIONS.format(
-            agent_dir=AGENT_DIR,
-            output=OUTPUT,
-            commands=FACADE_COMMANDS if facade else NO_COMMANDS,
+        template.format(
+            agent_dir=AGENT_DIR, output=OUTPUT, commands=commands, test_root=task.test_root
         ),
         "## What you may change\n",
-        f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}.",
+        (
+            f"Only inside: `{task.test_root}`. The production files below are for reading."
+            if author
+            else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
+        ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]
     if result.items or notes:

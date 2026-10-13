@@ -203,3 +203,56 @@ As propostas abaixo valem como decisões.
 13. **Erro de coleta.** Proposta: erro de importação, sintaxe ou coleta **não** conta como vermelho; a tentativa é rejeitada com a mensagem do pytest. Concorda?
 14. **Teste que já existia e passa a falhar.** Proposta: reprova a etapa do autor de testes (o autor não pode quebrar a suíte). Concorda?
 15. **Orçamento de tentativas.** Hoje `attempts_per_task` = 3 vale por tarefa. Proposta: passa a valer por etapa (3 para o autor e 3 para o implementador), com o teto de tokens da execução inalterado. Concorda?
+
+# Plano detalhado do passo 6 (vermelho/verde e congelamento)
+
+Decisões do dono (12/10, "sim" a todas as propostas 1 a 6 e à divisão 6a/6b). O código foi mapeado antes (ver "Fatos vistos").
+
+## Fatos vistos
+
+- `TestsCheck` está em `checks\build_and_tests.py:44` (gate 5). O parser de pytest (`languages\python\parsers.py:106-125`) lê `pytest -rA`; o regex da linha 22 descarta o texto depois de " - ". Cada teste vira um `EvidenceDraft` `test.outcome` com valor `passed|failed|error|xfail|xpass`; o id é `path::nome`.
+- `OperationRequest.test_files` existe; o adaptador de Python o passa a `pytest -- <arquivos>` (`adapter.py:158-163`).
+- Todo check precisa de entrada em `CheckSettings` (`core\gates\pipeline.py:76-78`), senão o pipeline levanta erro. A ordem dentro do mesmo gate é a de registro.
+- O `saida.json` só é lido por `agent_runner._declared` (`agent_runner.py:452-464`); `LlmOutput` não tem campo de testes. `judge` (`measurer.py:241`) não recebe critérios nem manifesto.
+- No gate da etapa 1, o worktree é a base mais o diff não commitado do autor, sem produção alterada (garantido pelo `ScopeCheck`). Na etapa 2, o HEAD já traz o commit da etapa 1.
+- O payload de transição tem teto de 4096 bytes (`core\events\models.py:23`). `journal.enter(level, id, to, payload=...)` e `state.transition_payload(...)` permitem gravar e reler sem o worktree.
+- A ramificação de retomada em `task_cycle.py:155` entra em `STAGE COMMITTED` sem payload.
+
+## Decisões
+
+1. Canal do manifesto: campo opcional `tests` em `LlmOutput`, no formato de `AuthoredTestsBody`; `_declared` o lê e o runner o entrega ao `judge`.
+2. `test_id` do manifesto é o id completo do pytest (`tests/test_x.py::test_nome`).
+3. `Measurer.judge` ganha um parâmetro opcional com os critérios e o manifesto declarado.
+4. Só `FAILED` conta como vermelho. `ERROR` (importação, coleta, fixture) reprova a tentativa com a mensagem do pytest. O parser não guarda o tipo da exceção; fica fora do escopo.
+5. Congelamento: `path → sha256` dos arquivos TEST e FIXTURE da etapa 1 no payload de `STAGE COMMITTED`; acima de 4096 bytes, só o digest mais um artefato `TEST_MANIFEST`. Calculado também na ramificação de retomada.
+6. Os checks novos ficam no gate 5, registrados antes do `TestsCheck`, com entradas novas em `CheckSettings`.
+
+## 6a — manifesto e vermelho/verde
+
+1. `LlmOutput.tests` e leitura em `_declared`; o runner entrega o manifesto ao `judge` (parâmetro novo, opcional, padrão vazio, para não quebrar os outros chamadores). Testes de esquema e de leitura.
+2. Parser: manter o texto depois do " - " apenas se for preciso para a mensagem de rejeição (decidir ao implementar; sem mudar o valor de `test.outcome`).
+3. `RedGreenCheck` para a etapa do autor (só monta quando `task.role` é `TEST_AUTHOR`): (a) todo critério do `criterios.json` aparece em ao menos um `CriterionTest` do manifesto; (b) todo caminho do manifesto existe e é arquivo de teste; (c) roda só os testes novos (`test_files`) e cada teste do manifesto deve estar `failed`; um que passa é rejeitado com o nome; `error` ou ausente da saída reprova com a mensagem; (d) os testes que já existiam e passavam na base continuam passando (reaproveita `passing`).
+4. Etapa do implementador: um check verde roda os testes do manifesto (ids congelados) e exige `passed`, além dos checks de hoje.
+5. Entradas em `CheckSettings`/política; teste do pipeline com a ordem correta.
+6. Testes contra os "testes ruins" do passo 2 (sem asserção, `assert True`, não chama o código, erro de importação, passa com e sem o defeito) e contra o teste bom.
+
+## 6b — congelamento
+
+1. Calcular `path → sha256` dos arquivos TEST e FIXTURE do commit da etapa 1 (`core\manifest.py`: `build_manifest`, `diff_manifests`), antes de remover o worktree; gravar no payload de `STAGE COMMITTED` (com a regra do teto), também na ramificação de retomada.
+2. `FreezeCheck` na etapa 2: relê o congelado com `transition_payload` e compara com o worktree; alterar, apagar ou renomear arquivo congelado reprova, com o caminho. Gate 1 ou junto do escopo (decidir ao implementar; o gate mais barato possível).
+3. Testes: alterar, apagar, renomear, adicionar arquivo novo de teste (permitido ou não: **a decidir**, ver pergunta abaixo) e retomada nas fronteiras novas (`test_resume_end_to_end.py`).
+
+## Pronto quando
+
+Cada teste ruim do passo 2 é rejeitado com a causa certa; o teste bom é aceito; a etapa do implementador só avança com o manifesto verde; mexer em arquivo congelado reprova; retomada por corte termina no mesmo estado; `ruff`, `mypy src tests` e testes rápidos verdes.
+
+## Pergunta aberta
+
+7. Na etapa do implementador, criar um arquivo de teste novo (fora do congelado) já é barrado pelo `ScopeCheck` (só produção). Então o congelamento só cobre modificar, apagar e renomear. Confirma que não há caso em que o implementador pode adicionar teste?
+
+## Desvios do 6a em relação ao plano (13/10)
+
+- O `RedGreenCheck` roda a suíte inteira (uma execução), em vez de só os arquivos novos com `test_files`: assim o mesmo resultado cobre os testes declarados, os antigos e qualquer teste não declarado que falhe. Ele **substitui** o `TestsCheck` na etapa do autor (o `TestsCheck` reprovaria os testes vermelhos de propósito).
+- O item 4 (check verde do implementador) não foi criado: o `TestsCheck` já exige tudo verde, incluindo os testes commitados na etapa 1, e o congelamento (6b) impede apagar ou alterar esses testes.
+- Erro de coleta: o pytest o relata sob o caminho do arquivo; o check o trata como "errors out" para o teste declarado daquele arquivo.
+- Novo ponto de extensão: `AgentRunner.declared_tests(ctx)` e `Measurer.judge(..., expectations)`.

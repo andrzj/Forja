@@ -135,7 +135,7 @@ def test_the_fix_planner_makes_one_task_with_the_tests_first() -> None:
 
     assert planned == [
         PlannedTask(
-            "page 1 is wrong",
+            "page 1 is wrong\n\nCriteria:\n1. page 1 is the first items",
             ("src",),
             4,
             Budget().lines_per_task,

@@ -53,12 +53,17 @@ class FixPlanner:
         self._scope = tuple(scope)
         self._test_root = test_root
 
+    def _intent(self) -> str:
+        """The defect and its criteria; the numbers are the ones the test author declares."""
+        criteria = "\n".join(f"{c.id}. {c.text}" for c in self._fix.criteria.criteria)
+        return f"{self._fix.description}\n\nCriteria:\n{criteria}"
+
     async def plan(
         self, worktree: Path, baseline: Baseline, budget: Budget
     ) -> Sequence[PlannedTask]:
         return [
             PlannedTask(
-                intent=self._fix.description,
+                intent=self._intent(),
                 scope=self._scope,
                 max_files=budget.files_per_task,
                 max_lines=budget.lines_per_task,

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from forja.core.artifacts.models import Producer
 from forja.core.redaction import Redactor
 from forja.orchestrator.agent_runner import _fence, build_package
 from forja.orchestrator.ports import AttemptContext, TaskInfo
@@ -99,3 +100,49 @@ def test_the_files_section_is_there_for_files_and_for_directories_and_only_then(
     assert "## Files in scope" in package(tmp_path)
     assert "## Files in scope" in package(tmp_path, ("src",))
     assert "## Files in scope" not in package(tmp_path, ())
+
+
+def fix_context(tmp_path: Path, role: Producer, rejection: str | None = None) -> AttemptContext:
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src" / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    intent = "page 1 is wrong\n\nCriteria:\n1. page 1 is the first items"
+    task = TaskInfo("t1", "t1-t", intent, ("src/a.py",), 4, 200, role, "tests")
+    return AttemptContext(task, "t1-ta1", tmp_path, rejection)
+
+
+def test_the_test_author_is_told_to_write_failing_tests_under_the_test_root(
+    tmp_path: Path,
+) -> None:
+    text = build_package(fix_context(tmp_path, Producer.TEST_AUTHOR), Redactor())
+
+    assert "1. page 1 is the first items" in text
+    assert "Only inside: `tests`. The production files below are for reading." in text
+    assert "must FAIL" in text
+    assert "an import, a syntax or a collection" in text
+    assert '"tests": [{"criterion_id": 1, "test_id": "tests/test_x.py::test_name"' in text
+    assert "### `src/a.py`" in text
+    assert "refactoring" not in text
+
+
+def test_the_implementer_of_a_fix_is_told_the_tests_are_frozen(tmp_path: Path) -> None:
+    text = build_package(fix_context(tmp_path, Producer.IMPLEMENTER), Redactor())
+
+    assert "are frozen" in text and "must pass" in text
+    assert "anything under\n`tests`" in text
+    assert "Only inside: `src/a.py`." in text
+    assert "refactoring" not in text
+
+
+def test_a_rejected_test_author_is_shown_the_verdict(tmp_path: Path) -> None:
+    rejection = "the declared test passes on the code with the defect [tests/test_x.py::t]"
+
+    text = build_package(fix_context(tmp_path, Producer.TEST_AUTHOR, rejection), Redactor())
+
+    assert "## The previous attempt was rejected" in text and rejection in text
+
+
+def test_a_refactoring_package_keeps_its_own_instructions(tmp_path: Path) -> None:
+    text = package(tmp_path)
+
+    assert "You are refactoring existing code" in text
+    assert "frozen" not in text and "must FAIL" not in text

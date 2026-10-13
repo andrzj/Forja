@@ -3,8 +3,8 @@
 import asyncio
 from pathlib import Path
 
-from forja.orchestrator.config import Budget
-from forja.orchestrator.planner import ComplexityPlanner
+from forja.orchestrator.config import Budget, FixRequest
+from forja.orchestrator.planner import ComplexityPlanner, FixPlanner
 from forja.orchestrator.ports import Baseline, PlannedTask
 
 FOUND = {
@@ -64,3 +64,23 @@ def test_equally_complex_functions_are_ordered_by_file_before_name() -> None:
     tasks = asyncio.run(ComplexityPlanner(functions, 15).plan(Path("."), Baseline(True), Budget()))
 
     assert [t.scope for t in tasks] == [("src/a.py",), ("src/b.py",)]
+
+
+def test_a_fix_plan_puts_the_numbered_criteria_in_the_intent_of_its_one_task() -> None:
+    fix = FixRequest.model_validate(
+        {
+            "description": "page 1 is wrong",
+            "criteria": {
+                "criteria": [
+                    {"id": 1, "text": "page 1 is the first items", "level": "unit", "origin": "x"},
+                    {"id": 2, "text": "the last page is shorter", "level": "unit", "origin": "x"},
+                ]
+            },
+        }
+    )
+
+    plan = asyncio.run(FixPlanner(fix, ("src",)).plan(Path("."), Baseline(True), Budget()))
+
+    assert [task.intent for task in plan] == [
+        "page 1 is wrong\n\nCriteria:\n1. page 1 is the first items\n2. the last page is shorter"
+    ]
