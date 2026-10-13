@@ -40,6 +40,7 @@ from forja.core.adapters import (
 )
 from forja.core.artifacts.models import Producer
 from forja.core.evidence import Target, TargetKind
+from forja.core.reports import ReportFormat, ReportSpec
 
 C = LanguageCapability
 FULL_CAPABILITIES = frozenset(
@@ -136,6 +137,13 @@ class FakeLanguageAdapter:
             env_set={"NO_COLOR": "1"},
             config_files=("pyproject.toml",),
         )
+
+    def report(self, operation: Operation) -> ReportSpec | NotSupported:
+        if operation is Operation.COVERAGE and C.COVERAGE in self.capabilities:
+            return ReportSpec(ReportFormat.COVERAGE_PY_JSON, "target/coverage/coverage.json")
+        if operation is Operation.MUTATION and C.MUTATION in self.capabilities:
+            return ReportSpec(ReportFormat.STRYKER_JSON, "target/mutation/report.json")
+        return NotSupported(operation.value)
 
     def parse(self, operation: Operation, output: ToolOutput) -> ParseResult:
         lines = read_output_lines(output.log_path)

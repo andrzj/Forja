@@ -16,6 +16,7 @@ from forja.core.adapters import (
     ToolOutput,
 )
 from forja.core.artifacts.models import Producer
+from forja.core.reports import ReportFormat, ReportSpec
 from tests.core.adapters.conformance import executor_problems, language_problems
 from tests.core.adapters.fakes import FULL_CAPABILITIES, FakeExecutorAdapter, FakeLanguageAdapter
 
@@ -108,6 +109,56 @@ def test_an_operation_planned_without_its_capability_is_caught(
             )
 
     expect(check_language(Quiet(), project, tmp_path), "plans coverage without declaring coverage")
+
+
+def test_an_adapter_that_does_not_say_what_its_coverage_writes_is_caught(
+    project: Path, tmp_path: Path
+) -> None:
+    class Mute(FakeLanguageAdapter):
+        report = None  # type: ignore[assignment]
+
+    expect(
+        check_language(Mute(), project, tmp_path),
+        "declares coverage but has no report()",
+        "declares mutation but has no report()",
+    )
+
+
+def test_a_report_in_the_wrong_family_is_caught(project: Path, tmp_path: Path) -> None:
+    class Mixed(FakeLanguageAdapter):
+        def report(self, operation):  # type: ignore[no-untyped-def]
+            return ReportSpec(ReportFormat.PIT_XML, "r.xml")  # a mutation format for both
+
+    expect(
+        check_language(Mixed(), project, tmp_path),
+        "report(coverage): pit_xml is not a coverage format",
+    )
+
+
+def test_a_report_without_the_capability_is_caught(project: Path, tmp_path: Path) -> None:
+    class Overeager(FakeLanguageAdapter):
+        capabilities = FULL_CAPABILITIES - {C.MUTATION, C.MUTATION_INCREMENTAL}
+
+        def report(self, operation):  # type: ignore[no-untyped-def]
+            return ReportSpec(ReportFormat.STRYKER_JSON, "r.json")
+
+    expect(
+        check_language(Overeager(), project, tmp_path),
+        "without mutation, report(mutation) must be NotSupported",
+    )
+
+
+def test_a_declared_capability_with_no_report_description_is_caught(
+    project: Path, tmp_path: Path
+) -> None:
+    class Vague(FakeLanguageAdapter):
+        def report(self, operation):  # type: ignore[no-untyped-def]
+            return NotSupported(operation.value)
+
+    expect(
+        check_language(Vague(), project, tmp_path),
+        "report(coverage) must describe the report of a declared capability",
+    )
 
 
 def test_a_missing_required_operation_is_caught(project: Path, tmp_path: Path) -> None:

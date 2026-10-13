@@ -39,6 +39,7 @@ from forja.core.adapters import (
 from forja.core.artifacts.models import Producer
 from forja.core.policy.registry import LANGUAGES
 from forja.core.process import UnsafeCommand, check_command_safety
+from forja.core.reports import ReportSpec, formats_of
 
 SHELLS = {"sh", "bash", "zsh", "dash", "cmd", "powershell", "pwsh"}
 ACTIVITY_TYPES = (
@@ -143,6 +144,7 @@ def language_problems(adapter: LanguageAdapter, project: Path, scratch: Path) ->
             problems.append(f"plans {operation.value} without declaring {capability.value}")
 
     problems += _filter_problems(adapter, project)
+    problems += _report_problems(adapter)
 
     for text in _garbage_texts():
         path = text[:300]
@@ -195,6 +197,36 @@ def _filter_problems(adapter: LanguageAdapter, project: Path) -> list[str]:
             problems.append("declares mutation_incremental but cannot plan it")
     elif not isinstance(incremental, NotSupported):
         problems.append("without mutation_incremental an incremental request must be NotSupported")
+    return problems
+
+
+def _report_problems(adapter: LanguageAdapter) -> list[str]:
+    """Coverage and mutation write a report; the adapter says which, and only if it runs them."""
+    problems: list[str] = []
+    report = getattr(adapter, "report", None)
+    for capability, operation in CAPABILITY_OPERATION.items():
+        if not formats_of(operation):
+            continue
+        declared = capability in adapter.capabilities
+        if report is None:
+            if declared:
+                problems.append(
+                    f"declares {capability.value} but has no report() to say what it writes"
+                )
+            continue
+        label = f"report({operation.value})"
+        answer = _attempt(problems, label, report, operation)
+        if answer is None:
+            continue
+        if _attempt(problems, label, report, operation) != answer:
+            problems.append(f"{label} is not deterministic")
+        if declared:
+            if not isinstance(answer, ReportSpec):
+                problems.append(f"{label} must describe the report of a declared capability")
+            elif answer.format not in formats_of(operation):
+                problems.append(f"{label}: {answer.format.value} is not a {operation.value} format")
+        elif not isinstance(answer, NotSupported):
+            problems.append(f"without {capability.value}, {label} must be NotSupported")
     return problems
 
 

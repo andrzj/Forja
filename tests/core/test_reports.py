@@ -1,11 +1,17 @@
 import pytest
 
+from forja.core.adapters import Operation
 from forja.core.reports import (
+    COVERAGE_FORMATS,
+    MUTATION_FORMATS,
     CoverageReport,
     FileCoverage,
     MutantResult,
     MutantStatus,
     MutationReport,
+    ReportFormat,
+    ReportSpec,
+    formats_of,
 )
 
 
@@ -103,3 +109,21 @@ def test_a_mutant_needs_its_change_text_and_a_valid_place() -> None:
         MutantResult("a.py", 0, "x", MutantStatus.KILLED)
     with pytest.raises(ValueError, match="relative POSIX"):
         MutantResult("/a.py", 1, "x", MutantStatus.KILLED)
+
+
+# -- report formats ------------------------------------------------------------------------------
+
+
+def test_every_format_belongs_to_exactly_one_family() -> None:
+    assert set(ReportFormat) == COVERAGE_FORMATS | MUTATION_FORMATS
+    assert not COVERAGE_FORMATS & MUTATION_FORMATS
+    assert formats_of(Operation.COVERAGE) == COVERAGE_FORMATS
+    assert formats_of(Operation.MUTATION) == MUTATION_FORMATS
+    assert formats_of(Operation.TEST) == frozenset()
+
+
+def test_a_report_path_must_be_relative_posix() -> None:
+    ReportSpec(ReportFormat.JACOCO_XML, "target/site/jacoco/jacoco.xml")
+    for bad in ("/abs.xml", "..\\x.xml", "a/../x.xml", "C:/x.xml"):
+        with pytest.raises(ValueError, match="relative POSIX"):
+            ReportSpec(ReportFormat.JACOCO_XML, bad)
