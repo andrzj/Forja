@@ -18,7 +18,7 @@ from forja.core.reports.mutation_readers import (
     read_pit_xml,
     read_stryker_json,
 )
-from forja.core.reports.reading import ReportError
+from forja.core.reports.reading import MAX_REPORT_CHARS, ReportError
 
 _COVERAGE: dict[ReportFormat, Callable[[str, Path, Sequence[str]], CoverageReport]] = {
     ReportFormat.COVERAGE_PY_JSON: read_coverage_py_json,
@@ -41,6 +41,10 @@ def _guarded[T](
     root: Path,
     source_roots: Sequence[str],
 ) -> T:
+    if len(text) > MAX_REPORT_CHARS:
+        raise ReportError(
+            f"a {report_format.value} report larger than {MAX_REPORT_CHARS} characters"
+        )
     try:
         return reader(text, root, source_roots)
     except ReportError:

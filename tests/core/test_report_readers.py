@@ -226,3 +226,44 @@ def test_a_path_that_leaves_the_repository_is_refused(tmp_path: Path) -> None:
         resolve_path("../x.py", tmp_path)
     with pytest.raises(ReportError, match="empty"):
         resolve_path("  ", tmp_path)
+
+
+def test_a_network_or_device_path_is_refused_and_never_opened(tmp_path: Path) -> None:
+    for bad in (
+        "//server/share/a.py",
+        "\\\\server\\share\\a.py",
+        "\\\\?\\C:\\a.py",
+        "//./pipe/x",
+    ):
+        with pytest.raises(ReportError, match="network or device"):
+            resolve_path(bad, tmp_path)
+    with pytest.raises(ReportError, match="leaves the repository"):
+        resolve_path("a/b:stream", tmp_path)
+
+
+def test_an_absolute_path_outside_the_repository_stays_outside(tmp_path: Path) -> None:
+    root = project(tmp_path / "repo", "src/a.py")
+    assert resolve_path(str(tmp_path / "other" / "a.py"), root) != "src/a.py"
+    with pytest.raises(ReportError, match="leaves the repository"):
+        resolve_path(str(root) + "/../other.py", root)
+
+
+def test_a_block_that_claims_absurdly_many_lines_is_refused_without_looping(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ReportError, match="out of range"):
+        read_coverage(F.GO_COVERPROFILE, "mode: set\na.go:1.1,999999999.2 1 1\n", tmp_path)
+    with pytest.raises(ReportError, match="out of range"):
+        read_coverage(
+            F.COVERAGE_PY_JSON,
+            '{"files": {"a.py": {"executed_lines": [99999999999]}}}',
+            tmp_path,
+        )
+
+
+def test_a_report_larger_than_the_cap_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("forja.core.reports.readers.MAX_REPORT_CHARS", 10)
+    with pytest.raises(ReportError, match="larger than"):
+        read_coverage(F.GO_COVERPROFILE, "mode: set\na.go:1.1,2.2 1 1\n", tmp_path)

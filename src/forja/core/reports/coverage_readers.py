@@ -10,7 +10,14 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from forja.core.reports.models import CoverageReport, FileCoverage
-from forja.core.reports.reading import ReportError, load_json, load_xml, number, resolve_path
+from forja.core.reports.reading import (
+    MAX_LINE,
+    ReportError,
+    load_json,
+    load_xml,
+    number,
+    resolve_path,
+)
 
 
 class _Lines:
@@ -22,8 +29,8 @@ class _Lines:
         self.tests: dict[int, set[str]] = defaultdict(set)
 
     def add(self, line: int, hits: int) -> None:
-        if line < 1:
-            raise ReportError(f"line numbers start at 1, got {line}")
+        if not 1 <= line <= MAX_LINE:
+            raise ReportError(f"a line number out of range: {line}")
         self.seen.add(line)
         if hits > 0:
             self.hit.add(line)
@@ -156,6 +163,8 @@ def read_go_coverprofile(text: str, root: Path, source_roots: Sequence[str] = ()
             raise ReportError(f"a Go cover profile row that cannot be read: {row!r}") from None
         if first > last:
             raise ReportError(f"a Go cover profile block that ends before it starts: {row!r}")
+        if last > MAX_LINE:  # checked before the loop: a block is a range, not a list
+            raise ReportError(f"a Go cover profile block with a line out of range: {row!r}")
         lines = result.setdefault(resolve_path(name, root, source_roots), _Lines())
         for line in range(first, last + 1):
             lines.add(line, hits)
