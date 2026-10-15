@@ -25,7 +25,7 @@ Módulo novo `src/forja/mutation/executor.py`, sem importar nada específico de 
 2. Canário: roda os testes mapeados na cópia limpa. Se falhar, devolve `Inconclusive` sem mutar.
 3. Por mutante: escreve o arquivo mutado (`apply_site`), roda só os testes que cobrem a linha com
    timeout e restaura o original em `finally`. Testes falham = `KILLED`; passam = `SURVIVED`;
-   estouro de tempo = `TIMEOUT`; nenhum teste cobre = `NO_COVERAGE` (conta contra a nota).
+   estouro de tempo = `TIMEOUT`; nenhum teste cobre = `UNCOVERED` (conta contra a nota).
 4. Paralelismo: `asyncio` com semáforo; cada worker é dono de uma cópia e processa um mutante por vez.
    Padrão `min(4, núcleos)`, configurável pela política TOML.
 5. Timeout por mutante: 3× o tempo do canário, piso de 10 s.

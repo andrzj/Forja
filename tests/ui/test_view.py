@@ -89,7 +89,7 @@ def test_the_pipeline_is_in_order_so_what_came_before_a_running_gate_passed() ->
     assert statuses(view) == {
         "scope": GateStatus.PASSED, "secrets": GateStatus.PASSED, "format": GateStatus.PASSED,
         "lint": GateStatus.RUNNING, "build": GateStatus.PENDING, "tests": GateStatus.PENDING,
-        "complexity": GateStatus.PENDING,
+        "complexity": GateStatus.PENDING, "mutation": GateStatus.PENDING,
     }  # fmt: skip
 
 
