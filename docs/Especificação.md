@@ -387,7 +387,7 @@ Cada linguagem é um adaptador que traduz as ferramentas nativas para o esquema 
 | --- | --- | --- | --- | --- | --- |
 | Java | Spotless / google-java-format | PMD, Checkstyle, SpotBugs; autofix via OpenRewrite | Maven ou Gradle | JaCoCo | PIT |
 | Go | gofmt | golangci-lint | `go build` / `go test` | `-coverprofile` | gremlins |
-| Python | ruff format | ruff, mypy | pytest | coverage.py | mutmut |
+| Python | ruff format | ruff, mypy | pytest | coverage.py | motor próprio (ADR 0020) |
 | C# | dotnet format | analisadores Roslyn | `dotnet build` / `dotnet test` | coverlet | Stryker.NET |
 | JavaScript / TypeScript | Prettier | ESLint, typescript-eslint, `tsc` | npm, jest ou vitest | c8 ou istanbul | StrykerJS |
 

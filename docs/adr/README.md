@@ -25,3 +25,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0017](0017-o-comando-forja-guia-e-pergunta-pouco.md) | O comando `forja` guia, pergunta pouco e confirma uma vez | Aceito |
 | [0018](0018-a-forja-roda-no-ambiente-do-usuario-e-nao-cria-sandbox.md) | A Forja roda no ambiente do usuário e não cria sandbox | Aceito |
 | [0019](0019-a-medicao-2-decide-seguir-com-ressalvas.md) | A medição 2 decide seguir, com ressalvas | Aceito |
+| [0020](0020-a-mutacao-de-python-usa-motor-proprio.md) | A mutação de Python usa motor próprio | Aceito |
