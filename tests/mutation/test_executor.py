@@ -1,0 +1,149 @@
+import asyncio
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+import pytest
+
+from forja.core.reports.models import MutantStatus
+from forja.mutation.executor import (
+    BaselineFailed,
+    Mutant,
+    TestVerdict,
+    run_mutants,
+)
+
+CALC = b"def is_pos(x):\n    return x > 0\n\n\ndef spin(x):\n    return x + 1\n"
+TESTS = (
+    b"from calc import is_pos, spin\n\n\n"
+    b"def test_pos():\n    assert is_pos(1)\n    assert not is_pos(-1)\n\n\n"
+    b"def test_spin():\n    assert spin(1) == 2\n"
+)
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    root = tmp_path / "project"
+    (root / "tests").mkdir(parents=True)
+    (root / "calc.py").write_bytes(CALC)
+    (root / "tests" / "test_calc.py").write_bytes(TESTS)
+    (root / "conftest.py").write_bytes(b"")
+    return root
+
+
+async def pytest_runner(root: Path, selectors: Sequence[str], timeout: float | None) -> TestVerdict:
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--",
+        *selectors,
+        cwd=root,
+        env={k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        code = await asyncio.wait_for(process.wait(), timeout)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        return TestVerdict.TIMED_OUT
+    return TestVerdict.PASSED if code == 0 else TestVerdict.FAILED
+
+
+def mutant(old: bytes, new: bytes, *, tests: tuple[str, ...] = ("tests/test_calc.py",)) -> Mutant:
+    return Mutant("calc.py", 2, "change", "is_pos", CALC.replace(old, new), tests)
+
+
+def run(project: Path, tmp_path: Path, mutants: list[Mutant], runner=pytest_runner, **kwargs):  # type: ignore[no-untyped-def]
+    return asyncio.run(run_mutants(project, tmp_path / "scratch", mutants, runner, **kwargs))
+
+
+def test_a_change_the_tests_notice_is_killed(project: Path, tmp_path: Path) -> None:
+    report = run(project, tmp_path, [mutant(b"x > 0", b"x < 0")])
+    assert [m.status for m in report.mutants] == [MutantStatus.KILLED]
+
+
+def test_a_change_no_test_notices_survives(project: Path, tmp_path: Path) -> None:
+    report = run(project, tmp_path, [mutant(b"x > 0", b"x >= 0")])
+    assert [m.status for m in report.mutants] == [MutantStatus.SURVIVED]
+
+
+def test_a_mutant_without_tests_is_uncovered_and_runs_nothing(
+    project: Path, tmp_path: Path
+) -> None:
+    calls: list[Sequence[str]] = []
+
+    async def runner(root: Path, selectors: Sequence[str], timeout: float | None) -> TestVerdict:
+        calls.append(selectors)
+        return TestVerdict.PASSED
+
+    report = run(project, tmp_path, [mutant(b"x > 0", b"x < 0", tests=())], runner)
+    assert [m.status for m in report.mutants] == [MutantStatus.UNCOVERED]
+    assert calls == []
+
+
+def test_a_mutant_that_never_ends_times_out(project: Path, tmp_path: Path) -> None:
+    hang = mutant(b"return x + 1", b"while True:\n        pass")
+
+    async def runner(root: Path, selectors: Sequence[str], timeout: float | None) -> TestVerdict:
+        if (root / "calc.py").read_bytes() == hang.mutated:
+            return TestVerdict.TIMED_OUT
+        return await pytest_runner(root, selectors, timeout)
+
+    report = run(project, tmp_path, [hang], runner)
+    assert [m.status for m in report.mutants] == [MutantStatus.TIMEOUT]
+
+
+def test_the_worktree_and_every_copy_are_left_as_they_were(project: Path, tmp_path: Path) -> None:
+    run(project, tmp_path, [mutant(b"x > 0", b"x < 0"), mutant(b"x > 0", b"x >= 0")], workers=2)
+    assert (project / "calc.py").read_bytes() == CALC
+    for copy in (tmp_path / "scratch").glob("worker-*"):
+        assert (copy / "calc.py").read_bytes() == CALC
+
+
+def test_a_runner_that_raises_still_restores_the_file(project: Path, tmp_path: Path) -> None:
+    async def runner(root: Path, selectors: Sequence[str], timeout: float | None) -> TestVerdict:
+        if (root / "calc.py").read_bytes() != CALC:
+            raise RuntimeError("tool gone")
+        return TestVerdict.PASSED
+
+    with pytest.raises(RuntimeError):
+        run(project, tmp_path, [mutant(b"x > 0", b"x < 0")], runner, workers=1)
+    assert (tmp_path / "scratch" / "worker-0" / "calc.py").read_bytes() == CALC
+
+
+def test_failing_tests_on_the_unchanged_copy_stop_the_run(project: Path, tmp_path: Path) -> None:
+    (project / "tests" / "test_calc.py").write_bytes(TESTS + b"\n\ndef test_bad():\n    assert 0\n")
+    with pytest.raises(BaselineFailed):
+        run(project, tmp_path, [mutant(b"x > 0", b"x < 0")])
+
+
+def test_stale_bytecode_does_not_hide_a_change_of_the_same_size(
+    project: Path, tmp_path: Path
+) -> None:
+    # `>` and `<` have the same size. Pinning the file time makes the compiled code of the
+    # original look current, as it does when two mutants are written within the same second.
+    async def runner(root: Path, selectors: Sequence[str], timeout: float | None) -> TestVerdict:
+        os.utime(root / "calc.py", (1_700_000_000, 1_700_000_000))
+        return await pytest_runner(root, selectors, timeout)
+
+    killer = mutant(b"x > 0", b"x < 0")
+    assert len(killer.mutated) == len(CALC)
+    report = run(project, tmp_path, [killer], runner, workers=1)
+    assert [m.status for m in report.mutants] == [MutantStatus.KILLED]
+
+
+def test_results_keep_the_order_and_text_of_the_input(project: Path, tmp_path: Path) -> None:
+    first, second = mutant(b"x > 0", b"x < 0"), mutant(b"x > 0", b"x >= 0")
+    report = run(project, tmp_path, [first, second], workers=2)
+    assert [(m.file, m.line, m.change, m.function) for m in report.mutants] == [
+        ("calc.py", 2, "change", "is_pos")
+    ] * 2
+    assert [m.status for m in report.mutants] == [MutantStatus.KILLED, MutantStatus.SURVIVED]
