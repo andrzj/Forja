@@ -25,7 +25,7 @@ from tests.core.idempotency.conftest import Repo
 
 MOD = SAMPLE["src/sample/mod.py"]
 OTHER = SAMPLE["src/sample/other.py"]
-EVERY_GATE = ["scope", "secrets", "format", "lint", "build", "tests", "complexity"]
+EVERY_GATE = ["scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity"]
 
 
 def ran(outcome: PipelineOutcome) -> list[str]:
@@ -293,7 +293,7 @@ def test_each_rule_is_counted_on_its_own(scene: Scene) -> None:
 
 
 def observing(*names: str) -> dict[str, CheckSettings]:
-    watched = {name: CheckSettings(Mode.OBSERVATION) for name in names}
+    watched = {name: CheckSettings(Mode.OBSERVATION) for name in (*names, "mutation")}
     return {n: BLOCKING for n in ("scope", "secrets", "build", "tests", "complexity")} | watched
 
 

@@ -20,6 +20,7 @@ FAKE_TOOLS = str(Path(__file__).with_name("fake_tools.py"))
 LIZARD = (sys.executable, "-m", "lizard")
 BLOCKING = CheckSettings(Mode.BLOCKING, InconclusivePolicy.BLOCK)
 PREMISE = CheckSettings(Mode.BLOCKING, InconclusivePolicy.PREMISE)
+OBSERVATION = CheckSettings(Mode.OBSERVATION, InconclusivePolicy.PREMISE)
 RUN = "r1abcdef0123"
 
 SAMPLE: Mapping[str, str] = {
@@ -139,7 +140,7 @@ class Scene:
     ) -> PipelineMeasurer:
         standard = {
             name: BLOCKING for name in ("scope", "secrets", "format", "lint", "build", "tests")
-        } | {"complexity": PREMISE}
+        } | {"complexity": PREMISE, "mutation": OBSERVATION}
         return PipelineMeasurer(
             adapter=self.adapter,
             git=self.repo.git,

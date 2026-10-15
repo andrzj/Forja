@@ -10,7 +10,7 @@ import pytest
 from forja.core.states import AttemptState, ExecutionState, Level, TaskState
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.ports import PlannedTask
-from tests.checks.support import BLOCKING, FAKE_GITLEAKS, LIZARD, PREMISE, SAMPLE
+from tests.checks.support import BLOCKING, FAKE_GITLEAKS, LIZARD, OBSERVATION, PREMISE, SAMPLE
 from tests.orchestrator.fakes import ScriptedAgent, ScriptedPlanner
 from tests.orchestrator.harness import IDENTITY, World, minimal_env
 
@@ -66,7 +66,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
         log=log,
         workdir=world.run_dir / "measure",
         host_env=world.repo.env,
-        settings=settings | {"complexity": PREMISE},
+        settings=settings | {"complexity": PREMISE, "mutation": OBSERVATION},
         lizard=LIZARD,
         gitleaks=(sys.executable, str(FAKE_GITLEAKS)),
     )

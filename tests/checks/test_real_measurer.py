@@ -65,7 +65,16 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
     outcome = judge(scene)
 
     assert outcome.verdict is Verdict.PASSED
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build", "tests", "complexity"]
+    assert ran(outcome) == [
+        "scope",
+        "secrets",
+        "format",
+        "lint",
+        "build",
+        "tests",
+        "mutation",
+        "complexity",
+    ]
 
 
 # -- gate 1: scope ---------------------------------------------------------------------------------
@@ -216,7 +225,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
 ) -> None:
     observing = {
         name: BLOCKING for name in ("scope", "secrets", "build", "tests", "complexity")
-    } | {name: CheckSettings(Mode.OBSERVATION) for name in ("format", "lint")}
+    } | {name: CheckSettings(Mode.OBSERVATION) for name in ("format", "lint", "mutation")}
     scene = Scene(repo, tmp_path / "scene", real=True, settings=observing)
     scene.write("src/sample/mod.py", "def (:\n")
 
@@ -275,7 +284,16 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build", "tests", "complexity"]
+    assert ran(outcome) == [
+        "scope",
+        "secrets",
+        "format",
+        "lint",
+        "build",
+        "tests",
+        "mutation",
+        "complexity",
+    ]
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]

@@ -502,7 +502,7 @@ def test_the_real_coverage_driver_writes_a_report_the_reader_understands(
     module = report.of("pkg/m.py")
     assert module is not None
     assert module.covered == frozenset({1, 4, 5}) and not module.missed  # import, def, return
-    assert module.tests[5] == frozenset({"test_m.test_g"})
+    assert module.tests[5] == frozenset({"tests/test_m.py::test_g"})
     assert not (sample / ".coverage").exists()  # recorded in memory: nothing else is left behind
 
 

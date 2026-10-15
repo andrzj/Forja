@@ -114,9 +114,11 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "build": (4, Mode.BLOCKING, "block"),
         "tests": (5, Mode.BLOCKING, "block"),
         "red_green": (5, Mode.BLOCKING, "block"),
+        "mutation": (7, Mode.OBSERVATION, "premise"),
         "complexity": (8, Mode.BLOCKING, "premise"),
     }
     assert specs["scope"].limits == {"max_files", "max_lines"}
+    assert specs["mutation"].thresholds == {"min_score"} and specs["mutation"].limits == {"workers"}
     assert specs["complexity"].thresholds == {"max_ccn"}
     assert specs["red_green"].commands == {"test"}
     assert specs["tests"].commands == {"test"} and specs["build"].commands == {"build"}

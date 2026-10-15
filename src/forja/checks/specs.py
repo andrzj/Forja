@@ -20,6 +20,14 @@ def default_registry() -> CheckRegistry:
         CheckSpec("build", 4, Mode.BLOCKING, BLOCK, commands=frozenset({"build"})),
         CheckSpec("tests", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
         CheckSpec("red_green", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
+        CheckSpec(
+            "mutation",
+            7,
+            Mode.OBSERVATION,
+            PREMISE,
+            thresholds=frozenset({"min_score"}),
+            limits=frozenset({"workers"}),
+        ),
         CheckSpec("complexity", 8, Mode.BLOCKING, PREMISE, thresholds=frozenset({"max_ccn"})),
     ):
         registry.register(spec)
