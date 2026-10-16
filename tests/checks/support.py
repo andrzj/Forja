@@ -140,7 +140,13 @@ class Scene:
     ) -> PipelineMeasurer:
         standard = {
             name: BLOCKING for name in ("scope", "secrets", "format", "lint", "build", "tests")
-        } | {"complexity": PREMISE, "mutation": OBSERVATION, "crap": OBSERVATION}
+        } | {
+            "complexity": PREMISE,
+            "mutation": OBSERVATION,
+            "crap": OBSERVATION,
+            "pass_through": OBSERVATION,
+            "module_depth": OBSERVATION,
+        }
         return PipelineMeasurer(
             adapter=self.adapter,
             git=self.repo.git,

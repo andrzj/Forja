@@ -91,6 +91,8 @@ def test_the_pipeline_is_in_order_so_what_came_before_a_running_gate_passed() ->
         "lint": GateStatus.RUNNING, "build": GateStatus.PENDING, "tests": GateStatus.PENDING,
         "complexity": GateStatus.PENDING, "mutation": GateStatus.PENDING,
         "crap": GateStatus.PENDING,
+        "pass_through": GateStatus.PENDING,
+        "module_depth": GateStatus.PENDING,
     }  # fmt: skip
 
 

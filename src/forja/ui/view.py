@@ -18,7 +18,19 @@ from forja.core.events.versioning import BadLine, parse_line
 from forja.core.states import AttemptState, ExecutionState, Level, TaskState
 from forja.ui.glyphs import clean
 
-GATES = ("scope", "secrets", "format", "lint", "build", "tests", "complexity", "mutation", "crap")
+GATES = (
+    "scope",
+    "secrets",
+    "format",
+    "lint",
+    "build",
+    "tests",
+    "complexity",
+    "mutation",
+    "crap",
+    "pass_through",
+    "module_depth",
+)
 _FEED = 60
 _REJECTIONS = 20
 _RUN_TOOL = re.compile(r"^run_tool:[^:]+:(?P<check>[a-z_]+):\d+$")

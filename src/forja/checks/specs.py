@@ -30,6 +30,14 @@ def default_registry() -> CheckRegistry:
         ),
         CheckSpec("complexity", 8, Mode.BLOCKING, PREMISE, thresholds=frozenset({"max_ccn"})),
         CheckSpec("crap", 8, Mode.OBSERVATION, PREMISE, thresholds=frozenset({"max_crap"})),
+        CheckSpec("pass_through", 8, Mode.OBSERVATION, PREMISE),
+        CheckSpec(
+            "module_depth",
+            8,
+            Mode.OBSERVATION,
+            PREMISE,
+            thresholds=frozenset({"max_interface_ratio", "min_statements"}),
+        ),
     ):
         registry.register(spec)
     return registry

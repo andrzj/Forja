@@ -19,10 +19,13 @@ from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.freeze import FreezeCheck
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
+from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
+from forja.checks.pass_through import PassThroughCheck
 from forja.checks.red_green import RedGreenCheck
 from forja.checks.scope import ScopeCheck
 from forja.checks.secrets import SecretsCheck
+from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
     CommandPlan,
@@ -250,6 +253,7 @@ class PipelineMeasurer:
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         before = await read_before(git, changes, SOURCE_SUFFIXES)
+        before_shapes = await read_before(git, changes, SHAPE_SUFFIXES)
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(
             p for p in changes.current() if self._classify(p) is FileClass.PRODUCTION
@@ -272,6 +276,8 @@ class PipelineMeasurer:
             CrapCheck(
                 tools, adapter, worktree, changes, production, before, self._lizard, share=share
             ),
+            PassThroughCheck(worktree, changes, production, before_shapes),
+            ModuleDepthCheck(worktree, changes, production, before_shapes),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)

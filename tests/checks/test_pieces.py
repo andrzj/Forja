@@ -117,11 +117,14 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "mutation": (7, Mode.OBSERVATION, "premise"),
         "complexity": (8, Mode.BLOCKING, "premise"),
         "crap": (8, Mode.OBSERVATION, "premise"),
+        "pass_through": (8, Mode.OBSERVATION, "premise"),
+        "module_depth": (8, Mode.OBSERVATION, "premise"),
     }
     assert specs["scope"].limits == {"max_files", "max_lines"}
     assert specs["mutation"].thresholds == {"min_score"} and specs["mutation"].limits == {"workers"}
     assert specs["complexity"].thresholds == {"max_ccn"}
     assert specs["crap"].thresholds == {"max_crap"}
+    assert specs["module_depth"].thresholds == {"max_interface_ratio", "min_statements"}
     assert specs["red_green"].commands == {"test"}
     assert specs["tests"].commands == {"test"} and specs["build"].commands == {"build"}
     assert specs["format"].commands == {"format"} and specs["lint"].commands == {"lint"}
