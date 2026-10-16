@@ -40,7 +40,9 @@ from forja.mutation.executor import (
 )
 from forja.mutation.sites import discover
 
-DEFAULT_MIN_SCORE = 0.65
+DEFAULT_MIN_SCORE = 0.80
+LOWER_MIN_SCORE = 0.70  # Python and Go are slower and more fragile (Especificação)
+LOWER_LANGUAGES = frozenset({"python", "go"})
 BASELINE_TIMEOUT = 600.0
 SCRIPT = frozenset({"javascript", "typescript"})  # one family, as in the mutator
 
@@ -58,12 +60,16 @@ def of_language(language: str, files: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(found)
 
 
+def default_min_score(language: str) -> float:
+    return LOWER_MIN_SCORE if language in LOWER_LANGUAGES else DEFAULT_MIN_SCORE
+
+
 def min_score(data: GateInput, language: str) -> float:
     thresholds = data.values.get("thresholds")
     per_language = thresholds.get(language) if isinstance(thresholds, dict) else None
     value = per_language.get("min_score") if isinstance(per_language, dict) else None
     ok = isinstance(value, int | float) and not isinstance(value, bool) and 0 < value <= 1
-    return float(value) if ok and isinstance(value, int | float) else DEFAULT_MIN_SCORE
+    return float(value) if ok and isinstance(value, int | float) else default_min_score(language)
 
 
 def worker_count(data: GateInput) -> int | None:
@@ -102,6 +108,21 @@ def build_mutants(
                 Mutant(path, site.line, site.description, site.function, mutated, covered)
             )
     return mutants
+
+
+def untested_lines(
+    lines: Mapping[str, frozenset[int]], mutants: list[Mutant], coverage: CoverageReport
+) -> dict[str, list[int]]:
+    """Added lines no test runs: the tool's missed lines, and mutable lines of unseen files."""
+    found: dict[str, set[int]] = {}
+    for path, wanted in lines.items():
+        seen = coverage.of(path)
+        if seen is not None:
+            found.setdefault(path, set()).update(wanted & seen.missed)
+    for mutant in mutants:
+        if not mutant.covered:
+            found.setdefault(mutant.file, set()).add(mutant.line)
+    return {path: sorted(numbers) for path, numbers in sorted(found.items()) if numbers}
 
 
 class _Quiet:
@@ -179,6 +200,9 @@ class MutationCheck:
             return Approved()
         coverage = await run_coverage(self.tools, self.adapter, self.worktree, data, self.share)
         mutants = build_mutants(self.worktree, lines, coverage)
+        untested = untested_lines(lines, mutants, coverage)
+        if untested:
+            return self._unprotected(untested)
         if not mutants:
             return Approved()
         report = await self._run(data, mutants)
@@ -200,6 +224,19 @@ class MutationCheck:
                 raise _failed("mutation: the tests do not pass on the unchanged copy") from None
             except TestsDidNotRun as error:
                 raise _failed(f"mutation: the tests could not run ({error})") from None
+
+    def _unprotected(self, untested: Mapping[str, list[int]]) -> GateResult:
+        """Without a test there is nothing to mutate against: the test author must write one."""
+        return rejected(
+            [
+                Finding(
+                    message="no test runs this new line; a test for it is needed before mutation",
+                    target=f"{path}:{number}",
+                )
+                for path, numbers in untested.items()
+                for number in numbers
+            ]
+        )
 
     def _verdict(self, report: MutationReport, limit: float) -> GateResult:
         score = report.score

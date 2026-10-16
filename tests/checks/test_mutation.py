@@ -11,12 +11,14 @@ from forja.checks.mutation import (
     build_mutants,
     min_score,
     of_language,
+    untested_lines,
     worker_count,
 )
 from forja.core.gates import GateInput
 from forja.core.gates.models import Approved, Rejected
 from forja.core.reports.models import CoverageReport, FileCoverage
 from forja.core.states import Level
+from forja.mutation.executor import Mutant
 from tests.checks.support import Scene, sinks
 from tests.core.idempotency.conftest import Repo
 
@@ -27,11 +29,14 @@ def gate_input(**values: object) -> GateInput:
     return GateInput(Path("."), "c" * 40, "t", "s", "a", values=values)  # type: ignore[arg-type]
 
 
-def test_the_default_limit_is_65_percent_and_the_policy_may_change_it() -> None:
-    assert min_score(gate_input(), "python") == DEFAULT_MIN_SCORE == 0.65
-    assert min_score(gate_input(thresholds={"python": {"min_score": 0.8}}), "python") == 0.8
-    assert min_score(gate_input(thresholds={"python": {"min_score": 7}}), "python") == 0.65
-    assert min_score(gate_input(thresholds={"python": {"min_score": True}}), "python") == 0.65
+def test_the_default_limit_is_80_percent_70_for_python_and_go_and_the_policy_may_change_it() -> (
+    None
+):
+    assert min_score(gate_input(), "java") == DEFAULT_MIN_SCORE == 0.80
+    assert min_score(gate_input(), "python") == min_score(gate_input(), "go") == 0.70
+    assert min_score(gate_input(thresholds={"python": {"min_score": 0.9}}), "python") == 0.9
+    assert min_score(gate_input(thresholds={"python": {"min_score": 7}}), "python") == 0.70
+    assert min_score(gate_input(thresholds={"java": {"min_score": True}}), "java") == 0.80
 
 
 def test_workers_come_from_the_policy_only_when_positive() -> None:
@@ -114,12 +119,12 @@ def test_a_new_line_a_test_runs_without_checking_it_is_rejected_with_the_score(
 
     assert isinstance(result, Rejected)
     assert result.findings[0].measured == 0.0
-    assert result.findings[0].limit == 0.65
+    assert result.findings[0].limit == 0.70
     assert any(f.target == "src/sample/mod.py:6" for f in result.findings)
 
 
 @pytest.mark.slow
-def test_a_new_line_no_test_runs_is_not_mutated_and_does_not_reject(
+def test_a_new_line_no_test_runs_is_rejected_for_the_test_author_to_cover(
     repo: Repo, tmp_path: Path
 ) -> None:
     scene = Scene(repo, tmp_path, real=True)
@@ -133,7 +138,21 @@ def test_a_new_line_no_test_runs_is_not_mutated_and_does_not_reject(
         "from sample.mod import add\n\n\ndef test_add() -> None:\n    assert add(1, 2) == 3\n",
     )
 
-    assert isinstance(judge(scene), Approved)
+    result = judge(scene)
+
+    assert isinstance(result, Rejected)
+    assert [f.target for f in result.findings] == ["src/sample/mod.py:6"]
+
+
+def test_untested_lines_are_missed_lines_and_mutable_lines_of_files_the_tool_never_saw() -> None:
+    report = CoverageReport(
+        {"a.py": FileCoverage(covered=frozenset({1}), missed=frozenset({2, 9}))}
+    )
+    lines = {"a.py": frozenset({1, 2, 3}), "b.py": frozenset({4})}
+    mutants = [Mutant("b.py", 4, "- -> +", "f", b"", covered=False)]
+
+    assert untested_lines(lines, mutants, report) == {"a.py": [2], "b.py": [4]}
+    assert untested_lines({"a.py": frozenset({1})}, [], report) == {}
 
 
 def test_a_language_gets_only_its_own_files_and_script_languages_share_rules() -> None:

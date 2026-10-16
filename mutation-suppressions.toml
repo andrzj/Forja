@@ -49,12 +49,6 @@ change = "0 -> 1"
 reason = "The initial attempt only matters when there is no task id, and the condition that reads it requires one."
 
 [[suppress]]
-file = "src/forja/ui/plain.py"
-function = "PlainRenderer.update"
-change = "> -> >="
-reason = "With zero new items the slice of the list is empty either way."
-
-[[suppress]]
 file = "src/forja/core/gitguard/rules.py"
 function = "check"
 change = "== -> !="
