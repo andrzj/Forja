@@ -1,13 +1,14 @@
 """Gate 7 (the mutation part): do the tests notice a change to the lines the attempt wrote?
 
-Only the lines the diff added are mutated. Coverage says which test files run each of them, so a
-mutant is judged by those files alone. The score is the share of mutants the tests noticed; one
-below the policy's limit reproves. The mutation engine knows Python only; the executor does not.
+Only the lines the diff added are mutated. As in unclebob/mutator, coverage only says which lines
+a test runs (a mutant on another line is not run), each mutant is judged by the whole test
+command, and the score is killed over killed plus survived; one below the policy's limit reproves.
+The tests of the adapter are Python's only, though the rules of the sites cover more languages.
 """
 
 import itertools
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import ClassVar
@@ -26,7 +27,7 @@ from forja.core.adapters import (
 from forja.core.gates import Approved, Finding, GateInput, GateResult, Inconclusive
 from forja.core.gates.models import InconclusiveReason
 from forja.core.process import Outcome, ProcessIdentity, ProcessRunner
-from forja.core.reports.models import CoverageReport, FileCoverage, MutantStatus, MutationReport
+from forja.core.reports.models import CoverageReport, MutantStatus, MutationReport
 from forja.mutation.apply import apply_site
 from forja.mutation.executor import (
     BaselineFailed,
@@ -39,7 +40,6 @@ from forja.mutation.sites import discover
 
 DEFAULT_MIN_SCORE = 0.65
 BASELINE_TIMEOUT = 600.0
-MAX_SELECTORS = 200  # past this the command line gets long: run the whole suite instead
 SUFFIXES = (".py",)
 
 
@@ -67,53 +67,25 @@ def changed_lines(changes: Changes, files: tuple[str, ...]) -> dict[str, frozens
     return {path: frozenset(numbers) for path, numbers in found.items()}
 
 
-def test_file(context: str) -> str | None:
-    """The test file in a coverage context such as ``tests/test_a.py::test_x``."""
-    name = context.replace("\\", "/").split("::")[0]
-    return name if name.endswith(".py") else None
-
-
-def tests_for(
-    coverage: FileCoverage | None, line: int, everything: tuple[str, ...]
-) -> tuple[str, ...]:
-    """The test files that run ``line``; none when no test reaches it.
-
-    A covered line the tool could not attribute to a test falls back to every test file.
-    """
-    if coverage is None or line not in coverage.covered:
-        return ()
-    names = {f for context in coverage.tests.get(line, ()) if (f := test_file(context))}
-    return tuple(sorted(names)) or everything
-
-
 def build_mutants(
     worktree: Path, lines: Mapping[str, frozenset[int]], coverage: CoverageReport
 ) -> list[Mutant]:
-    """One mutant per place on a changed line where the engine can change the code."""
-    everything = tuple(
-        sorted(
-            {
-                f
-                for file in coverage.files.values()
-                for contexts in file.tests.values()
-                for context in contexts
-                if (f := test_file(context))
-            }
-        )
-    )
+    """One mutant per place on a changed line where the rules allow a change."""
     mutants: list[Mutant] = []
     for path, wanted in sorted(lines.items()):
         try:
             source = (worktree / path).read_text(encoding="utf-8")
-            sites = discover(source)
+            sites = discover(source, path)
         except (OSError, SyntaxError, ValueError):
             continue  # a file that does not compile is the build gate's finding, not this one's
         for site in sites:
             if site.line not in wanted:
                 continue
             mutated = apply_site(source, site).encode("utf-8")
-            tests = tests_for(coverage.of(path), site.line, everything)
-            mutants.append(Mutant(path, site.line, site.description, site.function, mutated, tests))
+            covered = coverage.is_covered(path, site.line)
+            mutants.append(
+                Mutant(path, site.line, site.description, site.function, mutated, covered)
+            )
     return mutants
 
 
@@ -135,7 +107,7 @@ class _Quiet:
 
 @dataclass(frozen=True)
 class AdapterRunner:
-    """Runs the adapter's test command over some test files in a copy of the repository."""
+    """Runs the adapter's whole test command in a copy of the repository."""
 
     __test__: ClassVar[bool] = False  # not a test class, whatever its name says to pytest
 
@@ -144,11 +116,8 @@ class AdapterRunner:
     logs: Path
     ids: "itertools.count[int]" = field(default_factory=itertools.count)
 
-    async def __call__(
-        self, root: Path, selectors: Sequence[str], timeout: float | None
-    ) -> TestVerdict:
-        files = tuple(selectors) if len(selectors) <= MAX_SELECTORS else ()
-        plan = self.adapter.plan(Operation.TEST, OperationRequest(root=root, test_files=files))
+    async def __call__(self, root: Path, timeout: float | None) -> TestVerdict:
+        plan = self.adapter.plan(Operation.TEST, OperationRequest(root=root))
         if isinstance(plan, NotSupported):
             raise TestsDidNotRun(plan.reason)
         # a stale bytecode file could run the original code in place of the mutant
@@ -221,9 +190,7 @@ class MutationCheck:
         score = report.score
         if score is None or score >= limit:
             return Approved()
-        bad = [
-            m for m in report.mutants if m.status in (MutantStatus.SURVIVED, MutantStatus.UNCOVERED)
-        ]
+        bad = report.with_status(MutantStatus.SURVIVED)
         findings = [
             Finding(
                 message="the tests do not notice enough changes to the new code",

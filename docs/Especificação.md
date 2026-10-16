@@ -385,15 +385,15 @@ Cada linguagem é um adaptador que traduz as ferramentas nativas para o esquema 
 
 | Linguagem | Formatação | Lint | Build / testes | Cobertura | Mutação |
 | --- | --- | --- | --- | --- | --- |
-| Java | Spotless / google-java-format | PMD, Checkstyle, SpotBugs; autofix via OpenRewrite | Maven ou Gradle | JaCoCo | PIT |
-| Go | gofmt | golangci-lint | `go build` / `go test` | `-coverprofile` | gremlins |
-| Python | ruff format | ruff, mypy | pytest | coverage.py | motor próprio (ADR 0020) |
-| C# | dotnet format | analisadores Roslyn | `dotnet build` / `dotnet test` | coverlet | Stryker.NET |
-| JavaScript / TypeScript | Prettier | ESLint, typescript-eslint, `tsc` | npm, jest ou vitest | c8 ou istanbul | StrykerJS |
+| Java | Spotless / google-java-format | PMD, Checkstyle, SpotBugs; autofix via OpenRewrite | Maven ou Gradle | JaCoCo | regras do mutator |
+| Go | gofmt | golangci-lint | `go build` / `go test` | `-coverprofile` | regras do mutator |
+| Python | ruff format | ruff, mypy | pytest | coverage.py | regras do mutator |
+| C# | dotnet format | analisadores Roslyn | `dotnet build` / `dotnet test` | coverlet | regras do mutator |
+| JavaScript / TypeScript | Prettier | ESLint, typescript-eslint, `tsc` | npm, jest ou vitest | c8 ou istanbul | regras do mutator |
 
 Camadas transversais às seis linguagens: **lizard** (complexidade ciclomática), **jscpd** (duplicação), **tree-sitter** (medidores próprios), **Semgrep** (SAST), **OSV-Scanner** (vulnerabilidades em dependências) e **gitleaks** (segredos).
 
-A maturidade das ferramentas de mutação varia: PIT, Stryker.NET e StrykerJS são sólidas; as de Go e Python são mais lentas e frágeis. Os limiares refletem isso.
+A mutação das seis linguagens segue o `unclebob/mutator`: sítios achados com tree-sitter pela mesma tabela de regras, um mutante por vez, o comando de testes inteiro, mutante morto quando os testes falham ou estouram o tempo (10× o baseline, no mínimo 2 s), nota = mortos / (mortos + sobreviventes), linha sem cobertura não é mutada. O mutator não tem C#; nele vale o conjunto de Java. Os limiares podem diferir por linguagem.
 
 ### Regras para linters e formatadores
 

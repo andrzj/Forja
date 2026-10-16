@@ -1,7 +1,9 @@
 """Run mutants: change one file at a time in a throwaway copy and see whether the tests notice.
 
 Nothing here knows a language. The caller hands over each mutant as the bytes the file would
-have, the tests that cover the changed line, and a function that runs those tests.
+have, whether a test runs the changed line, and a function that runs the whole test command.
+As in unclebob/mutator a mutant on an uncovered line is not run, a failing or timed-out run kills
+the mutant, and the timeout is ten times the baseline, never below two seconds.
 """
 
 import asyncio
@@ -16,8 +18,8 @@ from typing import ClassVar, Protocol
 from forja.core.reports.models import MutantResult, MutantStatus, MutationReport
 
 LEFT_OUT = (".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".ruff_cache")
-MIN_TIMEOUT = 10.0
-TIMEOUT_FACTOR = 3.0
+MIN_TIMEOUT = 2.0
+TIMEOUT_FACTOR = 10.0
 
 
 class TestVerdict(StrEnum):
@@ -37,9 +39,7 @@ class TestsDidNotRun(Exception):
 class TestRunner(Protocol):
     __test__: ClassVar[bool] = False
 
-    async def __call__(
-        self, root: Path, selectors: Sequence[str], timeout: float | None
-    ) -> TestVerdict: ...
+    async def __call__(self, root: Path, timeout: float | None) -> TestVerdict: ...
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class Mutant:
     change: str  # the tool's text for the change, e.g. "<= -> <"
     function: str | None
     mutated: bytes  # the whole file as the mutant has it
-    tests: tuple[str, ...]  # what to run; empty means no test covers the line
+    covered: bool  # a test runs the line; if not the mutant is not run
 
 
 class BaselineFailed(Exception):
@@ -68,13 +68,13 @@ def _clean_bytecode(root: Path) -> None:
 async def _judge(
     runner: TestRunner, root: Path, path: Path, original: bytes, mutant: Mutant, timeout: float
 ) -> MutantStatus:
-    if not mutant.tests:
+    if not mutant.covered:
         return MutantStatus.UNCOVERED
     try:
         path.write_bytes(mutant.mutated)
         # a stale bytecode file of the same size and time could run the original code
         _clean_bytecode(root)
-        verdict = await runner(root, mutant.tests, timeout)
+        verdict = await runner(root, timeout)
     finally:
         path.write_bytes(original)
         _clean_bytecode(root)
@@ -112,17 +112,18 @@ async def run_mutants(
 ) -> MutationReport:
     """Judge every mutant. ``scratch`` is an empty directory for the copies; the caller removes it.
 
-    The baseline run (all selectors of all mutants, unchanged copy) must pass; its duration
-    sets the timeout of each mutant at three times that, but never below ten seconds.
+    The baseline run (the whole test command on the unchanged copy) must pass; its duration sets
+    the timeout of each mutant at ten times that, but never below two seconds.
     """
     count = max(1, workers if workers is not None else min(4, os.cpu_count() or 1))
     roots = [scratch / f"worker-{n}" for n in range(count)]
     for root in roots:
         await asyncio.to_thread(_fresh_copy, worktree, root)
-    selectors = tuple(sorted({s for m in mutants for s in m.tests}))
     loop = asyncio.get_running_loop()
     started = loop.time()
-    if selectors and await runner(roots[0], selectors, baseline_timeout) is not TestVerdict.PASSED:
+    if any(m.covered for m in mutants) and await runner(roots[0], baseline_timeout) is not (
+        TestVerdict.PASSED
+    ):
         raise BaselineFailed("the tests do not pass on the unchanged copy")
     timeout = max(MIN_TIMEOUT, TIMEOUT_FACTOR * (loop.time() - started))
     queue: asyncio.Queue[tuple[int, Mutant]] = asyncio.Queue()

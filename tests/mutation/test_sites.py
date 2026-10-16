@@ -10,7 +10,7 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "forja"
 
 def sites_of(body: str, header: str = "def f(a, b, c=None):") -> list[Site]:
     indented = "".join(f"    {line}\n" for line in body.strip().splitlines())
-    return discover(f"{header}\n{indented}")
+    return discover(f"{header}\n{indented}", "m.py")
 
 
 def changes(body: str) -> list[str]:
@@ -77,7 +77,7 @@ def test_what_the_mutator_does_not_change_is_not_a_site(body: str) -> None:
 
 def test_code_outside_a_function_has_no_site() -> None:
     source = "LIMIT = 1\nclass C:\n    FLAG = True\n    def m(self):\n        return 0\n"
-    assert [(s.line, s.function) for s in discover(source)] == [(5, "C.m")]
+    assert [(s.line, s.function) for s in discover(source, "m.py")] == [(5, "C.m")]
 
 
 def test_the_name_is_the_qualified_name_of_the_innermost_function() -> None:
@@ -92,7 +92,7 @@ def test_the_name_is_the_qualified_name_of_the_innermost_function() -> None:
         "    async def work():\n"
         "        return True\n"
     )
-    assert [(s.line, s.function) for s in discover(source)] == [
+    assert [(s.line, s.function) for s in discover(source, "m.py")] == [
         (5, "A.B.m.inner"),
         (6, "A.B.m"),
         (9, "top.work"),
@@ -101,7 +101,7 @@ def test_the_name_is_the_qualified_name_of_the_innermost_function() -> None:
 
 def test_decorators_are_outside_the_function_and_defaults_are_inside() -> None:
     source = "@wrap(1)\ndef f(a=1):\n    pass\n"
-    assert [(s.line, s.function) for s in discover(source)] == [(2, "f")]
+    assert [(s.line, s.function) for s in discover(source, "m.py")] == [(2, "f")]
 
 
 def test_a_lambda_belongs_to_the_function_that_holds_it() -> None:
@@ -119,17 +119,13 @@ def test_every_operator_of_a_chain_is_a_site() -> None:
 
 
 @pytest.mark.parametrize("body", ["return a not in b", "return a is not b"])
-def test_negated_membership_and_identity_lose_the_not_only(body: str) -> None:
-    source = f"def f(a, b):\n    {body}\n"
-    (site,) = discover(source)
-    assert site.description == "delete not"
-    assert apply_site(source, site) == source.replace("not", "")
+def test_negated_membership_and_identity_are_no_site_as_in_the_mutator(body: str) -> None:
+    assert changes(body) == []
 
 
 def test_the_operator_is_found_through_parentheses_comments_and_line_breaks() -> None:
     body = "return (\n    (a)  # - and\n    +\n    (b)\n)"
-    sites = sites_of(body)
-    assert [(s.line, s.description) for s in sites] == [(4, "+ -> -")]
+    assert [(s.line, s.description) for s in sites_of(body)] == [(4, "+ -> -")]
 
 
 def test_a_binary_minus_before_a_unary_one_is_two_different_sites() -> None:
@@ -142,7 +138,7 @@ def test_an_f_string_expression_is_code_and_its_text_is_not() -> None:
 
 def test_offsets_are_bytes_of_utf_8_and_lines_are_one_based() -> None:
     source = 'def f(a, b):\n    x = "ção"; return a + b\n'
-    (site,) = discover(source)
+    (site,) = discover(source, "m.py")
     assert site.line == 2
     assert source.encode()[site.start : site.end] == b"+"
     assert apply_site(source, site) == 'def f(a, b):\n    x = "ção"; return a - b\n'
@@ -156,7 +152,7 @@ def test_sites_come_in_file_order() -> None:
 
 def test_source_that_is_not_python_raises_syntax_error() -> None:
     with pytest.raises(SyntaxError):
-        discover("def f(:\n")
+        discover("def f(:\n", "m.py")
 
 
 def test_apply_refuses_a_site_that_does_not_belong_to_the_source() -> None:
@@ -170,7 +166,7 @@ def test_apply_refuses_a_site_that_does_not_belong_to_the_source() -> None:
 )
 def test_every_mutant_of_the_project_is_python_that_differs_from_the_original(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    for site in discover(source):
+    for site in discover(source, "m.py"):
         mutant = apply_site(source, site)
         assert mutant != source
         ast.parse(mutant)
@@ -201,4 +197,46 @@ def test_the_changes_the_suppressions_name_are_sites_of_the_engine(
     file: str, function: str, change: str
 ) -> None:
     source = (SRC.parents[1] / file).read_text(encoding="utf-8")
-    assert (function, change) in {(s.function, s.description) for s in discover(source)}
+    assert (function, change) in {(s.function, s.description) for s in discover(source, "m.py")}
+
+
+def lines(source: str, path: str) -> list[str]:
+    return [site.description for site in discover(source, path)]
+
+
+def test_go_changes_a_star_into_a_slash_and_never_a_slash() -> None:
+    source = """package p
+
+func f(a, b int) int {
+	return a * b + a / b
+}
+"""
+    assert lines(source, "p.go") == ["* -> /", "+ -> -"]
+
+
+def test_java_has_the_set_and_no_site_in_a_constructor() -> None:
+    source = """class C {
+  C(int a) { int x = a + 1; }
+  boolean m(int a, boolean b) { return !b && a >= 0; }
+}
+"""
+    assert lines(source, "C.java") == ["delete !", "&& -> ||", ">= -> >", "0 -> 1"]
+
+
+def test_typescript_adds_strict_equality_nullish_and_optional_chaining() -> None:
+    source = "function f(a, b) { return a === b ?? a?.c; }"
+    assert lines(source, "f.ts") == ["=== -> !==", "?? -> ||", "?. -> ."]
+
+
+def test_javascript_uses_the_typescript_rules() -> None:
+    assert lines("function f(a, b) { return a === b; }", "f.js") == ["=== -> !=="]
+
+
+def test_csharp_follows_the_java_set() -> None:
+    source = "class C { bool M(int a, bool b) { return !b && a < 1; } }"
+    assert lines(source, "C.cs") == ["delete !", "&& -> ||", "< -> <=", "1 -> 0"]
+
+
+def test_a_file_of_a_language_without_rules_is_refused() -> None:
+    with pytest.raises(ValueError, match="no mutation rules"):
+        discover("x", "notes.txt")

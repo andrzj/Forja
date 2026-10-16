@@ -89,7 +89,7 @@ def test_with_status_picks_one_status() -> None:
     assert [m.line for m in report.with_status(MutantStatus.SURVIVED)] == [1]
 
 
-def test_score_counts_timeouts_as_killed_and_uncovered_against() -> None:
+def test_score_counts_timeouts_as_killed_and_leaves_uncovered_out() -> None:
     report = MutationReport(
         (
             mutant("a.py", 1, MutantStatus.KILLED),
@@ -98,8 +98,9 @@ def test_score_counts_timeouts_as_killed_and_uncovered_against() -> None:
             mutant("a.py", 4, MutantStatus.UNCOVERED),
         )
     )
-    assert report.score == 0.5
+    assert report.score == 2 / 3
     assert MutationReport(()).score is None
+    assert MutationReport((mutant("a.py", 4, MutantStatus.UNCOVERED),)).score is None
 
 
 def test_a_mutant_needs_its_change_text_and_a_valid_place() -> None:

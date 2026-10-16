@@ -71,7 +71,7 @@ class CoverageReport:
 class MutantStatus(StrEnum):
     KILLED = "killed"  # a test failed: the change was noticed
     SURVIVED = "survived"  # every test passed: the change went unnoticed
-    UNCOVERED = "uncovered"  # no test runs the line, so no test could notice
+    UNCOVERED = "uncovered"  # no test runs the line: not run, and left out of the score
     TIMEOUT = "timeout"  # the tests did not finish; tools differ on whether this counts as killed
 
 
@@ -110,9 +110,9 @@ class MutationReport:
 
     @property
     def score(self) -> float | None:
-        """Killed share of the mutants that could be judged; ``None`` if there are none.
-        Uncovered mutants count against the score, timeouts count as killed."""
-        if not self.mutants:
-            return None
-        noticed = sum(m.status in (MutantStatus.KILLED, MutantStatus.TIMEOUT) for m in self.mutants)
-        return noticed / len(self.mutants)
+        """Killed share of the mutants that ran, as in unclebob/mutator: killed over killed plus
+        survived. A timeout counts as killed; an uncovered mutant was not run and is left out.
+        ``None`` if none ran."""
+        killed = sum(m.status in (MutantStatus.KILLED, MutantStatus.TIMEOUT) for m in self.mutants)
+        ran = killed + sum(m.status is MutantStatus.SURVIVED for m in self.mutants)
+        return killed / ran if ran else None

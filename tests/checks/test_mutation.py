@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from forja.checks import mutation
 from forja.checks.mutation import (
     DEFAULT_MIN_SCORE,
     MutationCheck,
@@ -40,31 +39,23 @@ def test_workers_come_from_the_policy_only_when_positive() -> None:
     assert worker_count(gate_input(limits={"workers": 0})) is None
 
 
-def test_a_test_file_is_the_part_of_a_context_before_the_double_colon() -> None:
-    assert mutation.test_file("tests/test_a.py::test_x") == "tests/test_a.py"
-    assert mutation.test_file("tests\\test_a.py::T::test_x") == "tests/test_a.py"
-    assert mutation.test_file("test_x") is None
-
-
-def test_a_covered_line_without_a_named_test_falls_back_to_every_test_file() -> None:
-    coverage = FileCoverage(covered=frozenset({1, 2}), tests={1: frozenset({"t/a.py::x"})})
-
-    assert mutation.tests_for(coverage, 1, ("t/a.py", "t/b.py")) == ("t/a.py",)
-    assert mutation.tests_for(coverage, 2, ("t/a.py", "t/b.py")) == ("t/a.py", "t/b.py")
-    assert mutation.tests_for(coverage, 3, ("t/a.py",)) == ()
-    assert mutation.tests_for(None, 1, ("t/a.py",)) == ()
-
-
 def test_only_the_lines_a_file_gained_are_mutated(tmp_path: Path) -> None:
     (tmp_path / "m.py").write_text("def f(a, b):\n    x = a + b\n    return a - b\n")
-    coverage = CoverageReport(
-        {"m.py": FileCoverage(covered=frozenset({2, 3}), tests={2: frozenset({"t/t.py::a"})})}
-    )
+    coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset({2, 3}), tests={})})
 
     mutants = build_mutants(tmp_path, {"m.py": frozenset({3})}, coverage)
 
     assert [(m.line, m.change) for m in mutants] == [(3, "- -> +")]
-    assert mutants[0].tests == ("t/t.py",)
+    assert mutants[0].covered
+
+
+def test_a_changed_line_no_test_runs_gives_an_uncovered_mutant(tmp_path: Path) -> None:
+    (tmp_path / "m.py").write_text("def f(a, b):\n    return a - b\n")
+    covered = CoverageReport({"m.py": FileCoverage(covered=frozenset({1}), tests={})})
+
+    for report in (covered, CoverageReport({})):
+        (mutant,) = build_mutants(tmp_path, {"m.py": frozenset({2})}, report)
+        assert not mutant.covered
 
 
 def judge(scene: Scene) -> object:
@@ -103,12 +94,19 @@ def test_a_new_line_the_tests_check_is_approved(repo: Repo, tmp_path: Path) -> N
 
 
 @pytest.mark.slow
-def test_a_new_line_no_test_checks_is_rejected_with_the_score(repo: Repo, tmp_path: Path) -> None:
+def test_a_new_line_a_test_runs_without_checking_it_is_rejected_with_the_score(
+    repo: Repo, tmp_path: Path
+) -> None:
     scene = Scene(repo, tmp_path, real=True)
     scene.write(
         "src/sample/mod.py",
         "def add(a: int, b: int) -> int:\n    return a + b\n\n\n"
         "def sub(a: int, b: int) -> int:\n    return a - b\n",
+    )
+    scene.write(
+        "tests/test_mod.py",
+        "from sample.mod import add, sub\n\n\n"
+        "def test_add() -> None:\n    add(1, 2)\n    sub(3, 1)\n",
     )
 
     result = judge(scene)
@@ -117,3 +115,21 @@ def test_a_new_line_no_test_checks_is_rejected_with_the_score(repo: Repo, tmp_pa
     assert result.findings[0].measured == 0.0
     assert result.findings[0].limit == 0.65
     assert any(f.target == "src/sample/mod.py:6" for f in result.findings)
+
+
+@pytest.mark.slow
+def test_a_new_line_no_test_runs_is_not_mutated_and_does_not_reject(
+    repo: Repo, tmp_path: Path
+) -> None:
+    scene = Scene(repo, tmp_path, real=True)
+    scene.write(
+        "src/sample/mod.py",
+        "def add(a: int, b: int) -> int:\n    return a + b\n\n\n"
+        "def sub(a: int, b: int) -> int:\n    return a - b\n",
+    )
+    scene.write(
+        "tests/test_mod.py",
+        "from sample.mod import add\n\n\ndef test_add() -> None:\n    assert add(1, 2) == 3\n",
+    )
+
+    assert isinstance(judge(scene), Approved)

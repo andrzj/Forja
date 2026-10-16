@@ -1,223 +1,221 @@
-"""Find the mutation sites of a Python file.
+"""Find the mutation sites of a source file, with the rules of unclebob/mutator.
 
-The operators and the way a change is worded follow unclebob/mutator (which reads Python with
-tree-sitter): an operator is changed only inside an arithmetic, comparison or boolean expression,
-``not`` and a unary ``-`` are deleted, ``True`` and ``False`` swap, and of the numbers only ``0``
-and ``1`` swap. Strings and comments hold no site, and neither does code outside a function.
-
-``ast`` gives the position of an expression, not of its operator. The operator is the token of
-that text found between the two operands (what lies there besides it is parentheses).
+The rules are the mutator's: Java's set is the base, and Python, Go, TypeScript (JavaScript uses
+its rules) and C# are that set spelled in their language. An operator changes only inside a binary
+expression; ``!``/``not`` and a unary ``-`` are deleted; ``true``/``false`` swap; of the numbers
+only ``0`` and ``1`` swap. Strings and comments hold no site, and neither does code outside a
+function. Go changes ``*`` into ``/`` only. TypeScript also changes ``===``, ``!==``, ``??`` and
+``?.``. C# is the one language the mutator lacks: its sites follow the Java rule, with the unary
+node of C# named in ``UNARY_PARENTS``.
 """
 
-import ast
-import tokenize
-from bisect import bisect_left
 from collections.abc import Iterator
-from typing import NamedTuple
+from functools import cache
 
+from tree_sitter import Language, Node, Parser
+
+from forja.checks.structure import Dialect, dialect_of
 from forja.mutation.model import Site
 
-Position = tuple[int, int]  # (line, byte column)
-Change = tuple[str, str, str]  # original, mutant, category
-
-_ARITHMETIC: dict[type[ast.operator], Change] = {
-    ast.Add: ("+", "-", "arithmetic"),
-    ast.Sub: ("-", "+", "arithmetic"),
-    ast.Mult: ("*", "/", "arithmetic"),
-    ast.Div: ("/", "*", "arithmetic"),
+BINARY = {
+    "+": "-",
+    "-": "+",
+    "*": "/",
+    "/": "*",
+    ">": ">=",
+    ">=": ">",
+    "<": "<=",
+    "<=": "<",
+    "==": "!=",
+    "!=": "==",
+    "===": "!==",
+    "!==": "===",
+    "&&": "||",
+    "||": "&&",
+    "??": "||",
+    "and": "or",
+    "or": "and",
 }
-_COMPARISON: dict[type[ast.cmpop], Change] = {
-    ast.Lt: ("<", "<=", "comparison"),
-    ast.LtE: ("<=", "<", "comparison"),
-    ast.Gt: (">", ">=", "comparison"),
-    ast.GtE: (">=", ">", "comparison"),
-    ast.Eq: ("==", "!=", "equality"),
-    ast.NotEq: ("!=", "==", "equality"),
-    ast.NotIn: ("not", "", "unary"),  # `a not in b` loses its `not`; the `in` stays
-    ast.IsNot: ("not", "", "unary"),
+BINARY_PARENTS = frozenset(
+    {"binary_expression", "binary_operator", "comparison_operator", "boolean_operator"}
+)
+UNARY_PARENTS = frozenset(
+    {"unary_expression", "unary_operator", "not_operator", "prefix_unary_expression"}
+)
+BOOLEANS = {"true": "false", "false": "true", "True": "False", "False": "True"}
+NUMBERS = frozenset(
+    {"decimal_integer_literal", "integer_literal", "int_literal", "integer", "number"}
+)
+
+FUNCTIONS = {
+    "python": frozenset({"function_definition"}),
+    "go": frozenset({"function_declaration", "method_declaration"}),
+    "java": frozenset({"method_declaration"}),  # constructors are not entries
+    "csharp": frozenset({"method_declaration", "local_function_statement"}),
+    "javascript": frozenset(
+        {
+            "function_declaration",
+            "generator_function_declaration",
+            "method_definition",
+            "arrow_function",
+            "function_expression",
+        }
+    ),
 }
-_LOGICAL: dict[type[ast.boolop], Change] = {
-    ast.And: ("and", "or", "logical"),
-    ast.Or: ("or", "and", "logical"),
-}
-_UNARY: dict[type[ast.unaryop], Change] = {
-    ast.Not: ("not", "", "unary"),
-    ast.USub: ("-", "", "unary"),
-}
-_WORDS = {
-    original
-    for table in (_ARITHMETIC, _COMPARISON, _LOGICAL, _UNARY)
-    for original, _, _ in table.values()
-}
+FUNCTIONS["typescript"] = FUNCTIONS["javascript"]
+CLASSES = frozenset(
+    {
+        "class_definition",
+        "class_declaration",
+        "interface_declaration",
+        "struct_declaration",
+        "record_declaration",
+    }
+)
 
 
-class _Token(NamedTuple):
-    start: Position
-    end: Position
-    text: str
+def _category(token: str) -> str:
+    if token in {"+", "-", "*", "/"}:
+        return "arithmetic"
+    if token in {">", ">=", "<", "<="}:
+        return "comparison"
+    if token in {"==", "!=", "===", "!=="}:
+        return "equality"
+    return "logical"
 
 
-def _start(node: ast.expr) -> Position:
-    return (node.lineno, node.col_offset)
+def _text(node: Node) -> str:
+    return node.text.decode("utf-8") if node.text is not None else ""
 
 
-def _end(node: ast.expr) -> Position:
-    return (node.end_lineno or node.lineno, node.end_col_offset or node.col_offset)
-
-
-class _Source:
-    """The file as bytes, with the tokens that can be an operator and their byte positions."""
-
-    def __init__(self, source: str) -> None:
-        lines = source.splitlines(keepends=True)
-        self.data = source.encode("utf-8")
-        self._line_starts = [0]
-        for line in lines:
-            self._line_starts.append(self._line_starts[-1] + len(line.encode("utf-8")))
-        self._tokens = list(self._operator_tokens(lines))
-        self._starts = [token.start for token in self._tokens]
-
-    @staticmethod
-    def _operator_tokens(lines: list[str]) -> Iterator[_Token]:
-        feed = iter(lines)
-        for token in tokenize.generate_tokens(lambda: next(feed, "")):
-            if token.string in _WORDS:
-                yield _Token(
-                    _byte_position(lines, token.start),
-                    _byte_position(lines, token.end),
-                    token.string,
-                )
-
-    def offset(self, position: Position) -> int:
-        return self._line_starts[position[0] - 1] + position[1]
-
-    def between(self, first_end: Position, second_start: Position, text: str) -> _Token | None:
-        """The token ``text`` that lies between two operands, if there is one."""
-        index = bisect_left(self._starts, first_end)
-        while index < len(self._tokens) and self._tokens[index].end <= second_start:
-            if self._tokens[index].text == text:
-                return self._tokens[index]
-            index += 1
+def _binary_mutant(language: str, token: str) -> str | None:
+    if language == "go" and token == "/":
         return None
+    if token == "??" and language != "typescript":
+        return None
+    return BINARY.get(token)
 
 
-def _byte_position(lines: list[str], position: Position) -> Position:
-    row, column = position
-    line = lines[row - 1] if row <= len(lines) else ""
-    return (row, len(line[:column].encode("utf-8")))
+def _optional_mutant(node: Node) -> str | None:
+    """``a?.b`` becomes ``a.b``; a call or index drops ``?.``, so ``a?.()`` becomes ``a()``."""
+    parent = node.parent
+    if parent is None:
+        return None
+    host = parent.parent if parent.type == "optional_chain" else parent
+    if host is None:
+        return None
+    if host.type == "member_expression":
+        return "."
+    if host.type in {"call_expression", "subscript_expression"}:
+        return ""
+    return None
 
 
-class _Collector:
-    def __init__(self, source: str) -> None:
-        self._source = _Source(source)
-        self.found: list[Site] = []
+def _change(node: Node, language: str) -> tuple[str, str, str] | None:
+    """The one change a leaf allows as ``(original, mutant, category)``, if any."""
+    token = _text(node)
+    parent = node.parent.type if node.parent is not None else ""
+    if parent in BINARY_PARENTS:
+        mutant = _binary_mutant(language, token)
+        if mutant is not None:
+            return token, mutant, _category(token)
+    if language == "typescript" and token == "?.":
+        mutant = _optional_mutant(node)
+        if mutant is not None:
+            return token, mutant, "optional"
+    if token in {"!", "not"} and parent in UNARY_PARENTS | {"comparison_operator"}:
+        return token, "", "unary"
+    if token == "-" and parent in UNARY_PARENTS:
+        return token, "", "unary"
+    if node.type in {"true", "false"} and token in BOOLEANS:
+        return token, BOOLEANS[token], "boolean"
+    if node.type in NUMBERS and token in {"0", "1"}:
+        return token, "1" if token == "0" else "0", "constant"
+    return None
 
-    def visit(self, node: ast.AST, function: str) -> None:
-        match node:
-            case ast.BinOp(left=left, op=op, right=right):
-                self._operator(_ARITHMETIC.get(type(op)), left, right, function)
-            case ast.Compare():
-                self._compare(node, function)
-            case ast.BoolOp():
-                self._logical(node, function)
-            case ast.UnaryOp(op=op):
-                self._unary(node, _UNARY.get(type(op)), function)
-            case ast.Constant(value=value):
-                self._constant(node, value, function)
 
-    def _operator(
-        self, change: Change | None, left: ast.expr, right: ast.expr, function: str
-    ) -> None:
-        if change is not None:
-            self._between(_end(left), _start(right), change, function)
+def _leaves(root: Node) -> Iterator[Node]:
+    pending = [root]
+    while pending:
+        node = pending.pop()
+        if node.child_count == 0:
+            yield node
+        else:
+            pending.extend(reversed(node.children))
 
-    def _between(
-        self, first_end: Position, second_start: Position, change: Change, function: str
-    ) -> None:
-        token = self._source.between(first_end, second_start, change[0])
-        if token is not None:
-            self._add(token.start, token.end, change, function)
 
-    def _compare(self, node: ast.Compare, function: str) -> None:
-        operands = [node.left, *node.comparators]
-        for index, op in enumerate(node.ops):
-            change = _COMPARISON.get(type(op))
-            if change is not None:
-                self._between(_end(operands[index]), _start(operands[index + 1]), change, function)
+def _name(node: Node) -> str:
+    found = node.child_by_field_name("name")
+    if found is not None:
+        return _text(found)
+    parent = node.parent
+    if parent is not None and parent.type in {
+        "variable_declarator",
+        "pair",
+        "assignment_expression",
+    }:
+        label = parent.child_by_field_name("name") or parent.child_by_field_name("key")
+        if label is not None:
+            return _text(label)
+    return "<anonymous>"
 
-    def _logical(self, node: ast.BoolOp, function: str) -> None:
-        change = _LOGICAL.get(type(node.op))
-        for left, right in zip(node.values, node.values[1:], strict=False):
-            self._operator(change, left, right, function)
 
-    def _unary(self, node: ast.UnaryOp, change: Change | None, function: str) -> None:
-        if change is None:
-            return
-        token = self._source.between(_start(node), _end(node), change[0])
-        if token is not None and token.start == _start(node):
-            self._add(token.start, token.end, change, function)
+def _owner(node: Node, functions: frozenset[str]) -> str | None:
+    """The qualified name of the innermost function that holds ``node``, or ``None``."""
+    names: list[str] = []
+    inside = False
+    current = node.parent
+    while current is not None:
+        if current.type in functions:
+            inside = True
+            names.append(_name(current))
+        elif current.type in CLASSES:
+            names.append(_name(current))
+        current = current.parent
+    return ".".join(reversed(names)) if inside else None
 
-    def _constant(self, node: ast.Constant, value: object, function: str) -> None:
-        start, end = _start(node), _end(node)
-        if isinstance(value, bool):
-            original = "True" if value else "False"
-            self._add(start, end, (original, str(not value), "boolean"), function)
-        elif type(value) is int and value in (0, 1):
-            original = str(value)  # `0x1`, `1_0` and `00` are other texts of the same value
-            if (
-                self._source.data[self._source.offset(start) : self._source.offset(end)]
-                == original.encode()
-            ):
-                self._add(start, end, (original, str(1 - value), "constant"), function)
 
-    def _add(self, start: Position, end: Position, change: Change, function: str) -> None:
+@cache
+def _parser(dialect: Dialect) -> Parser:
+    parser = Parser()
+    parser.language = Language(dialect.grammar())
+    return parser
+
+
+def supports(path: str) -> bool:
+    return dialect_of(path) is not None
+
+
+def discover(source: str, path: str) -> list[Site]:
+    """The sites of ``source`` in file order, in the language of ``path``.
+
+    Raises ``ValueError`` for a file of a language without rules and ``SyntaxError`` if the text
+    does not parse.
+    """
+    dialect = dialect_of(path)
+    if dialect is None:
+        raise ValueError(f"no mutation rules for {path}")
+    tree = _parser(dialect).parse(source.encode("utf-8"))
+    if tree.root_node.has_error:
+        raise SyntaxError(f"{path} does not parse")
+    language = "typescript" if dialect.language == "javascript" else dialect.language  # same rules
+    functions = FUNCTIONS[language]
+    found: list[Site] = []
+    for leaf in _leaves(tree.root_node):
+        change = _change(leaf, language)
+        owner = _owner(leaf, functions) if change is not None else None
+        if change is None or owner is None:
+            continue
         original, mutant, category = change
-        self.found.append(
+        found.append(
             Site(
-                line=start[0],
-                start=self._source.offset(start),
-                end=self._source.offset(end),
+                line=leaf.start_point[0] + 1,
+                start=leaf.start_byte,
+                end=leaf.end_byte,
                 original=original,
                 mutant=mutant,
                 category=category,
-                function=function,
+                function=owner,
             )
         )
-
-
-def _owned(tree: ast.AST) -> Iterator[tuple[ast.AST, str]]:
-    """Every node with the qualified name of the innermost ``def`` that holds it.
-
-    Code outside a function (module level, a class body) has no owner and is left out. The
-    decorators of a function are outside it; its parameters, defaults and annotations are inside.
-    """
-    stack: list[tuple[ast.AST, str, str]] = [(tree, "", "")]  # node, name prefix, owner
-    while stack:
-        node, prefix, owner = stack.pop()
-        if owner:
-            yield node, owner
-        stack.extend(_children(node, prefix, owner))
-
-
-def _children(node: ast.AST, prefix: str, owner: str) -> Iterator[tuple[ast.AST, str, str]]:
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-        name = f"{prefix}{node.name}"
-        decorators = [id(decorator) for decorator in node.decorator_list]
-        for child in ast.iter_child_nodes(node):
-            outside = id(child) in decorators
-            yield (child, prefix, owner) if outside else (child, f"{name}.", name)
-    elif isinstance(node, ast.ClassDef):
-        for child in ast.iter_child_nodes(node):
-            yield child, f"{prefix}{node.name}.", owner
-    else:
-        for child in ast.iter_child_nodes(node):
-            yield child, prefix, owner
-
-
-def discover(source: str) -> list[Site]:
-    """The sites of ``source`` in file order. Raises ``SyntaxError`` if it is not Python."""
-    tree = ast.parse(source)
-    collector = _Collector(source)
-    for node, function in _owned(tree):
-        collector.visit(node, function)
-    return sorted(collector.found, key=lambda site: (site.line, site.start, site.end))
+    return sorted(found, key=lambda site: (site.line, site.start, site.end))
