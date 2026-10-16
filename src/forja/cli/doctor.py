@@ -17,10 +17,13 @@ from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
 from forja.cli.prepare import LOW_DISK_GIB, Refused, prove
 from forja.cli.session import repo_python
 from forja.cli.settings import Perfil
+from forja.core.adapters.executor import locate_in_path
 from forja.executors.probe import executable_version, version_problem
 
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
 GIT_HELP = "https://git-scm.com/downloads"
+GO_HELP = "https://go.dev/doc/install"
+GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,29 @@ async def _pytest_in(repo: Path) -> Check:
         f"{python[0]} importa pytest" if ok else f"{python[0]} não importa pytest",
         "" if ok else "crie o ambiente do projeto e instale as dependências de teste nele",
     )
+
+
+def _go_checks(environ: Mapping[str, str]) -> list[Check]:
+    path = environ.get("PATH")
+    found = locate_in_path("go", path) is not None
+    lint = locate_in_path("golangci-lint", path) is not None
+    return [
+        Check(
+            "go",
+            found,
+            "go no PATH" if found else "go ausente",
+            "" if found else GO_HELP,
+        ),
+        Check(
+            "golangci-lint",
+            lint,
+            "golangci-lint no PATH"
+            if lint
+            else "golangci-lint ausente: o lint de Go fica não suportado",
+            "" if lint else f"instale seguindo {GOLANGCI_HELP}",
+            required=False,
+        ),
+    ]
 
 
 async def run_checks(
@@ -101,6 +127,8 @@ async def run_checks(
         )
         if detection.python:
             checks.append(await _pytest_in(detection.repo))
+        if detection.go:
+            checks += _go_checks(environ)
     checks.append(await _agent_check(name, profile, environ, console, cache))
     return checks
 

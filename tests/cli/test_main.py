@@ -302,3 +302,21 @@ def test_everything_a_policy_can_loosen_is_listed_with_its_values(
     assert "detectores de dados pessoais desligados" in talk.text
     assert "limiar de entropia mais alto (4.0)" in talk.text
     assert "valores liberados pelo repositório" in talk.text
+
+
+def test_the_doctor_warns_when_golangci_lint_is_missing_but_does_not_require_it(
+    tmp_path: Path,
+) -> None:
+    only_go = tmp_path / "bin"
+    only_go.mkdir()
+    program = only_go / ("go.exe" if sys.platform == "win32" else "go")
+    program.write_text("x", encoding="utf-8")
+    program.chmod(0o755)
+
+    found, lint = doctor_module._go_checks({"PATH": str(only_go)})  # noqa: SLF001
+
+    assert found.ok
+    assert not lint.ok
+    assert not lint.required
+    assert "não suportado" in lint.detail
+    assert "golangci-lint.run" in lint.fix

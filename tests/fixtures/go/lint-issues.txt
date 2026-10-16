@@ -1,0 +1,9 @@
+l.go:6:11: Error return value of `os.Remove` is not checked (errcheck)
+	os.Remove("a")
+	         ^
+l.go:7:2: ineffectual assignment to x (ineffassign)
+	x := 1
+	^
+2 issues:
+* errcheck: 1
+* ineffassign: 1

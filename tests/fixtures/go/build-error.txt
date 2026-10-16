@@ -1,0 +1,2 @@
+# example.com/calc
+.\bad.go:3:25: cannot use "x" (untyped string constant) as int value in return statement

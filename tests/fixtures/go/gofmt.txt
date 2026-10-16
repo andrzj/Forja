@@ -1,0 +1,2 @@
+broken.go:2:6: expected 'IDENT', found '{'
+ugly.go

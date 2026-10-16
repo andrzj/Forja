@@ -31,6 +31,7 @@ class Detection:
     gitleaks: bool
     git: bool
     disk_free_gib: float
+    go: bool = False
 
     @property
     def greenfield(self) -> bool:
@@ -68,6 +69,7 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
     branch = await git.run("rev-parse", "--abbrev-ref", "HEAD")
     changed = await git.lines("-c", "core.fsmonitor=false", "status", "--porcelain")
     base["python"] = (root / "pyproject.toml").is_file()
+    base["go"] = (root / "go.mod").is_file()
     return Detection(
         repo=root,
         has_commits=has_commits,
