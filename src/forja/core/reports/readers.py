@@ -12,12 +12,7 @@ from forja.core.reports.coverage_readers import (
     read_jacoco_xml,
 )
 from forja.core.reports.formats import ReportFormat
-from forja.core.reports.models import CoverageReport, MutationReport
-from forja.core.reports.mutation_readers import (
-    read_gremlins_json,
-    read_pit_xml,
-    read_stryker_json,
-)
+from forja.core.reports.models import CoverageReport
 from forja.core.reports.reading import MAX_REPORT_CHARS, ReportError
 
 _COVERAGE: dict[ReportFormat, Callable[[str, Path, Sequence[str]], CoverageReport]] = {
@@ -26,11 +21,6 @@ _COVERAGE: dict[ReportFormat, Callable[[str, Path, Sequence[str]], CoverageRepor
     ReportFormat.GO_COVERPROFILE: read_go_coverprofile,
     ReportFormat.COBERTURA_XML: read_cobertura_xml,
     ReportFormat.ISTANBUL_JSON: read_istanbul_json,
-}
-_MUTATION: dict[ReportFormat, Callable[[str, Path, Sequence[str]], MutationReport]] = {
-    ReportFormat.PIT_XML: read_pit_xml,
-    ReportFormat.GREMLINS_JSON: read_gremlins_json,
-    ReportFormat.STRYKER_JSON: read_stryker_json,
 }
 
 
@@ -60,13 +50,4 @@ def read_coverage(
     reader = _COVERAGE.get(report_format)
     if reader is None:
         raise ReportError(f"{report_format.value} is not a coverage format")
-    return _guarded(report_format, reader, text, root, source_roots)
-
-
-def read_mutation(
-    report_format: ReportFormat, text: str, root: Path, source_roots: Sequence[str] = ()
-) -> MutationReport:
-    reader = _MUTATION.get(report_format)
-    if reader is None:
-        raise ReportError(f"{report_format.value} is not a mutation format")
     return _guarded(report_format, reader, text, root, source_roots)

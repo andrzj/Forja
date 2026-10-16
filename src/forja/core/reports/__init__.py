@@ -2,7 +2,6 @@
 
 from forja.core.reports.formats import (
     COVERAGE_FORMATS,
-    MUTATION_FORMATS,
     ReportFormat,
     ReportingAdapter,
     ReportSpec,
@@ -18,7 +17,6 @@ from forja.core.reports.models import (
 
 __all__ = [
     "COVERAGE_FORMATS",
-    "MUTATION_FORMATS",
     "CoverageReport",
     "FileCoverage",
     "MutantResult",

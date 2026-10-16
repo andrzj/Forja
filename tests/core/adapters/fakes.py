@@ -141,8 +141,6 @@ class FakeLanguageAdapter:
     def report(self, operation: Operation) -> ReportSpec | NotSupported:
         if operation is Operation.COVERAGE and C.COVERAGE in self.capabilities:
             return ReportSpec(ReportFormat.COVERAGE_PY_JSON, "target/coverage/coverage.json")
-        if operation is Operation.MUTATION and C.MUTATION in self.capabilities:
-            return ReportSpec(ReportFormat.STRYKER_JSON, "target/mutation/report.json")
         return NotSupported(operation.value)
 
     def parse(self, operation: Operation, output: ToolOutput) -> ParseResult:

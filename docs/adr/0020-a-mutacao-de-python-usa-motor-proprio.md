@@ -1,5 +1,7 @@
 # 0020. A mutação de Python usa motor próprio
 
+Status: substituído pela [ADR 0021](0021-a-mutacao-segue-o-unclebob-mutator.md).
+
 ## Contexto
 
 A especificação previa o mutmut para a mutação de Python. O mutmut 3.8.0 recusa rodar no Windows

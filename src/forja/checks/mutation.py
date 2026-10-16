@@ -3,7 +3,8 @@
 Only the lines the diff added are mutated. As in unclebob/mutator, coverage only says which lines
 a test runs (a mutant on another line is not run), each mutant is judged by the whole test
 command, and the score is killed over killed plus survived; one below the policy's limit reproves.
-The tests of the adapter are Python's only, though the rules of the sites cover more languages.
+The check serves every language the mutator serves; the adapter it is given supplies the test
+command and the coverage report of its language.
 """
 
 import itertools
@@ -16,6 +17,7 @@ from typing import ClassVar
 from forja.checks.base import Undecided, decided, rejected
 from forja.checks.changes import Changes, added_lines
 from forja.checks.coverage import CoverageShare, run_coverage
+from forja.checks.structure import dialect_of
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
     LanguageAdapter,
@@ -40,7 +42,20 @@ from forja.mutation.sites import discover
 
 DEFAULT_MIN_SCORE = 0.65
 BASELINE_TIMEOUT = 600.0
-SUFFIXES = (".py",)
+SCRIPT = frozenset({"javascript", "typescript"})  # one family, as in the mutator
+
+
+def of_language(language: str, files: tuple[str, ...]) -> tuple[str, ...]:
+    """The files of ``files`` that the mutation rules of ``language`` can change."""
+    found = []
+    for file in files:
+        dialect = dialect_of(file)
+        if dialect is None:
+            continue
+        same = dialect.language == language or {dialect.language, language} <= SCRIPT
+        if same:
+            found.append(file)
+    return tuple(found)
 
 
 def min_score(data: GateInput, language: str) -> float:
@@ -159,7 +174,7 @@ class MutationCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        lines = changed_lines(self.changes, tuple(f for f in self.files if f.endswith(SUFFIXES)))
+        lines = changed_lines(self.changes, of_language(self.language, self.files))
         if not lines:
             return Approved()
         coverage = await run_coverage(self.tools, self.adapter, self.worktree, data, self.share)

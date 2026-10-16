@@ -10,11 +10,10 @@ import pytest
 
 from forja.core.reports import (
     COVERAGE_FORMATS,
-    MUTATION_FORMATS,
     MutantStatus,
     ReportFormat,
 )
-from forja.core.reports.readers import read_coverage, read_mutation
+from forja.core.reports.readers import read_coverage
 from forja.core.reports.reading import ReportError, resolve_path
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "reports"
@@ -101,81 +100,7 @@ def test_a_coverage_report_of_the_wrong_shape_is_a_report_error(
         read_coverage(report_format, text, tmp_path)
 
 
-# -- mutation ------------------------------------------------------------------------------------
-
-
-def test_pit_maps_statuses_and_drops_what_does_not_compile(tmp_path: Path) -> None:
-    root = project(tmp_path, "src/main/java/com/acme/Calc.java")
-    report = read_mutation(F.PIT_XML, fixture("pit.xml"), root, ("src/main/java",))
-    file = "src/main/java/com/acme/Calc.java"
-    assert summary(report) == [
-        (file, 4, MutantStatus.KILLED),
-        (file, 5, MutantStatus.SURVIVED),
-        (file, 9, MutantStatus.UNCOVERED),
-        (file, 14, MutantStatus.TIMEOUT),
-    ]
-    assert report.mutants[0].change == "Replaced integer addition with subtraction"
-    assert report.mutants[1].function == "add"
-
-
-def test_gremlins_maps_statuses_and_drops_what_does_not_compile(tmp_path: Path) -> None:
-    root = project(tmp_path, "calc.go")
-    report = read_mutation(F.GREMLINS_JSON, fixture("gremlins.json"), root)
-    assert summary(report) == [
-        ("calc.go", 4, MutantStatus.KILLED),
-        ("calc.go", 7, MutantStatus.SURVIVED),
-        ("calc.go", 9, MutantStatus.UNCOVERED),
-        ("calc.go", 15, MutantStatus.TIMEOUT),
-    ]
-
-
-def test_stryker_maps_statuses_and_drops_what_does_not_compile(tmp_path: Path) -> None:
-    root = project(tmp_path, "src/calc.js")
-    report = read_mutation(F.STRYKER_JSON, fixture("stryker.json"), root)
-    assert summary(report) == [
-        ("src/calc.js", 2, MutantStatus.KILLED),
-        ("src/calc.js", 5, MutantStatus.SURVIVED),
-        ("src/calc.js", 8, MutantStatus.UNCOVERED),
-        ("src/calc.js", 9, MutantStatus.TIMEOUT),
-        ("src/calc.js", 12, MutantStatus.KILLED),  # a crash: the change was noticed
-    ]
-    assert report.mutants[1].change == "EqualityOperator: a <= b"
-
-
-@pytest.mark.parametrize(
-    ("report_format", "text"),
-    [
-        (F.PIT_XML, "<coverage/>"),
-        (F.PIT_XML, "<mutations><mutation status='STARTED'/></mutations>"),
-        (F.GREMLINS_JSON, '{"files": {}}'),
-        (
-            F.GREMLINS_JSON,
-            '{"files": [{"file_name": "a.go", "mutations": [{"line": 1, '
-            '"type": "X", "status": "RUNNABLE"}]}]}',
-        ),
-        (F.STRYKER_JSON, '{"files": []}'),
-        (
-            F.STRYKER_JSON,
-            '{"files": {"a.js": {"mutants": [{"mutatorName": "X", '
-            '"location": {"start": {"line": 1}}, "status": "Pending"}]}}}',
-        ),
-    ],
-)
-def test_a_mutant_that_was_not_judged_or_a_wrong_shape_is_a_report_error(
-    tmp_path: Path, report_format: ReportFormat, text: str
-) -> None:
-    with pytest.raises(ReportError):
-        read_mutation(report_format, text, tmp_path)
-
-
 # -- what every reader shares --------------------------------------------------------------------
-
-
-def test_a_format_is_only_read_as_its_own_kind(tmp_path: Path) -> None:
-    with pytest.raises(ReportError, match="not a coverage format"):
-        read_coverage(F.PIT_XML, "", tmp_path)
-    with pytest.raises(ReportError, match="not a mutation format"):
-        read_mutation(F.JACOCO_XML, "", tmp_path)
 
 
 def test_xml_with_entities_is_refused_before_it_is_parsed(tmp_path: Path) -> None:
@@ -199,9 +124,6 @@ def test_no_reader_fails_with_anything_but_a_report_error(tmp_path: Path) -> Non
         for report_format in COVERAGE_FORMATS:
             with contextlib.suppress(ReportError):
                 read_coverage(report_format, sample, tmp_path)
-        for report_format in MUTATION_FORMATS:
-            with contextlib.suppress(ReportError):
-                read_mutation(report_format, sample, tmp_path)
 
 
 # -- paths ---------------------------------------------------------------------------------------

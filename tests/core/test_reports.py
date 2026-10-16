@@ -3,7 +3,6 @@ import pytest
 from forja.core.adapters import Operation
 from forja.core.reports import (
     COVERAGE_FORMATS,
-    MUTATION_FORMATS,
     CoverageReport,
     FileCoverage,
     MutantResult,
@@ -115,11 +114,10 @@ def test_a_mutant_needs_its_change_text_and_a_valid_place() -> None:
 # -- report formats ------------------------------------------------------------------------------
 
 
-def test_every_format_belongs_to_exactly_one_family() -> None:
-    assert set(ReportFormat) == COVERAGE_FORMATS | MUTATION_FORMATS
-    assert not COVERAGE_FORMATS & MUTATION_FORMATS
+def test_every_format_is_a_coverage_format() -> None:
+    assert set(ReportFormat) == COVERAGE_FORMATS
     assert formats_of(Operation.COVERAGE) == COVERAGE_FORMATS
-    assert formats_of(Operation.MUTATION) == MUTATION_FORMATS
+    assert formats_of(Operation.MUTATION) == frozenset()
     assert formats_of(Operation.TEST) == frozenset()
 
 

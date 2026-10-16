@@ -10,6 +10,7 @@ from forja.checks.mutation import (
     MutationCheck,
     build_mutants,
     min_score,
+    of_language,
     worker_count,
 )
 from forja.core.gates import GateInput
@@ -133,3 +134,15 @@ def test_a_new_line_no_test_runs_is_not_mutated_and_does_not_reject(
     )
 
     assert isinstance(judge(scene), Approved)
+
+
+def test_a_language_gets_only_its_own_files_and_script_languages_share_rules() -> None:
+    files = ("a.py", "b.go", "C.java", "D.cs", "e.ts", "f.js", "g.tsx", "notes.md")
+
+    assert of_language("python", files) == ("a.py",)
+    assert of_language("go", files) == ("b.go",)
+    assert of_language("java", files) == ("C.java",)
+    assert of_language("csharp", files) == ("D.cs",)
+    assert of_language("typescript", files) == ("e.ts", "f.js", "g.tsx")
+    assert of_language("javascript", files) == ("e.ts", "f.js", "g.tsx")
+    assert of_language("rust", files) == ()

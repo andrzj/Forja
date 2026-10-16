@@ -1,6 +1,6 @@
 """Which native report a tool writes, so one reader per format serves every language.
 
-A language adapter says *where* and *in what format* its coverage and mutation tools write; the
+A language adapter says *where* and *in what format* its coverage tool writes; the
 core runs the command and hands the file to the reader for that format. Adapters stay pure.
 """
 
@@ -19,9 +19,6 @@ class ReportFormat(StrEnum):
     GO_COVERPROFILE = "go_coverprofile"  # Go: go test -coverprofile
     COBERTURA_XML = "cobertura_xml"  # C#: coverlet
     ISTANBUL_JSON = "istanbul_json"  # JavaScript and TypeScript: c8 or istanbul
-    PIT_XML = "pit_xml"  # Java: PIT
-    GREMLINS_JSON = "gremlins_json"  # Go: gremlins
-    STRYKER_JSON = "stryker_json"  # C#, JavaScript, TypeScript: Stryker (mutation-testing-elements)
 
 
 COVERAGE_FORMATS = frozenset(
@@ -33,15 +30,12 @@ COVERAGE_FORMATS = frozenset(
         ReportFormat.ISTANBUL_JSON,
     }
 )
-MUTATION_FORMATS = frozenset(ReportFormat) - COVERAGE_FORMATS
 
 
 def formats_of(operation: Operation) -> frozenset[ReportFormat]:
     """The formats that make sense as the report of an operation; empty for the others."""
     if operation is Operation.COVERAGE:
         return COVERAGE_FORMATS
-    if operation is Operation.MUTATION:
-        return MUTATION_FORMATS
     return frozenset()
 
 
@@ -57,6 +51,6 @@ class ReportSpec:
 
 
 class ReportingAdapter(Protocol):
-    """A language adapter that runs coverage or mutation also says what they write."""
+    """A language adapter that runs coverage also says what it writes."""
 
     def report(self, operation: Operation) -> ReportSpec | NotSupported: ...
