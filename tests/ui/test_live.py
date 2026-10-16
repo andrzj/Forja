@@ -28,6 +28,7 @@ def gates(**changes: GateStatus) -> tuple[tuple[str, GateStatus], ...]:
         "scope": GateStatus.PASSED, "secrets": GateStatus.PASSED, "format": GateStatus.PASSED,
         "lint": GateStatus.RUNNING, "build": GateStatus.PENDING, "tests": GateStatus.PENDING,
         "complexity": GateStatus.PENDING, "mutation": GateStatus.PENDING,
+        "crap": GateStatus.PENDING,
     }  # fmt: skip
     return tuple({**base, **changes}.items())
 

@@ -66,7 +66,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
         log=log,
         workdir=world.run_dir / "measure",
         host_env=world.repo.env,
-        settings=settings | {"complexity": PREMISE, "mutation": OBSERVATION},
+        settings=settings | {"complexity": PREMISE, "mutation": OBSERVATION, "crap": OBSERVATION},
         lizard=LIZARD,
         gitleaks=(sys.executable, str(FAKE_GITLEAKS)),
     )

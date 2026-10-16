@@ -29,6 +29,7 @@ GATE_NAMES = {
     "tests": "testes",
     "complexity": "complex.",
     "mutation": "mutacao",
+    "crap": "crap",
 }
 Pieces = list[tuple[str, Style]]
 _COLOR_SYSTEM = {"truecolor": "truecolor", "256": "256", "16": "standard", "none": None}

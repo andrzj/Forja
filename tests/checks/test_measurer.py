@@ -25,7 +25,7 @@ from tests.core.idempotency.conftest import Repo
 
 MOD = SAMPLE["src/sample/mod.py"]
 OTHER = SAMPLE["src/sample/other.py"]
-EVERY_GATE = ["scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity"]
+EVERY_GATE = ["scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap"]
 
 
 def ran(outcome: PipelineOutcome) -> list[str]:
@@ -293,7 +293,7 @@ def test_each_rule_is_counted_on_its_own(scene: Scene) -> None:
 
 
 def observing(*names: str) -> dict[str, CheckSettings]:
-    watched = {name: CheckSettings(Mode.OBSERVATION) for name in (*names, "mutation")}
+    watched = {name: CheckSettings(Mode.OBSERVATION) for name in (*names, "mutation", "crap")}
     return {n: BLOCKING for n in ("scope", "secrets", "build", "tests", "complexity")} | watched
 
 
@@ -373,7 +373,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == EVERY_GATE
+    assert ran(outcome) == EVERY_GATE[:-1]  # the CRAP gate comes after the one that stopped it
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]

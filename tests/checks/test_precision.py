@@ -58,6 +58,8 @@ def test_a_clean_attempt_starts_exactly_these_tools_in_this_order(scene: Scene) 
         "run_tool:t1-a1:coverage:1",
         "run_tool:t1-a1:complexity:1",
         "run_tool:t1-a1:complexity:1",
+        "run_tool:t1-a1:complexity:1",
+        "run_tool:t1-a1:complexity:1",
     ]
     assert {r.where for r in runs} == {ATTEMPT}
     assert {r.timeout for r in runs} == {300.0}
@@ -129,7 +131,7 @@ def test_complexity_is_measured_for_the_changed_production_files_after_and_befor
 
     judge(scene)
 
-    after, before = [r for r in scene.recorder.runs if r.check == "complexity"]
+    after, before, *_ = [r for r in scene.recorder.runs if r.check == "complexity"]
     assert tail(after) == ("--csv", "--", *FILES) and tail(before) == ("--csv", "--", *FILES)
     assert after.cwd == scene.repo.path
     assert before.cwd.name.startswith("forja-before-") and not before.cwd.exists()
@@ -171,7 +173,7 @@ def test_a_new_file_has_no_before_to_lint(scene: Scene) -> None:
     judge(scene, scope=("src/sample",))
 
     assert [r.check for r in scene.recorder.runs if r.check.startswith("lint")] == ["lint"]
-    assert [r.check for r in scene.recorder.runs if r.check == "complexity"] == ["complexity"]
+    assert [r.check for r in scene.recorder.runs if r.check == "complexity"] == ["complexity"] * 2
 
 
 def test_the_policy_commands_replace_the_adapters_for_that_operation(
@@ -306,7 +308,7 @@ def test_the_pipeline_gets_the_attempt_the_commit_and_what_the_adapter_can_do(
     assert data.commit == scene.repo.sh("rev-parse", "HEAD")
     assert spy.capabilities == [{"test_filter_by_file", "coverage", "structural_meters"}]
     assert [c.id for c in spy.checks] == [
-        "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity",
+        "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
     ]  # fmt: skip
 
 

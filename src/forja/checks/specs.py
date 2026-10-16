@@ -29,6 +29,7 @@ def default_registry() -> CheckRegistry:
             limits=frozenset({"workers"}),
         ),
         CheckSpec("complexity", 8, Mode.BLOCKING, PREMISE, thresholds=frozenset({"max_ccn"})),
+        CheckSpec("crap", 8, Mode.OBSERVATION, PREMISE, thresholds=frozenset({"max_crap"})),
     ):
         registry.register(spec)
     return registry

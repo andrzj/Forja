@@ -15,6 +15,8 @@ from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
 from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
+from forja.checks.coverage import CoverageShare
+from forja.checks.crap import CrapCheck
 from forja.checks.freeze import FreezeCheck
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
 from forja.checks.mutation import MutationCheck
@@ -254,6 +256,7 @@ class PipelineMeasurer:
         )
         unstable, passing = self._read_base()
         adapter, worktree = self._adapter, ctx.worktree
+        share = CoverageShare()
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
             *self._frozen(ctx, changes),
@@ -264,8 +267,11 @@ class PipelineMeasurer:
             LintCheck(tools, adapter, worktree, changes, before),
             BuildCheck(tools, adapter, worktree),
             self._tests_check(ctx, tools, expectations, unstable, passing),
-            MutationCheck(tools, adapter, worktree, changes, production, self._env),
+            MutationCheck(tools, adapter, worktree, changes, production, self._env, share=share),
             ComplexityCheck(tools, worktree, changes, production, before, self._lizard),
+            CrapCheck(
+                tools, adapter, worktree, changes, production, before, self._lizard, share=share
+            ),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)

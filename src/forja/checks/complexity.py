@@ -35,15 +35,57 @@ def max_ccn(data: GateInput, language: str) -> int:
     return int(value) if isinstance(value, int | float) and value > 0 else DEFAULT_MAX_CCN
 
 
-def parse_functions(lines: list[str]) -> Functions:
-    """Complexity by (file, function). Methods with the same name keep the worst one."""
-    found: Functions = {}
+@dataclass(frozen=True)
+class Function:
+    ccn: int
+    first: int  # first and last line of the function
+    last: int
+
+
+def parse_spans(lines: list[str]) -> dict[tuple[str, str], Function]:
+    """Complexity and place by (file, function). Methods with the same name keep the worst one."""
+    found: dict[tuple[str, str], Function] = {}
     for row in csv.reader(lines):
-        if len(row) != FIELDS or not row[1].isdigit():
+        if len(row) != FIELDS or not (row[1].isdigit() and row[9].isdigit() and row[10].isdigit()):
             continue
         key = (row[6].replace("\\", "/"), row[7])
-        found[key] = max(found.get(key, 0), int(row[1]))
+        function = Function(int(row[1]), int(row[9]), int(row[10]))
+        worst = found.get(key)
+        if worst is None or function.ccn > worst.ccn:
+            found[key] = function
     return found
+
+
+def parse_functions(lines: list[str]) -> Functions:
+    """Complexity by (file, function). Methods with the same name keep the worst one."""
+    return {key: function.ccn for key, function in parse_spans(lines).items()}
+
+
+def origin(changes: Changes, path: str) -> str:
+    """Where ``path`` was before the attempt, which differs when the attempt renamed it."""
+    for change in changes.files:
+        if change.path == path:
+            return change.before or path
+    return path
+
+
+async def read_spans(
+    tools: Tools, lizard: tuple[str, ...], root: Path, files: tuple[str, ...]
+) -> dict[tuple[str, str], Function]:
+    plan = lizard_plan(lizard, root, files)
+    execution = await tools.run("complexity", plan)
+    if not execution.finished:
+        raise Undecided(execution.inconclusive("complexity"))
+    if execution.result.exit_code != 0:
+        detail = f"complexity: lizard ended with {execution.result.exit_code}"
+        raise Undecided(
+            Inconclusive(
+                reason=InconclusiveReason.TOOL_FAILED,
+                detail=detail,
+                tool_run_ids=(execution.operation_id,),
+            )
+        )
+    return parse_spans(execution.lines)
 
 
 @dataclass(frozen=True)
@@ -79,10 +121,7 @@ class ComplexityCheck:
         return rejected(findings) if findings else Approved()
 
     def _origin(self, path: str) -> str:
-        for change in self.changes.files:
-            if change.path == path:
-                return change.before or path
-        return path
+        return origin(self.changes, path)
 
     async def _before(self) -> Functions:
         if not self.before:
@@ -92,17 +131,5 @@ class ComplexityCheck:
             return await self._read(Path(directory), tuple(sorted(self.before)))
 
     async def _read(self, root: Path, files: tuple[str, ...]) -> Functions:
-        plan = lizard_plan(self.lizard, root, files)
-        execution = await self.tools.run("complexity", plan)
-        if not execution.finished:
-            raise Undecided(execution.inconclusive("complexity"))
-        if execution.result.exit_code != 0:
-            detail = f"complexity: lizard ended with {execution.result.exit_code}"
-            raise Undecided(
-                Inconclusive(
-                    reason=InconclusiveReason.TOOL_FAILED,
-                    detail=detail,
-                    tool_run_ids=(execution.operation_id,),
-                )
-            )
-        return parse_functions(execution.lines)
+        spans = await read_spans(self.tools, self.lizard, root, files)
+        return {key: function.ccn for key, function in spans.items()}

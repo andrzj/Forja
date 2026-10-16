@@ -12,25 +12,21 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import ClassVar
 
-from forja.checks.base import Undecided, decided, overrides_from, rejected
+from forja.checks.base import Undecided, decided, rejected
 from forja.checks.changes import Changes, added_lines
+from forja.checks.coverage import CoverageShare, run_coverage
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
-    CommandPlan,
     LanguageAdapter,
     NotSupported,
     Operation,
     OperationRequest,
     build_spec,
-    plan_with_override,
 )
-from forja.core.gates import Approved, Finding, GateInput, GateResult, Inconclusive, NotApplicable
+from forja.core.gates import Approved, Finding, GateInput, GateResult, Inconclusive
 from forja.core.gates.models import InconclusiveReason
 from forja.core.process import Outcome, ProcessIdentity, ProcessRunner
-from forja.core.reports.formats import ReportSpec
 from forja.core.reports.models import CoverageReport, FileCoverage, MutantStatus, MutationReport
-from forja.core.reports.readers import read_coverage
-from forja.core.reports.reading import ReportError
 from forja.mutation.apply import apply_site
 from forja.mutation.executor import (
     BaselineFailed,
@@ -188,6 +184,7 @@ class MutationCheck:
     id: str = "mutation"
     gate: int = 7
     requires: frozenset[str] = frozenset({"coverage"})
+    share: CoverageShare | None = None
 
     async def evaluate(self, data: GateInput) -> GateResult:
         return await decided(self._judge(data))
@@ -196,7 +193,7 @@ class MutationCheck:
         lines = changed_lines(self.changes, tuple(f for f in self.files if f.endswith(SUFFIXES)))
         if not lines:
             return Approved()
-        coverage = await self._coverage(data)
+        coverage = await run_coverage(self.tools, self.adapter, self.worktree, data, self.share)
         mutants = build_mutants(self.worktree, lines, coverage)
         if not mutants:
             return Approved()
@@ -219,30 +216,6 @@ class MutationCheck:
                 raise _failed("mutation: the tests do not pass on the unchanged copy") from None
             except TestsDidNotRun as error:
                 raise _failed(f"mutation: the tests could not run ({error})") from None
-
-    async def _coverage(self, data: GateInput) -> CoverageReport:
-        report = getattr(self.adapter, "report", None)
-        spec = report(Operation.COVERAGE) if callable(report) else None
-        if not isinstance(spec, ReportSpec):
-            raise Undecided(NotApplicable(missing_capability=Operation.COVERAGE.value))
-        request = OperationRequest(root=self.worktree)
-        overrides = overrides_from(self.adapter, data.values)
-        plan = plan_with_override(self.adapter, Operation.COVERAGE, request, overrides)
-        if not isinstance(plan, CommandPlan):
-            raise Undecided(NotApplicable(missing_capability=Operation.COVERAGE.value))
-        execution = await self.tools.run("coverage", plan)
-        if not execution.finished:
-            raise Undecided(execution.inconclusive("coverage"))
-        path = self.worktree / spec.path
-        try:
-            if execution.result.exit_code != 0:
-                raise _failed(f"coverage: the tool ended with {execution.result.exit_code}")
-            text = path.read_text(encoding="utf-8")
-            return read_coverage(spec.format, text, self.worktree)
-        except (OSError, ReportError) as error:
-            raise _failed(f"coverage: the report cannot be read ({error})") from None
-        finally:
-            path.unlink(missing_ok=True)  # the report is not part of the attempt
 
     def _verdict(self, report: MutationReport, limit: float) -> GateResult:
         score = report.score
