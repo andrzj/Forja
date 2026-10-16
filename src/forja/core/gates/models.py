@@ -35,6 +35,12 @@ class InconclusiveReason(StrEnum):
     UNSUPPORTED_CONSTRUCT = "unsupported_construct"
 
 
+class FindingKind(StrEnum):
+    """A finding the orchestrator routes on; every other finding has no kind."""
+
+    UNTESTED_LINE = "untested_line"  # new code no test runs: the test author must write one
+
+
 def _strict() -> ConfigDict:
     return ConfigDict(frozen=True, extra="forbid")
 
@@ -59,6 +65,7 @@ class Finding(BaseModel):
     location: Location | None = None
     measured: float | None = Field(default=None, allow_inf_nan=False)
     limit: float | None = Field(default=None, allow_inf_nan=False)
+    kind: FindingKind | None = None
 
     def describe(self) -> str:
         text = f"{self.message} [{self.target}"

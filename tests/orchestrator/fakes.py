@@ -16,6 +16,7 @@ from forja.core.gates import (
     CheckRun,
     CheckSettings,
     Finding,
+    FindingKind,
     Inconclusive,
     InconclusivePolicy,
     InconclusiveReason,
@@ -57,6 +58,18 @@ def outcome(result: GateResult, settings: CheckSettings = BLOCKING) -> PipelineO
 
 PASSED = outcome(Approved())
 REJECTED = outcome(Rejected(findings=(Finding(message="too complex", target="src/a.py::f"),)))
+_NO_TEST = Rejected(
+    findings=(
+        Finding(
+            message="no test runs this new line",
+            target="src/a.py:2",
+            kind=FindingKind.UNTESTED_LINE,
+        ),
+    )
+)
+UNTESTED = PipelineOutcome(
+    (CheckRun("mutation", 7, BLOCKING, _NO_TEST, decide_effect(BLOCKING, _NO_TEST)),)
+)
 INCONCLUSIVE = outcome(
     Inconclusive(reason=InconclusiveReason.TOOL_FAILED, detail="the tool crashed")
 )

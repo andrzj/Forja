@@ -50,6 +50,7 @@ from forja.core.states import Level
 from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, SinkFactory
 
 BASE_FILE = "base.json"
+HEAD = "HEAD"
 UNSTABLE = "unstable"
 PASSING = "passing"
 
@@ -253,11 +254,15 @@ class PipelineMeasurer:
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         before = await read_before(git, changes, SOURCE_SUFFIXES)
-        before_shapes = await read_before(git, changes, SHAPE_SUFFIXES)
-        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
-        production = tuple(
-            p for p in changes.current() if self._classify(p) is FileClass.PRODUCTION
+        # an extra test stage judges the code the implementer committed, read against what it was
+        base = await self._code_base(git, ctx.task.reviews)
+        code = changes if base == HEAD else await read_changes(git, base)
+        code_before = (
+            before if base == HEAD else await read_before(git, code, SOURCE_SUFFIXES, base)
         )
+        before_shapes = await read_before(git, code, SHAPE_SUFFIXES, base)
+        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
+        production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
         adapter, worktree = self._adapter, ctx.worktree
         share = CoverageShare()
@@ -271,17 +276,26 @@ class PipelineMeasurer:
             LintCheck(tools, adapter, worktree, changes, before),
             BuildCheck(tools, adapter, worktree),
             self._tests_check(ctx, tools, expectations, unstable, passing),
-            MutationCheck(tools, adapter, worktree, changes, production, self._env, share=share),
-            ComplexityCheck(tools, worktree, changes, production, before, self._lizard),
+            MutationCheck(tools, adapter, worktree, code, production, self._env, share=share),
+            ComplexityCheck(tools, worktree, code, production, code_before, self._lizard),
             CrapCheck(
-                tools, adapter, worktree, changes, production, before, self._lizard, share=share
+                tools, adapter, worktree, code, production, code_before, self._lizard, share=share
             ),
-            PassThroughCheck(worktree, changes, production, before_shapes),
-            ModuleDepthCheck(worktree, changes, production, before_shapes),
+            PassThroughCheck(worktree, code, production, before_shapes),
+            ModuleDepthCheck(worktree, code, production, before_shapes),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(adapter))
+
+    async def _code_base(self, git: GitAt, stage: str) -> str:
+        """The commit before the one that holds the work of ``stage``; ``HEAD`` for no stage."""
+        if not stage:
+            return HEAD
+        found = await git.lines("log", "-1", "--format=%H", f"--grep=^Stage-Id: {stage}$")
+        if not found:
+            raise RuntimeError(f"the work of stage {stage} is not in the history")
+        return f"{found[0]}^"
 
     def _frozen(self, ctx: AttemptContext, changes: Changes) -> list[Check]:
         task = ctx.task
@@ -297,8 +311,9 @@ class PipelineMeasurer:
         unstable: frozenset[str],
         passing: frozenset[str],
     ) -> Check:
-        """The test author's tests are red on purpose, so its stage has its own judge of them."""
-        if ctx.task.role is not Producer.TEST_AUTHOR:
+        """The test author's tests are red on purpose, so its stage has its own judge of them;
+        the tests of an extra stage describe code that exists, so they must pass."""
+        if ctx.task.role is not Producer.TEST_AUTHOR or ctx.task.reviews:
             return TestsCheck(tools, self._adapter, ctx.worktree, unstable, passing)
         assert expectations is not None  # the cycle gives them to every test author stage
         return RedGreenCheck(

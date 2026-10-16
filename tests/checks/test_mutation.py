@@ -15,7 +15,7 @@ from forja.checks.mutation import (
     worker_count,
 )
 from forja.core.gates import GateInput
-from forja.core.gates.models import Approved, Rejected
+from forja.core.gates.models import Approved, FindingKind, Rejected
 from forja.core.reports.models import CoverageReport, FileCoverage
 from forja.core.states import Level
 from forja.mutation.executor import Mutant
@@ -142,6 +142,7 @@ def test_a_new_line_no_test_runs_is_rejected_for_the_test_author_to_cover(
 
     assert isinstance(result, Rejected)
     assert [f.target for f in result.findings] == ["src/sample/mod.py:6"]
+    assert {f.kind for f in result.findings} == {FindingKind.UNTESTED_LINE}
 
 
 def test_untested_lines_are_missed_lines_and_mutable_lines_of_files_the_tool_never_saw() -> None:

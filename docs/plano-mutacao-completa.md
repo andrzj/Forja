@@ -14,11 +14,19 @@ Hoje a rejeição do `MutationCheck` volta ao implementador (`TaskCycle._last_re
 
 Fatos vistos: `TaskCycle.run` percorre `roles(task_id)` uma vez (autor, depois implementador); testes são congelados no commit do estágio do autor (`FreezeCheck`); `ScopeCheck` impede o implementador de mexer em testes; o id do estágio do autor é `{task}-t`.
 
-Desenho a confirmar na leitura de `phases.py`, `state.py` e `resume`:
-1. Um achado do tipo "linha sem teste" é distinguido dos demais (campo no `Finding`, não texto).
-2. Quando o estágio do implementador termina rejeitado só por esse tipo de achado, o ciclo abre um estágio extra do autor (`{task}-t2`, `-t3`…), com a lista de linhas como intenção e com o código do implementador como base; o congelamento passa a incluir os testes novos.
-3. Depois do estágio extra, o implementador reavalia (mutação de novo). Teto: `attempts_per_task` do orçamento vale também para as voltas; esgotado, a tarefa fica bloqueada com o motivo.
-4. Retomada: o estágio extra tem ids determinísticos e transições no log como os demais; teste de corte em cada fronteira (como `test_fix_resume.py`).
+### Feito (Parte A) e desvios do desenho
+
+Implementado em `core/gates/models.py` (`FindingKind`), `checks/mutation.py`, `orchestrator/task_cycle.py`, `orchestrator/measurer.py`, `checks/changes.py`; testes em `tests/orchestrator/test_untested_return.py` e `test_untested_resume.py`.
+
+1. O achado "linha sem teste" é o campo `Finding.kind = FindingKind.UNTESTED_LINE` (nunca o texto). O ciclo só desvia a tentativa quando **todos** os achados da rejeição têm esse tipo e o estágio é o do implementador.
+2. A tentativa rejeitada é **mantida num commit** (`commit_stage`, operação do diário da própria tentativa) na ramificação da tarefa, com o payload `untested` na transição `REJECTED`. O desenho original dizia "com o código do implementador como base" mas a tentativa rejeitada não era guardada; sem o commit o autor não veria o código. Consequência: o estágio do implementador não pede nova chamada ao agente.
+3. O estágio extra é `{task}-t2` (`-t3`… se houvesse outra volta), tentativas `{task}-t2a<k>`, papel `TEST_AUTHOR`, `TaskInfo.reviews = "{task}-s"`. A razão da primeira tentativa é a rejeição do implementador com prefixo explicando o pedido. Vale também para refactor (sem estágio `-t`); `test_root` vazio cai em `planner.TEST_ROOT`.
+4. **Desvio:** a mutação roda de novo **dentro do próprio estágio extra**, não numa nova chamada ao implementador. O `PipelineMeasurer.judge` do estágio extra: escopo, segredos, formato, lint, build e testes sobre o que o autor mudou (testes passam, não são vermelhos; sem `RedGreenCheck`); mutação, complexidade, CRAP, pass-through e profundidade sobre o código do implementador lido contra o commit anterior ao dele (`read_changes(git, base)`; base achada pelo trailer `Stage-Id`). Sobrevivente de mutação ou outro achado nessa rodada volta ao próprio autor (mais tentativas do estágio extra).
+5. Depois que o estágio extra faz commit, o estágio do implementador também vai a `COMMITTED`. O congelamento dos testes novos fica no `frozen_digest` do estágio extra.
+6. Teto: o estágio extra tem o orçamento `attempts_per_task` de qualquer estágio; esgotado, o estágio do implementador vai a `EXHAUSTED` (`tests_for_new_lines_exhausted`, com `detail` e `lines`) e a tarefa a `BLOCKED` com esse payload. Como o estágio do implementador termina na primeira volta, há no máximo uma volta por tentativa aceita; não há contador separado de voltas.
+7. Retomada: ids determinísticos; teste de corte em cada linha do log (limpo e com linha rasgada) em `test_untested_resume.py`.
+
+Não coberto por teste automático: o ramo `reviews` do `PipelineMeasurer.judge` com git e ferramentas reais (só `read_changes`/`read_before` com base, em `tests/checks/test_changes.py`).
 
 ## Parte B — adaptadores das linguagens que faltam
 

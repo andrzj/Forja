@@ -208,6 +208,27 @@ def test_git_is_asked_for_status_size_patch_and_ignored_files(repo: Repo) -> Non
     assert changes.ignored == ("hidden.local",)
 
 
+def test_the_work_can_be_read_against_an_earlier_commit_than_the_parent(repo: Repo) -> None:  # noqa: F811
+    (repo.path / "a.py").write_text("one\n", encoding="utf-8")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "start")
+    (repo.path / "a.py").write_text("one\ntwo\n", encoding="utf-8")
+    repo.sh("commit", "-am", "code")
+    (repo.path / "test_a.py").write_text("t\n", encoding="utf-8")
+
+    own = asyncio.run(read_changes(repo.git))
+    since = asyncio.run(read_changes(repo.git, "HEAD~1"))
+    before = asyncio.run(read_before(repo.git, since, (".py",), "HEAD~1"))
+
+    assert [c.path for c in own.files] == ["test_a.py"]
+    assert sorted(c.path for c in since.files) == ["a.py", "test_a.py"]
+    assert [(a.path, a.number) for a in added_lines(since.patch)] == [
+        ("a.py", 2),
+        ("test_a.py", 1),
+    ]
+    assert before == {"a.py": "one\n"}
+
+
 def test_renames_are_found_even_when_the_user_turned_detection_off(repo: Repo) -> None:  # noqa: F811
     (repo.path / "old.py").write_text("a\nb\nc\nd\ne\nf\n", encoding="utf-8")
     repo.sh("add", "-A")

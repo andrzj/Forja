@@ -66,6 +66,7 @@ class TaskInfo:
     test_root: str = ""
     attempt_prefix: str = ""  # attempts are ``<prefix><n>``; empty means ``<task>-a``
     frozen_digest: str = ""  # of the files under ``test_root`` the test author committed
+    reviews: str = ""  # an extra test stage: the implementer stage whose committed code it tests
 
 
 @dataclass(frozen=True)

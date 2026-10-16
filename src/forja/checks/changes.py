@@ -53,17 +53,18 @@ class Git(Protocol):
     async def lines(self, *args: str) -> list[str]: ...
 
 
-async def read_changes(git: Git) -> Changes:
-    """Stage everything in the worktree and read what differs from its parent commit.
+async def read_changes(git: Git, base: str = "HEAD") -> Changes:
+    """Stage everything in the worktree and read what differs from its parent commit, or from
+    ``base`` when the work is to be read against an earlier commit.
 
     Staging changes only the index of a disposable worktree and lets git see renames, which a
     plain status of untracked files cannot.
     """
     await git.lines("add", "-A")
-    status = await git.lines("diff", "--cached", "--name-status", "-M", "HEAD")
-    numstat = await git.lines("diff", "--cached", "--numstat", "-M", "HEAD")
+    status = await git.lines("diff", "--cached", "--name-status", "-M", base)
+    numstat = await git.lines("diff", "--cached", "--numstat", "-M", base)
     patch = await git.lines(
-        "diff", "--cached", "-U0", "--no-color", "HEAD"
+        "diff", "--cached", "-U0", "--no-color", base
     )  # git's defaults say the same
     ignored = await git.lines("ls-files", "--others", "--ignored", "--exclude-standard")
     return Changes(
@@ -154,13 +155,15 @@ def added_lines(patch: tuple[str, ...]) -> list[AddedLine]:
     return found
 
 
-async def read_before(git: Git, changes: Changes, suffixes: tuple[str, ...]) -> dict[str, str]:
-    """The parent commit's text of every changed file that had one, by its old path."""
+async def read_before(
+    git: Git, changes: Changes, suffixes: tuple[str, ...], base: str = "HEAD"
+) -> dict[str, str]:
+    """The parent commit's (or ``base``'s) text of every changed file that had one, by old path."""
     contents = {}
     for change in changes.files:
         before = change.before
         if before is not None and before.endswith(suffixes):
-            text = "\n".join(await git.lines("show", f"HEAD:{before}"))
+            text = "\n".join(await git.lines("show", f"{base}:{before}"))
             contents[before] = text + "\n"
     return contents
 

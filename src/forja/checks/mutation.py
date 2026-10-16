@@ -26,7 +26,14 @@ from forja.core.adapters import (
     OperationRequest,
     build_spec,
 )
-from forja.core.gates import Approved, Finding, GateInput, GateResult, Inconclusive
+from forja.core.gates import (
+    Approved,
+    Finding,
+    FindingKind,
+    GateInput,
+    GateResult,
+    Inconclusive,
+)
 from forja.core.gates.models import InconclusiveReason
 from forja.core.process import Outcome, ProcessIdentity, ProcessRunner
 from forja.core.reports.models import CoverageReport, MutantStatus, MutationReport
@@ -232,6 +239,7 @@ class MutationCheck:
                 Finding(
                     message="no test runs this new line; a test for it is needed before mutation",
                     target=f"{path}:{number}",
+                    kind=FindingKind.UNTESTED_LINE,
                 )
                 for path, numbers in untested.items()
                 for number in numbers

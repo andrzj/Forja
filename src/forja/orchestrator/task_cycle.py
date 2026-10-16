@@ -4,8 +4,14 @@ Every step asks the journal first, so running this after a crash continues where
 The implementer's attempts are numbered ``<task>-a<n>`` and its stage is ``<task>-s``. A fix task
 has the test author first, with stage ``<task>-t`` and attempts ``<task>-ta<n>``; the task joins the
 run only after its last stage is committed.
+
+An implementer attempt that the mutation gate rejects only because new lines have no test is kept
+in a commit and sent to an extra test author stage, ``<task>-t<n>`` (n from 2) with attempts
+``<task>-t<n>a<k>``. That stage judges the committed code and the new tests together, mutation
+included; once it commits, the implementer's stage is committed with it.
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -14,11 +20,12 @@ from forja.checks.freeze import tree_digest
 from forja.core.adapters.executor import ErrorKind
 from forja.core.artifacts.models import Producer
 from forja.core.events.state import RunState
-from forja.core.gates import CheckRun, Inconclusive, Rejected, Verdict
+from forja.core.gates import CheckRun, FindingKind, Inconclusive, Rejected, Verdict
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.config import Objective
 from forja.orchestrator.outcome import StopRun
+from forja.orchestrator.planner import TEST_ROOT
 from forja.orchestrator.ports import (
     AgentResult,
     AttemptContext,
@@ -30,6 +37,10 @@ from forja.orchestrator.ports import (
 from forja.orchestrator.workspace_git import CommitMessage
 
 REASON_LIMIT = 1500
+UNTESTED_LIMIT = 200
+RETURNED = (
+    "Returned to the test author: the new code has lines no test runs. Write tests for them; "
+)
 _FINISHED = (AttemptState.REJECTED, AttemptState.DISCARDED, AttemptState.COMMITTED)
 
 
@@ -48,6 +59,16 @@ def describe_stop(run: CheckRun) -> str:
     else:
         text = result.result
     return f"{where}: {text}"[:REASON_LIMIT]
+
+
+def untested_targets(run: CheckRun) -> list[str]:
+    """Where the new code has no test, if that is the only thing the check found."""
+    result = run.result
+    if not isinstance(result, Rejected):
+        return []
+    if any(finding.kind is not FindingKind.UNTESTED_LINE for finding in result.findings):
+        return []
+    return [finding.target for finding in result.findings][:UNTESTED_LIMIT]
 
 
 class TaskCycle:
@@ -123,8 +144,11 @@ class TaskCycle:
             )
         while (attempt := self._next_attempt(info)) is not None:
             await self._attempt(info, attempt)
+        returned = self._returned(info)
+        if returned is not None:
+            return await self._rework(info, returned)
         stage = self._state.state_of(Level.STAGE, info.stage_id)
-        if stage is StageState.EXHAUSTED:
+        if stage is StageState.EXHAUSTED and not info.reviews:
             payload = self._state.transition_payload(
                 Level.STAGE, info.stage_id, StageState.EXHAUSTED
             )
@@ -139,6 +163,8 @@ class TaskCycle:
                 return attempt
         if state.state_of(Level.STAGE, info.stage_id) is not StageState.IN_PROGRESS:
             return None
+        if self._returned(info) is not None:
+            return None
         budget = self._ctx.config.budget
         if quality_attempts(state, info.stage_id) >= budget.attempts_per_task:
             self._exhaust(info, "attempts_exhausted")
@@ -148,14 +174,68 @@ class TaskCycle:
             return None
         return f"{info.attempt_prefix}{len(children) + 1}"
 
-    def _exhaust(self, info: TaskInfo, reason: str) -> None:
+    def _exhaust(self, info: TaskInfo, reason: str, **details: JsonValue) -> None:
         self._log.append_transition(
             Level.STAGE,
             info.stage_id,
             StageState.IN_PROGRESS,
             StageState.EXHAUSTED,
-            payload={"reason": reason},
+            payload={"reason": reason, **details},
         )
+
+    # -- the return to the test author ----------------------------------------------------------
+
+    def _untested_by(self, attempt: str) -> list[JsonValue]:
+        """The places a rejected attempt left without a test; empty if it was rejected otherwise."""
+        payload = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.REJECTED)
+        found = payload.get("untested") if payload else None
+        return found if isinstance(found, list) else []
+
+    def _returns(self, info: TaskInfo) -> list[str]:
+        """The attempts of an implementer stage that went back to the test author, in order."""
+        if info.role is not Producer.IMPLEMENTER or info.reviews:
+            return []
+        attempts = self._state.children_of(Level.ATTEMPT, info.stage_id)
+        return [a for a in attempts if self._untested_by(a)]
+
+    def _returned(self, info: TaskInfo) -> str | None:
+        """The attempt the stage is waiting on the test author for, if it is."""
+        if self._state.state_of(Level.STAGE, info.stage_id) is not StageState.IN_PROGRESS:
+            return None
+        returns = self._returns(info)
+        last = self._state.children_of(Level.ATTEMPT, info.stage_id)[-1:]
+        return returns[-1] if returns and last == returns[-1:] else None
+
+    def rework_info(self, info: TaskInfo, attempt: str) -> TaskInfo:
+        """The extra test author stage for the ``attempt`` of the implementer's ``info``."""
+        number = self._returns(info).index(attempt) + 2
+        author = self.info(info.task_id, Producer.TEST_AUTHOR)
+        return replace(
+            author,
+            stage_id=f"{info.task_id}-t{number}",
+            attempt_prefix=f"{info.task_id}-t{number}a",
+            test_root=author.test_root or TEST_ROOT,
+            reviews=info.stage_id,
+        )
+
+    async def _rework(self, info: TaskInfo, attempt: str) -> bool:
+        """The test author writes what the new code lacks; the implementer's stage ends with it."""
+        extra = self.rework_info(info, attempt)
+        if await self._stage(extra):
+            self._journal.enter(Level.STAGE, info.stage_id, StageState.COMMITTED)
+            return True
+        gone = self._state.transition_payload(Level.STAGE, extra.stage_id, StageState.EXHAUSTED)
+        detail = self._own_rejection(extra) or str(gone)
+        if self._state.state_of(Level.STAGE, info.stage_id) is StageState.IN_PROGRESS:
+            self._exhaust(
+                info,
+                "tests_for_new_lines_exhausted",
+                detail=detail[:REASON_LIMIT],
+                lines=self._untested_by(attempt),
+            )
+        payload = self._state.transition_payload(Level.STAGE, info.stage_id, StageState.EXHAUSTED)
+        self._journal.enter(Level.TASK, info.task_id, TaskState.BLOCKED, payload=payload)
+        return False
 
     # -- one attempt ----------------------------------------------------------------------------
 
@@ -175,6 +255,8 @@ class TaskCycle:
                 StageState.COMMITTED,
                 payload=self._frozen(info, ctx.workspace.attempt_worktree(attempt)),
             )
+        elif self._untested_by(attempt):
+            await self._commit_attempt(info, attempt)
         await journal.operate(
             "remove_worktree",
             Level.ATTEMPT,
@@ -183,7 +265,7 @@ class TaskCycle:
             ctx.workspace.remove_worktree(attempt),
         )
 
-    def _last_rejection(self, info: TaskInfo) -> str | None:
+    def _own_rejection(self, info: TaskInfo) -> str | None:
         state = self._state
         for attempt in reversed(state.children_of(Level.ATTEMPT, info.stage_id)):
             if state.state_of(Level.ATTEMPT, attempt) is AttemptState.REJECTED:
@@ -191,6 +273,14 @@ class TaskCycle:
                 assert payload is not None  # _reject always says why
                 return str(payload["reason"])
         return None
+
+    def _last_rejection(self, info: TaskInfo) -> str | None:
+        """Why the stage's last attempt was rejected. An extra test stage starts from the reason
+        the implementer's attempt was sent back to it."""
+        own = self._own_rejection(info)
+        if own is not None or not info.reviews:
+            return own
+        return f"{RETURNED}{self._own_rejection(self.info(info.task_id))}"[:REASON_LIMIT]
 
     async def _work(self, ctx: AttemptContext) -> None:
         run, journal = self._ctx, self._journal
@@ -251,13 +341,16 @@ class TaskCycle:
             )
         return result, [difference.describe() for difference in watch.differences]
 
-    def _reject(self, attempt: str, reason: str) -> None:
+    def _reject(self, attempt: str, reason: str, untested: list[str] | None = None) -> None:
+        payload: dict[str, JsonValue] = {"reason": reason[:REASON_LIMIT]}
+        if untested:
+            payload["untested"] = [*untested]
         self._log.append_transition(
             Level.ATTEMPT,
             attempt,
             self._state.state_of(Level.ATTEMPT, attempt),
             AttemptState.REJECTED,
-            payload={"reason": reason[:REASON_LIMIT]},
+            payload=payload,
         )
 
     async def _judge(self, ctx: AttemptContext) -> None:
@@ -284,13 +377,17 @@ class TaskCycle:
         if stopper is None:
             journal.enter(Level.ATTEMPT, attempt, AttemptState.APPROVED)
         elif outcome.verdict is Verdict.REJECTED:
-            self._reject(attempt, describe_stop(stopper))
+            untested = untested_targets(stopper)
+            sent_back = bool(untested) and ctx.task.role is Producer.IMPLEMENTER
+            self._reject(attempt, describe_stop(stopper), untested if sent_back else None)
+            if sent_back:
+                await self._commit_attempt(ctx.task, attempt)
         else:
             self._block(ctx.task, attempt, describe_stop(stopper))
 
     def _expectations(self, ctx: AttemptContext) -> Expectations | None:
         fix = self._ctx.config.fix
-        if ctx.task.role is not Producer.TEST_AUTHOR or fix is None:
+        if ctx.task.role is not Producer.TEST_AUTHOR or fix is None or ctx.task.reviews:
             return None
         declared = self._ctx.runner(ctx.task.role).declared_tests(ctx)
         return Expectations(frozenset(int(c.id) for c in fix.criteria.criteria), declared)
@@ -310,12 +407,10 @@ class TaskCycle:
         )
         self._exhaust(info, "inconclusive_gate")
 
-    async def _commit(self, ctx: AttemptContext) -> None:
-        run, journal = self._ctx, self._journal
-        attempt, info = ctx.attempt_id, ctx.task
+    def _commit_message(self, info: TaskInfo, attempt: str) -> CommitMessage:
+        run = self._ctx
         validating = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.VALIDATING)
         assert validating is not None  # _work records the agent's reason on the way in
-        reason = str(validating["reason"])
         author = info.role is Producer.TEST_AUTHOR
         executor = (
             (run.config.test_author or run.config.implementer)
@@ -323,20 +418,30 @@ class TaskCycle:
             else (run.config.implementer)
         )
         kind = "test" if author else "fix" if run.config.objective is Objective.FIX else "refactor"
-        message = CommitMessage.of(
+        return CommitMessage.of(
             kind,
             info.intent,
-            reason,
+            str(validating["reason"]),
             agent=f"{executor.name} {executor.version}",
             policy_version=run.config.policy_version,
         )
-        await journal.operate(
+
+    async def _commit_attempt(self, info: TaskInfo, attempt: str) -> None:
+        """Also what keeps the work of an attempt sent back to the test author, so it sees it."""
+        await self._journal.operate(
             "commit_stage",
             Level.ATTEMPT,
             attempt,
             attempt,
-            run.workspace.commit_stage(info.task_id, info.stage_id, attempt, message),
+            self._ctx.workspace.commit_stage(
+                info.task_id, info.stage_id, attempt, self._commit_message(info, attempt)
+            ),
         )
+
+    async def _commit(self, ctx: AttemptContext) -> None:
+        journal = self._journal
+        attempt, info = ctx.attempt_id, ctx.task
+        await self._commit_attempt(info, attempt)
         journal.enter(Level.ATTEMPT, attempt, AttemptState.COMMITTED)
         journal.enter(
             Level.STAGE,
