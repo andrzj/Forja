@@ -45,9 +45,13 @@ class ReportSpec:
 
     format: ReportFormat
     path: str
+    # where the sources start, for a report that names a file by package (JaCoCo)
+    source_roots: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        check_relative_path(self.path)
+        check_relative_path(self.path.replace("*", "x"))
+        for root in self.source_roots:
+            check_relative_path(root)
 
 
 class ReportingAdapter(Protocol):

@@ -73,7 +73,12 @@ async def _measure(
             raise OSError(f"{spec.path} was not written")
         return merge_coverage(
             [
-                read_coverage(spec.format, path.read_text(encoding="utf-8"), worktree)
+                read_coverage(
+                    spec.format,
+                    path.read_text(encoding="utf-8"),
+                    worktree,
+                    spec.source_roots,
+                )
                 for path in paths
             ]
         )
