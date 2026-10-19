@@ -60,6 +60,7 @@ class PythonAdapter:
     contract_version = CONTRACT_VERSION
     language = "python"
     grammar = "python"
+    test_root = "tests"  # the directory the test author writes in unless the policy says otherwise
     capabilities = frozenset(
         {
             LanguageCapability.TEST_FILTER_BY_FILE,

@@ -34,6 +34,22 @@ def found(*toml: str) -> list[str]:
 
 
 CASES = {
+    "a test root that leaves the repository": (
+        "[tests]" + chr(10) + 'root = "../outside"',
+        ["layer 0: tests.root: must be a directory inside the repository, as a POSIX path"],
+    ),
+    "the repository itself as the test root": (
+        "[tests]" + chr(10) + 'root = "."',
+        ["layer 0: tests.root: must be a directory inside the repository, as a POSIX path"],
+    ),
+    "a test root that is not text": (
+        "[tests]" + chr(10) + "root = 3",
+        ["layer 0: tests.root: must be a directory inside the repository, as a POSIX path"],
+    ),
+    "an unknown key under tests": (
+        '[tests]\nname = "x"',
+        ["layer 0: tests.name: unknown key"],
+    ),
     "checks not a table": ("checks = 1", ["layer 0: checks: must be a table"]),
     "a check that is not a table, and the next one is still read": (
         "[checks]\nbuild = 1\ncomplexity = 2",

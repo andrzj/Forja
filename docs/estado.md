@@ -161,13 +161,11 @@ Falta:
 - **3c a 3f:** segunda CLI com diversidade de autor, cache de medições, aceitação e repetição do experimento.
 - **Suíte completa** depois do TypeScript, do `AppendOnlyCheck` e do ajuste no executor de mutantes (a última, de 6593 passaram e 25 pulados, é anterior).
 
-Pendências abertas (cada uma é conhecida, nenhuma bloqueia o 3):
-- `TEST_ROOT = "tests"` fixo em `orchestrator/planner.py`: o autor de testes só escreve em `tests/`; um repositório com outro layout precisa de configuração.
-- A mensagem do `ScopeCheck` diz "in a refactoring" mesmo em correção (`checks/scope.py`).
-- `mypy src scripts` falha por módulo `core` duplicado em `scripts/medicao/defeitos/*/corrigido/core.py`.
-- Uma execução com tarefa bloqueada ainda sai com código `DELIVERED` (0): `exit_code_for` só olha o estado da execução.
-- `mypy` acusa 29 erros em 10 arquivos de `tests/` (pré-existentes); `src` limpo.
+Pendências do 3a resolvidas em 19/10/2026: mensagem do `ScopeCheck` neutra; `mypy` ignora os repositórios de amostra da medição (o `core` duplicado); código de saída 5 quando a entrega tem tarefa bloqueada e outra integrada (o 4, já existente, é para tudo bloqueado); `[tests] root` no TOML e `PythonAdapter.test_root` no lugar do `TEST_ROOT` fixo.
+
+Pendências abertas (nenhuma bloqueia o 3):
+- **Testes ao lado do código (Go, JS/TS):** o papel de autor de testes congela por diretório (`tree_digest` sobre `test_root`); com testes ao lado do código seria preciso congelar por arquivo classificado como teste. Hoje o autor de testes só funciona de ponta a ponta em Python.
+- `mypy src scripts` ainda acusa 14 erros em `scripts/medicao/oracle.py` e `run.py` (importam os repositórios de amostra e módulos sem marcador); `mypy` na configuração padrão acusa 9 erros em 4 arquivos de `tests/` (`forja.cli` sem atributo `main`, `prepare`, `doctor`).
 - Quatro testes que falham no Linux estão em `[tool.forja.mutation] deselect`.
 - 1d/1h: falta execução viva completa com o Claude Code real e a aceitação 1h (gitleaks instalado).
 - Aproximações: CRAP do commit pai não é medido; limiares de pass-through e profundidade (razão 1,0; 10 instruções) sem calibração.
-

@@ -529,3 +529,22 @@ internal-id = 'corp-id-(\d{8})'
     )
 
     assert result.items[0].content == "x corp-id-[REDACTED:custom-internal-id:1]"
+
+
+def test_where_the_test_author_writes_comes_from_the_latest_layer_and_defaults_to_none() -> None:
+    assert policy().test_root is None
+    layers = [
+        parse_layer("a", '[tests]\nroot = "spec"'),
+        parse_layer("b", '[tests]\nroot = "t/unit"'),
+    ]
+
+    assert build_policy(make_registry(), layers).test_root == "t/unit"
+
+
+def test_a_policy_without_a_test_root_keeps_its_digest_and_one_with_it_changes() -> None:
+    plain = policy()
+    with_root = build_policy(make_registry(), [parse_layer("a", '[tests]\nroot = "spec"')])
+
+    assert "tests" not in plain.to_dict()
+    assert with_root.to_dict()["tests"] == {"root": "spec"}
+    assert with_root.digest() != plain.digest()

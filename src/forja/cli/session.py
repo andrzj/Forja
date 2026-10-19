@@ -301,7 +301,7 @@ async def _context(
         agents[Producer.TEST_AUTHOR] = runner(
             config.test_author or config.implementer, Producer.TEST_AUTHOR
         )
-        planner = FixPlanner(config.fix, config.scope)
+        planner = FixPlanner(config.fix, config.scope, policy.test_root or PythonAdapter.test_root)
     return RunContext(
         journal=Journal(log),
         config=config,

@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import JsonValue
 
+from forja.core.artifacts.llm_output import check_relative_path
 from forja.core.events.models import canonical_json
 from forja.core.gates.effects import CheckSettings, InvalidCheckSettings
 from forja.core.gates.models import InconclusivePolicy, Mode
@@ -105,6 +106,7 @@ class EffectivePolicy:
     # language -> operation -> the repository's own command line for it
     adapter_commands: Mapping[str, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
     redaction: RedactionSettings = field(default_factory=RedactionSettings)
+    test_root: str | None = None  # where the test author may write; None: the adapter's own
 
     def settings(self) -> dict[str, CheckSettings]:
         return {check_id: check.settings for check_id, check in self.checks.items()}
@@ -113,6 +115,12 @@ class EffectivePolicy:
         return {check_id: check.values() for check_id, check in self.checks.items()}
 
     def to_dict(self) -> dict[str, Any]:
+        data = self._to_dict()
+        if self.test_root is not None:  # absent when unset, so older policies keep their digest
+            data["tests"] = {"root": self.test_root}
+        return data
+
+    def _to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": POLICY_SCHEMA_VERSION,
             "checks": {
@@ -188,6 +196,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         _collect(layers, "branches", "protected"),
         _merge_adapter_commands(layers),
         _merge_redaction(layers),
+        _merge_test_root(layers),
     )
 
 
@@ -198,13 +207,21 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
     def bad(where: str, message: str) -> None:
         problems.append(f"{layer.name}: {where}: {message}")
 
-    unknown_top = set(layer.data) - {"checks", "sensitive", "branches", "adapters", "redaction"}
+    unknown_top = set(layer.data) - {
+        "checks",
+        "sensitive",
+        "branches",
+        "adapters",
+        "redaction",
+        "tests",
+    }
     for key in sorted(unknown_top):
         bad(key, "unknown section")
     _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
     _validate_string_list(layer.data.get("branches"), "branches", "protected", bad, _check_branch)
     _validate_adapters(layer.data.get("adapters"), bad)
     _validate_redaction(layer.data.get("redaction"), bad)
+    _validate_tests(layer.data.get("tests"), bad)
     checks = layer.data.get("checks", {})
     if not isinstance(checks, dict):
         bad("checks", "must be a table")
@@ -226,6 +243,34 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         _validate_thresholds(raw.get("thresholds"), spec, where, bad)
         _validate_commands(raw.get("commands"), spec, where, bad)
         _validate_limits(raw.get("limits"), spec, where, bad)
+
+
+def _merge_test_root(layers: Sequence[Layer]) -> str | None:
+    """The latest layer that sets where the test author writes."""
+    found = None
+    for layer in layers:
+        section = layer.data.get("tests", {})
+        if "root" in section:
+            found = str(section["root"])
+    return found
+
+
+def _validate_tests(section: Any, bad: Any) -> None:
+    if section is None:
+        return
+    if not isinstance(section, dict):
+        bad("tests", "must be a table")
+        return
+    for key in sorted(set(section) - {"root"}):
+        bad(f"tests.{key}", "unknown key")
+    if "root" in section:
+        root = section["root"]
+        try:
+            if not isinstance(root, str):
+                raise ValueError("must be a string")
+            check_relative_path(root)
+        except ValueError:
+            bad("tests.root", "must be a directory inside the repository, as a POSIX path")
 
 
 def _merge_redaction(layers: Sequence[Layer]) -> RedactionSettings:
