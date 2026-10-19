@@ -75,7 +75,7 @@ def test_every_kind_of_file_outside_a_refactoring_is_named_for_what_it_is() -> N
         "src/a.py", "tests/test_a.py", "tests/fixtures/data.py", "pyproject.toml", "docs/x.md"
     )
 
-    rule = "only production files may change in a refactoring"
+    rule = "only production files may change in this stage"
 
     assert described(evaluate(changes, scope=("src", "tests", "docs", "pyproject.toml"))) == [
         f"{rule} (this is test) [tests/test_a.py]",
@@ -329,5 +329,5 @@ def test_the_test_author_is_held_to_both_ends_of_a_rename() -> None:
 
 def test_the_implementer_may_not_touch_tests_in_a_fix_either() -> None:
     assert described(evaluate(modified("tests/test_a.py"), scope=("tests",))) == [
-        "only production files may change in a refactoring (this is test) [tests/test_a.py]"
+        "only production files may change in this stage (this is test) [tests/test_a.py]"
     ]

@@ -67,7 +67,7 @@ def _limit(task_value: int, data: GateInput, name: str) -> int:
 
 @dataclass(frozen=True)
 class ScopeCheck:
-    """In a refactoring only production files in the task's scope may change; tests stay frozen."""
+    """The implementer may change only production files in the task's scope; tests stay frozen."""
 
     changes: Changes
     task: TaskInfo
@@ -108,7 +108,7 @@ class ScopeCheck:
     def _implementer(self, path: str) -> Finding | None:
         kind = self.classify(path)
         if kind is not FileClass.PRODUCTION:
-            message = f"only production files may change in a refactoring (this is {kind.value})"
+            message = f"only production files may change in this stage (this is {kind.value})"
             return Finding(message=message, target=path)
         if not in_scope(path, self.task.scope):
             return Finding(message="outside the task scope", target=path)

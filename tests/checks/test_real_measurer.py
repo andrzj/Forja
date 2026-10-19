@@ -105,7 +105,7 @@ def test_tests_are_frozen_in_a_refactoring(scene: Scene) -> None:
     outcome = judge(scene, scope=("src/sample/mod.py", "tests"))
 
     assert findings(outcome) == [
-        "only production files may change in a refactoring (this is test) [tests/test_mod.py]"
+        "only production files may change in this stage (this is test) [tests/test_mod.py]"
     ]
 
 
