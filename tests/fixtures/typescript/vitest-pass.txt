@@ -1,0 +1,5 @@
+TAP version 13
+1..3
+ok 1 - src/calc.test.ts > add # time=1.16ms
+ok 2 - src/calc.test.ts > group > wrong # time=0.17ms
+ok 3 - src/calc.test.ts > group > later # SKIP

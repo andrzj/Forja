@@ -320,3 +320,19 @@ def test_the_doctor_warns_when_golangci_lint_is_missing_but_does_not_require_it(
     assert not lint.required
     assert "não suportado" in lint.detail
     assert "golangci-lint.run" in lint.fix
+
+
+def test_the_doctor_requires_node_for_a_typescript_project(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    program = bin_dir / ("node.exe" if sys.platform == "win32" else "node")
+    program.write_text("x", encoding="utf-8")
+    program.chmod(0o755)
+
+    (found,) = doctor_module._node_checks({"PATH": str(bin_dir)})  # noqa: SLF001
+    (missing,) = doctor_module._node_checks({"PATH": str(tmp_path)})  # noqa: SLF001
+
+    assert found.ok
+    assert not missing.ok
+    assert missing.required
+    assert "nodejs.org" in missing.fix

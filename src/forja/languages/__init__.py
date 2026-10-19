@@ -2,5 +2,6 @@
 
 from forja.languages.go.adapter import GoAdapter
 from forja.languages.python.adapter import PythonAdapter
+from forja.languages.typescript.adapter import TypeScriptAdapter
 
-__all__ = ["GoAdapter", "PythonAdapter"]
+__all__ = ["GoAdapter", "PythonAdapter", "TypeScriptAdapter"]

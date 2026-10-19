@@ -1,0 +1,4 @@
+[error] src/syn.ts: SyntaxError: Expression expected. (1:20)
+[error] > 1 | export const x   = ;
+[error]     |                    ^
+[error]   2 |

@@ -24,6 +24,7 @@ GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instal
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
+NODE_HELP = "https://nodejs.org/en/download"
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,18 @@ def _go_checks(environ: Mapping[str, str]) -> list[Check]:
     ]
 
 
+def _node_checks(environ: Mapping[str, str]) -> list[Check]:
+    found = locate_in_path("node", environ.get("PATH")) is not None
+    return [
+        Check(
+            "node",
+            found,
+            "node no PATH" if found else "node ausente",
+            "" if found else NODE_HELP,
+        )
+    ]
+
+
 async def run_checks(
     detection: Detection,
     profile: Perfil,
@@ -129,6 +142,8 @@ async def run_checks(
             checks.append(await _pytest_in(detection.repo))
         if detection.go:
             checks += _go_checks(environ)
+        if detection.typescript:
+            checks += _node_checks(environ)
     checks.append(await _agent_check(name, profile, environ, console, cache))
     return checks
 

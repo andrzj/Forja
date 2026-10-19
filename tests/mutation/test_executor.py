@@ -156,3 +156,21 @@ def test_the_timeout_is_ten_times_the_baseline_and_never_below_two_seconds(
     run(project, tmp_path, [mutant(b"x > 0", b"x < 0")], runner, workers=1, baseline_timeout=600.0)
     assert seen[0] == 600.0
     assert seen[1] is not None and 2.0 <= seen[1] < 3.0
+
+
+def test_a_copy_sees_the_installed_packages_and_leaves_them_in_place(
+    project: Path, tmp_path: Path
+) -> None:
+    packages = project / "node_modules" / "dep"
+    packages.mkdir(parents=True)
+    (packages / "index.js").write_text("x", encoding="utf-8")
+    seen: list[bool] = []
+
+    async def runner(root: Path, timeout: float | None) -> TestVerdict:
+        seen.append((root / "node_modules" / "dep" / "index.js").is_file())
+        return TestVerdict.PASSED
+
+    run(project, tmp_path, [mutant(b"x > 0", b"x < 0")], runner)
+
+    assert seen and all(seen)
+    assert (packages / "index.js").read_text(encoding="utf-8") == "x"  # the cleanup only unlinks

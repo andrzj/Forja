@@ -1,0 +1,4 @@
+src/lint.ts:1:17: Unexpected any. Specify a different type. (@typescript-eslint/no-explicit-any)
+src/lint.ts:2:5: 'unused' is never reassigned. Use 'const' instead. (prefer-const)
+src/lint.ts:2:5: 'unused' is assigned a value but never used. (@typescript-eslint/no-unused-vars)
+

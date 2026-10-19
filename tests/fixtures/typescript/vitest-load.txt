@@ -1,0 +1,20 @@
+TAP version 13
+1..4
+not ok 1 - src/broken.test.ts
+    ---
+    error:
+        name: "Error"
+        message: "Cannot find module './missing' imported from /work/calc/src/broken.test.ts"
+    at: "/work/calc/src/broken.test.ts:2:1"
+    ...
+ok 2 - src/calc.test.ts > add # time=1.00ms
+not ok 3 - src/calc.test.ts > group > wrong # time=3.59ms
+    ---
+    error:
+        name: "AssertionError"
+        message: "expected 2 to be 3 // Object.is equality"
+    at: "/work/calc/src/calc.test.ts:10:23"
+    actual: "2"
+    expected: "3"
+    ...
+ok 4 - src/calc.test.ts > group > later # SKIP
