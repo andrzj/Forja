@@ -67,6 +67,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+# the sample repositories of the measurement (each with its own `core.py`) are data, not Forja's code
+exclude = ["scripts/medicao/defeitos/", "scripts/medicao/repos/"]
 
 [tool.forja.mutation]
 # Tests that fail on Linux today (see docs/estado.md): the gate needs a green run to start from.
