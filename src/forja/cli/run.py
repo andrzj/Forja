@@ -121,13 +121,15 @@ async def _watch(
 
 
 def exit_code(session: Session, ended: Ended) -> int:
-    """The exit code of the process: the run's own, except a delivery with nothing in it."""
+    """The exit code of the process: the run's own, except a delivery with blocked tasks."""
     if ended.outcome is None:
         return int(ExitCode.INTERRUPTED)
     view = session.view.snapshot()
-    empty = bool(view.tasks_blocked) and not view.tasks_integrated
-    if ended.outcome.exit_code is ExitCode.DELIVERED and view.state == "delivered" and empty:
-        return int(ExitCode.NOTHING_INTEGRATED)
+    if ended.outcome.exit_code is ExitCode.DELIVERED and view.state == "delivered":
+        if view.tasks_blocked and not view.tasks_integrated:
+            return int(ExitCode.NOTHING_INTEGRATED)
+        if view.tasks_blocked:
+            return int(ExitCode.SOME_BLOCKED)
     return int(ended.outcome.exit_code)
 
 

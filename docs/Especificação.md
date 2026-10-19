@@ -371,6 +371,8 @@ Quando a única razão da rejeição de uma tentativa do implementador no gate 7
 - **Rejeitada:** o worktree é descartado. A nova tentativa recebe o mesmo pacote mais o motivo exato: gate, números e localização.
 - **Bloqueada:** após N tentativas, sai da fila com as evidências de cada tentativa e vai para o resumo. As demais tarefas seguem, exceto as dependentes.
 
+**Código de saída do processo**, calculado do estado das tarefas e nunca de texto: 0 entregue com todas as tarefas integradas; 1 falhou; 2 configuração inválida; 3 pausada com estado salvo; 4 entregue, mas toda tarefa ficou bloqueada (a branch não tem mudanças); 5 entregue com pelo menos uma tarefa bloqueada e pelo menos uma integrada; 130 interrompida pelo usuário.
+
 Falhas de infraestrutura (rede, limite de taxa) não contam como tentativa: o limite de tentativas mede qualidade, não instabilidade. Gates inconclusivos seguem a política do contrato 5.
 
 ## Adaptadores de linguagem, linters e medidores

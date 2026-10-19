@@ -12,6 +12,7 @@ class ExitCode(IntEnum):
     INVALID_CONFIG = 2
     PAUSED = 3  # stopped safely with state saved; the next ``forja`` resumes
     NOTHING_INTEGRATED = 4  # delivered, but every task was blocked: the branch has no changes
+    SOME_BLOCKED = 5  # delivered, but at least one task was blocked: the summary says which
     INTERRUPTED = 130  # the user asked to stop
 
 
