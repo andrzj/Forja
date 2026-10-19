@@ -15,7 +15,7 @@ from forja.core.adapters import (
 from forja.core.gates import GateInput, Inconclusive, NotApplicable
 from forja.core.gates.models import InconclusiveReason
 from forja.core.reports.formats import ReportSpec
-from forja.core.reports.models import CoverageReport
+from forja.core.reports.models import CoverageReport, FileCoverage
 from forja.core.reports.readers import read_coverage
 from forja.core.reports.reading import ReportError
 
@@ -65,13 +65,50 @@ async def _measure(
     execution = await tools.run("coverage", plan)
     if not execution.finished:
         raise Undecided(execution.inconclusive("coverage"))
-    path = worktree / spec.path
+    paths = report_paths(worktree, spec.path)
     try:
         if execution.result.exit_code != 0:
             raise _failed(f"coverage: the tool ended with {execution.result.exit_code}")
-        text = path.read_text(encoding="utf-8")
-        return read_coverage(spec.format, text, worktree)
+        if not paths:
+            raise OSError(f"{spec.path} was not written")
+        return merge_coverage(
+            [
+                read_coverage(spec.format, path.read_text(encoding="utf-8"), worktree)
+                for path in paths
+            ]
+        )
     except (OSError, ReportError) as error:
         raise _failed(f"coverage: the report cannot be read ({error})") from None
     finally:
-        path.unlink(missing_ok=True)  # the report is not part of the attempt
+        for path in paths:
+            path.unlink(missing_ok=True)  # the report is not part of the attempt
+
+
+def report_paths(worktree: Path, pattern: str) -> list[Path]:
+    """The report files; a pattern with ``*`` stands for a tool that puts them in a directory it
+    names itself (a run id), one report per test project."""
+    if "*" not in pattern:
+        return [worktree / pattern]
+    return sorted(path for path in worktree.glob(pattern) if path.is_file())
+
+
+def merge_coverage(reports: list[CoverageReport]) -> CoverageReport:
+    """A line is covered if any report covers it; the tests that ran it add up."""
+    if len(reports) == 1:
+        return reports[0]
+    merged: dict[str, FileCoverage] = {}
+    for report in reports:
+        for name, file in report.files.items():
+            seen = merged.get(name)
+            if seen is None:
+                merged[name] = file
+                continue
+            covered = seen.covered | file.covered
+            tests = {
+                line: seen.tests.get(line, frozenset()) | file.tests.get(line, frozenset())
+                for line in set(seen.tests) | set(file.tests)
+            }
+            merged[name] = FileCoverage(
+                covered=covered, missed=(seen.missed | file.missed) - covered, tests=tests
+            )
+    return CoverageReport(merged)

@@ -126,6 +126,7 @@ class ToolOutput:
 
     exit_code: int | None
     log_path: Path
+    root: Path | None = None  # where the command ran, for a tool that prints absolute paths
 
 
 def read_output_lines(log_path: Path) -> list[str]:

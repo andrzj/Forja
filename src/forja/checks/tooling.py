@@ -31,7 +31,7 @@ class Execution:
 
     @property
     def output(self) -> ToolOutput:
-        return ToolOutput(self.result.exit_code, self.result.log_path)
+        return ToolOutput(self.result.exit_code, self.result.log_path, self.plan.cwd)
 
     @property
     def lines(self) -> list[str]:
