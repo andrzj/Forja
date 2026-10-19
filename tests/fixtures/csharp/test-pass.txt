@@ -1,0 +1,23 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Calc -> /work/calc\src\Calc\bin\Debug\net9.0\Calc.dll
+  Calc.Tests -> /work/calc\tests\Calc.Tests\bin\Debug\net9.0\Calc.Tests.dll
+Test run for /work/calc\tests\Calc.Tests\bin\Debug\net9.0\Calc.Tests.dll (.NETCoreApp,Version=v9.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.8.2+699d445a1a (64-bit .NET 9.0.21)
+[xUnit.net 00:00:00.05]   Discovering: Calc.Tests
+[xUnit.net 00:00:00.07]   Discovered:  Calc.Tests
+[xUnit.net 00:00:00.07]   Starting:    Calc.Tests
+[xUnit.net 00:00:00.10]     Calc.Tests.CalculatorTests.Later [SKIP]
+[xUnit.net 00:00:00.10]       later
+[xUnit.net 00:00:00.10]   Finished:    Calc.Tests
+  Passed Calc.Tests.CalculatorTests.AddsTwoNumbers [4 ms]
+  Skipped Calc.Tests.CalculatorTests.Later [1 ms]
+  Passed Calc.Tests.CalculatorTests.AddsMany(a: 1, b: 1, expected: 2) [< 1 ms]
+  Passed Calc.Tests.CalculatorTests.AddsMany(a: 2, b: 2, expected: 4) [< 1 ms]
+
+Test Run Successful.
+Total tests: 4
+     Passed: 3
+    Skipped: 1
+ Total time: 0.4557 Seconds

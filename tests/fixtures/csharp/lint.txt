@@ -1,0 +1,2 @@
+/work/calc\src\Calc\Ugly.cs(5,15): warning CA1822: Member 'Twice' does not access instance data and can be marked as static [/work/calc\src\Calc\Calc.csproj]
+/work/calc\src\Calc\Ugly.cs(6,14): warning CA1822: Member 'Four' does not access instance data and can be marked as static [/work/calc\src\Calc\Calc.csproj]

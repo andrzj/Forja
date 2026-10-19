@@ -1,0 +1,40 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Calc -> /work/calc\src\Calc\bin\Debug\net9.0\Calc.dll
+  Calc.Tests -> /work/calc\tests\Calc.Tests\bin\Debug\net9.0\Calc.Tests.dll
+Test run for /work/calc\tests\Calc.Tests\bin\Debug\net9.0\Calc.Tests.dll (.NETCoreApp,Version=v9.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.8.2+699d445a1a (64-bit .NET 9.0.21)
+[xUnit.net 00:00:00.04]   Discovering: Calc.Tests
+[xUnit.net 00:00:00.06]   Discovered:  Calc.Tests
+[xUnit.net 00:00:00.06]   Starting:    Calc.Tests
+[xUnit.net 00:00:00.09]       Assert.Equal() Failure: Values differ
+[xUnit.net 00:00:00.09]       Expected: 6
+[xUnit.net 00:00:00.09]       Actual:   5
+[xUnit.net 00:00:00.09]       Stack Trace:
+[xUnit.net 00:00:00.09]         /work/calc\tests\Calc.Tests\CalculatorTests.cs(10,0): at Calc.Tests.CalculatorTests.AddsTwoNumbers()
+[xUnit.net 00:00:00.09]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+[xUnit.net 00:00:00.09]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.09]     Calc.Tests.CalculatorTests.Later [SKIP]
+[xUnit.net 00:00:00.09]       later
+[xUnit.net 00:00:00.09]   Finished:    Calc.Tests
+  Failed Calc.Tests.CalculatorTests.AddsTwoNumbers [4 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 6
+Actual:   5
+  Stack Trace:
+     at Calc.Tests.CalculatorTests.AddsTwoNumbers() in /work/calc\tests\Calc.Tests\CalculatorTests.cs:line 10
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Skipped Calc.Tests.CalculatorTests.Later [1 ms]
+  Passed Calc.Tests.CalculatorTests.AddsMany(a: 1, b: 1, expected: 2) [< 1 ms]
+  Passed Calc.Tests.CalculatorTests.AddsMany(a: 2, b: 2, expected: 4) [< 1 ms]
+
+Total tests: 4
+     Passed: 2
+     Failed: 1
+    Skipped: 1
+ Total time: 0.4035 Seconds
+[xUnit.net 00:00:00.09]     Calc.Tests.CalculatorTests.AddsTwoNumbers [FAIL]
+Test Run Failed.

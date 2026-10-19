@@ -25,6 +25,7 @@ GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
 NODE_HELP = "https://nodejs.org/en/download"
+DOTNET_HELP = "https://dotnet.microsoft.com/download"
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,18 @@ def _node_checks(environ: Mapping[str, str]) -> list[Check]:
     ]
 
 
+def _dotnet_checks(environ: Mapping[str, str]) -> list[Check]:
+    found = locate_in_path("dotnet", environ.get("PATH")) is not None
+    return [
+        Check(
+            "dotnet",
+            found,
+            "dotnet no PATH" if found else "dotnet ausente",
+            "" if found else DOTNET_HELP,
+        )
+    ]
+
+
 async def run_checks(
     detection: Detection,
     profile: Perfil,
@@ -144,6 +157,8 @@ async def run_checks(
             checks += _go_checks(environ)
         if detection.typescript:
             checks += _node_checks(environ)
+        if detection.csharp:
+            checks += _dotnet_checks(environ)
     checks.append(await _agent_check(name, profile, environ, console, cache))
     return checks
 

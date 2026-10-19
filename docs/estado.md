@@ -153,10 +153,10 @@ Feito:
 - **3a** (aceito 13/10, `aceitacao-3a.md`): autor de testes, vermelho/verde, congelamento.
 - **3b** (aceito 16/10, `aceitacao-3b.md`): mutação, CRAP, métricas opostas. A mutação segue o `unclebob/mutator` (ADR 0021): sítios por tree-sitter, comando de testes inteiro, nota mortos/(mortos+sobreviventes). O mutator não tem limiar (sai com 3 se algum mutante sobrevive); o limiar é da Forja: 0,80 (0,70 para Python e Go), por linguagem no TOML, em modo observação até calibrar. Linha nova que nenhum teste executa reprova.
 - **Linha nova sem teste volta ao autor de testes** (`23f4b30`): estágio extra `<tarefa>-t<n>` que julga o código commitado e os testes novos juntos, mutação incluída. O estágio extra só acrescenta testes: alterar, mover ou apagar um teste existente reprova (`AppendOnlyCheck`, gate 1).
-- **Adaptadores com mutação real:** Python, Go (`220cd88`) e JavaScript/TypeScript (`c5ca46a`). O de TypeScript usa as ferramentas do `node_modules` do projeto (Prettier, ESLint, `tsc`, Vitest ou Jest, cobertura istanbul). A cópia de cada mutante liga `node_modules` por link.
+- **Adaptadores com mutação real:** Python, Go (`220cd88`), JavaScript/TypeScript (`c5ca46a`) e C#. O de C# usa `dotnet format` (formatação e analisadores Roslyn), `dotnet build`, `dotnet test` e o coletor coverlet (Cobertura); o relatório fica em `.forja-coverage/<id da execução>/`, então o `ReportSpec` aceita um padrão e os relatórios de vários projetos de teste se unem. `ToolOutput` passou a levar o diretório em que o comando rodou, para ler os caminhos absolutos que o `dotnet` imprime. O de TypeScript usa as ferramentas do `node_modules` do projeto (Prettier, ESLint, `tsc`, Vitest ou Jest, cobertura istanbul). A cópia de cada mutante liga `node_modules` por link.
 
 Falta:
-- **Adaptadores:** C#, depois Java (o usuário instala JDK atual e Maven ou Gradle).
+- **Adaptador:** Java (o usuário instala JDK atual e Maven ou Gradle).
 - **Mutação diferencial** dos 8 arquivos do 3a (`checks/{scope,red_green,freeze}.py`, `core/artifacts/llm_output.py`, `orchestrator/{task_cycle,measurer,agent_runner,planner}.py`).
 - **3c a 3f:** segunda CLI com diversidade de autor, cache de medições, aceitação e repetição do experimento.
 - **Suíte completa** depois do TypeScript, do `AppendOnlyCheck` e do ajuste no executor de mutantes (a última, de 6593 passaram e 25 pulados, é anterior).

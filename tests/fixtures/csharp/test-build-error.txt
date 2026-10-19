@@ -1,0 +1,4 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Calc -> /work/calc\src\Calc\bin\Debug\net9.0\Calc.dll
+/work/calc\tests\Calc.Tests\Broken.cs(2,31): error CS0029: Cannot implicitly convert type 'string' to 'int' [/work/calc\tests\Calc.Tests\Calc.Tests.csproj]
