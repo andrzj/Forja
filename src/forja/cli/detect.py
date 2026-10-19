@@ -34,6 +34,7 @@ class Detection:
     go: bool = False
     typescript: bool = False
     csharp: bool = False
+    java: bool = False
 
     @property
     def greenfield(self) -> bool:
@@ -72,6 +73,7 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
     changed = await git.lines("-c", "core.fsmonitor=false", "status", "--porcelain")
     base["python"] = (root / "pyproject.toml").is_file()
     base["go"] = (root / "go.mod").is_file()
+    base["java"] = (root / "pom.xml").is_file()
     base["csharp"] = any(root.glob("*.sln")) or any(root.glob("*.csproj"))
     base["typescript"] = (root / "package.json").is_file() and (root / "tsconfig.json").is_file()
     return Detection(

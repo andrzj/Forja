@@ -26,6 +26,8 @@ GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
 NODE_HELP = "https://nodejs.org/en/download"
 DOTNET_HELP = "https://dotnet.microsoft.com/download"
+JAVA_HELP = "https://adoptium.net/installation/"
+MAVEN_HELP = "https://maven.apache.org/install.html"
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,20 @@ def _dotnet_checks(environ: Mapping[str, str]) -> list[Check]:
     ]
 
 
+def _java_checks(environ: Mapping[str, str]) -> list[Check]:
+    java = locate_in_path("java", environ.get("PATH")) is not None
+    maven = locate_in_path("mvn", environ.get("PATH")) is not None
+    return [
+        Check("java", java, "java no PATH" if java else "java ausente", "" if java else JAVA_HELP),
+        Check(
+            "maven",
+            maven,
+            "mvn no PATH" if maven else "mvn ausente",
+            "" if maven else MAVEN_HELP,
+        ),
+    ]
+
+
 async def run_checks(
     detection: Detection,
     profile: Perfil,
@@ -159,6 +175,8 @@ async def run_checks(
             checks += _node_checks(environ)
         if detection.csharp:
             checks += _dotnet_checks(environ)
+        if detection.java:
+            checks += _java_checks(environ)
     checks.append(await _agent_check(name, profile, environ, console, cache))
     return checks
 

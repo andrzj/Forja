@@ -1,0 +1,43 @@
+[INFO] Scanning for projects...
+[INFO] Loaded 24143 auto-discovered prefixes for remote repository central (prefixes-central.txt)
+[INFO] 
+[INFO] ---------------------------< com.acme:calc >----------------------------
+[INFO] Building calc 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- spotless:2.44.4:check (default-cli) @ calc ---
+[INFO] Loaded 74 auto-discovered prefixes for remote repository apache.snapshots (prefixes-apache.snapshots.txt)
+[INFO] Spotless.Java is keeping 3 files clean - 1 needs changes to be clean, 0 were already clean, 2 were skipped because caching determined they were already clean
+[INFO] ------------------------------------------------------------------------
+[ERROR] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  2.322 s
+[INFO] Finished at: 2026-10-19T15:54:31-03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal com.diffplug.spotless:spotless-maven-plugin:2.44.4:check (default-cli) on project calc: The following files had format violations:
+[ERROR]     src\main\java\com\acme\Ugly.java
+[ERROR]         @@ -1,6 +1,13 @@
+[ERROR]          package·com.acme;
+[ERROR]          
+[ERROR]          public·class·Ugly·{
+[ERROR]         -··public·int··twice(·int·x·){return·x*2;}
+[ERROR]         -··public·void·unused()·{·int·y·=·3;·String·s·=·null;·s.length();·}
+[ERROR]         +··public·int·twice(int·x)·{
+[ERROR]         +····return·x·*·2;
+[ERROR]         +··}
+[ERROR]         +
+[ERROR]         +··public·void·unused()·{
+[ERROR]         +····int·y·=·3;
+[ERROR]         +····String·s·=·null;
+[ERROR]         +····s.length();
+[ERROR]         +··}
+[ERROR]          }
+[ERROR] Run 'mvn spotless:apply' to fix these violations.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

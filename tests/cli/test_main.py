@@ -352,3 +352,19 @@ def test_the_doctor_requires_dotnet_for_a_csharp_project(tmp_path: Path) -> None
     assert not missing.ok
     assert missing.required
     assert "dotnet.microsoft.com" in missing.fix
+
+
+def test_the_doctor_requires_java_and_maven_for_a_java_project(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    suffix = ".exe" if sys.platform == "win32" else ""
+    program = bin_dir / f"java{suffix}"
+    program.write_text("x", encoding="utf-8")
+    program.chmod(0o755)
+
+    java, maven = doctor_module._java_checks({"PATH": str(bin_dir)})  # noqa: SLF001
+
+    assert java.ok
+    assert not maven.ok
+    assert maven.required
+    assert "maven.apache.org" in maven.fix

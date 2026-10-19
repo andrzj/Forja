@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pmd xmlns="http://pmd.sourceforge.net/report/2.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pmd.sourceforge.net/report/2.0.0 https://pmd.github.io/schema/report_2_0_0.xsd" version="7.7.0" timestamp="2026-10-19T15:54:41.210">
+<file name="C:\work\calc\src\main\java\com\acme\Ugly.java">
+<violation beginline="5" endline="5" begincolumn="30" endcolumn="31" rule="UnusedLocalVariable" ruleset="Best Practices" package="com.acme" class="Ugly" method="unused" variable="y" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.7.0/pmd_rules_java_bestpractices.html#unusedlocalvariable" priority="3">
+Avoid unused local variables such as 'y'.
+</violation>
+<violation beginline="5" endline="5" begincolumn="54" endcolumn="64" rule="UselessOperationOnImmutable" ruleset="Error Prone" package="com.acme" class="Ugly" method="unused" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.7.0/pmd_rules_java_errorprone.html#uselessoperationonimmutable" priority="3">
+The result of an operation on an immutable object is ignored
+</violation>
+</file>
+</pmd>
