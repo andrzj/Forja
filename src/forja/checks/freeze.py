@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.base import rejected
-from forja.checks.changes import Changes
+from forja.checks.changes import ChangeKind, Changes
 from forja.checks.scope import disposable, in_scope
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.core.manifest import Manifest, build_manifest
@@ -56,4 +56,35 @@ class FreezeCheck:
         findings = [Finding(message="a frozen test file was changed", target=p) for p in touched]
         return rejected(
             findings or [Finding(message="the frozen tests were changed", target=self.root)]
+        )
+
+
+@dataclass(frozen=True)
+class AppendOnlyCheck:
+    """An extra test stage may add test files under ``root`` but not change, move or delete one
+    that already exists: the first test author, or an earlier extra stage, froze it."""
+
+    changes: Changes
+    root: str
+    id: str = "freeze"
+    gate: int = 1
+    requires: frozenset[str] = frozenset()
+
+    async def evaluate(self, data: GateInput) -> GateResult:
+        touched = sorted(
+            {
+                path
+                for change in self.changes.files
+                if change.kind is not ChangeKind.ADDED
+                for path in (change.old_path, change.path)
+                if path is not None and in_scope(path, (self.root,))
+            }
+        )
+        if not touched:
+            return Approved()
+        return rejected(
+            [
+                Finding(message="a test file that already existed was changed", target=p)
+                for p in touched
+            ]
         )

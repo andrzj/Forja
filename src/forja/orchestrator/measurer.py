@@ -17,7 +17,7 @@ from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
-from forja.checks.freeze import FreezeCheck
+from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
@@ -299,6 +299,8 @@ class PipelineMeasurer:
 
     def _frozen(self, ctx: AttemptContext, changes: Changes) -> list[Check]:
         task = ctx.task
+        if task.reviews and task.test_root:  # an extra test stage only adds tests
+            return [AppendOnlyCheck(changes, task.test_root)]
         if not (task.frozen_digest and task.test_root):
             return []
         return [FreezeCheck(ctx.worktree, changes, task.test_root, task.frozen_digest)]

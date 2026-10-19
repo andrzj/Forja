@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.freeze import FreezeCheck, tree_digest
+from forja.checks.freeze import AppendOnlyCheck, FreezeCheck, tree_digest
 from forja.core.gates import Approved, GateInput, Rejected
 
 NOTHING = Changes((), 0, ())
@@ -95,3 +95,29 @@ def test_removing_the_whole_directory_is_a_change(tmp_path: Path) -> None:
     (tmp_path / "tests").rmdir()
 
     assert judge(tmp_path, digest) == ["the frozen tests were changed [tests]"]
+
+
+def append_only(*changes: Change) -> list[str] | None:
+    result = asyncio.run(AppendOnlyCheck(Changes(changes, 0, ()), "tests").evaluate(DATA))
+    if isinstance(result, Approved):
+        return None
+    assert isinstance(result, Rejected)
+    return [f.target for f in result.findings]
+
+
+def test_an_extra_test_stage_may_add_tests_and_change_the_code() -> None:
+    assert (
+        append_only(
+            Change(ChangeKind.ADDED, "tests/test_new.py"), Change(ChangeKind.MODIFIED, "src/a.py")
+        )
+        is None
+    )
+
+
+def test_an_extra_test_stage_may_not_change_move_or_delete_an_existing_test() -> None:
+    assert append_only(Change(ChangeKind.MODIFIED, "tests/test_a.py")) == ["tests/test_a.py"]
+    assert append_only(Change(ChangeKind.DELETED, "tests/test_a.py")) == ["tests/test_a.py"]
+    assert append_only(Change(ChangeKind.RENAMED, "tests/test_b.py", "tests/test_a.py")) == [
+        "tests/test_a.py",
+        "tests/test_b.py",
+    ]
