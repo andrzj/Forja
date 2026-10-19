@@ -1,4 +1,6 @@
-# Forja — estado do incremento 0
+# Forja — estado
+
+Atualizado em 19/10/2026. As seções do incremento 0 e 1 abaixo são históricas; o estado atual está em "Incremento 3", no fim do arquivo.
 
 Nota de retomada. Escrita em 10/10/2026, depois de concluídos os contratos 1 a 5, os adaptadores, o lock e a redação do pacote. A especificação (`Especificação.md`) e o plano (`Plano de execução.md`) continuam sendo a referência; este arquivo registra o que foi decidido durante a construção e que não está no código nem na spec.
 
@@ -144,3 +146,28 @@ Protocolo em `docs/medicao-2.md`, harness em `scripts/medicao/` (repositórios `
 
 1. Fechar o incremento 0 (itens da seção "Onde estamos").
 2. Incremento 1: 1a, 1b, 1d e 1f (CLI `forja`, doctor, preparação, retomar/descartar, linha viva e texto, Ctrl+K) feitos. 1e (isolamento = ambiente do usuário) feito. Falta uma execução viva completa com o Claude Code real (gasta tokens; precisa do gitleaks instalado). 1g (tela completa em Textual) feita: `ui/panels.py` (conteúdo puro, sem Textual), `ui/full.py` (app e `FullRenderer`), escolha automática da camada em `cli/main.py`; testada sem terminal em 7 tamanhos (60x16 a 200x60) nos 6 temas e em ASCII, com redimensionamento durante a execução, teclas (Ctrl+K, Ctrl+C, t, tab, setas, ?, q) e uma execução inteira na tela. Fora do 1g, por falta de dado: a tecla `d` (diff da tentativa); o `View` não carrega o diff. Falta a 1h (aceitação). Respondidas: Claude Code e toda a infraestrutura em volta são do usuário e checados pelo doctor (documentados); o `doctor` não instala nada; ruff e lizard são dependências da Forja; o limite é de tokens.
+
+## Incremento 3 (em andamento, atualizado em 19/10/2026): prova forte
+
+Feito:
+- **3a** (aceito 13/10, `aceitacao-3a.md`): autor de testes, vermelho/verde, congelamento.
+- **3b** (aceito 16/10, `aceitacao-3b.md`): mutação, CRAP, métricas opostas. A mutação segue o `unclebob/mutator` (ADR 0021): sítios por tree-sitter, comando de testes inteiro, nota mortos/(mortos+sobreviventes). O mutator não tem limiar (sai com 3 se algum mutante sobrevive); o limiar é da Forja: 0,80 (0,70 para Python e Go), por linguagem no TOML, em modo observação até calibrar. Linha nova que nenhum teste executa reprova.
+- **Linha nova sem teste volta ao autor de testes** (`23f4b30`): estágio extra `<tarefa>-t<n>` que julga o código commitado e os testes novos juntos, mutação incluída. O estágio extra só acrescenta testes: alterar, mover ou apagar um teste existente reprova (`AppendOnlyCheck`, gate 1).
+- **Adaptadores com mutação real:** Python, Go (`220cd88`) e JavaScript/TypeScript (`c5ca46a`). O de TypeScript usa as ferramentas do `node_modules` do projeto (Prettier, ESLint, `tsc`, Vitest ou Jest, cobertura istanbul). A cópia de cada mutante liga `node_modules` por link.
+
+Falta:
+- **Adaptadores:** C#, depois Java (o usuário instala JDK atual e Maven ou Gradle).
+- **Mutação diferencial** dos 8 arquivos do 3a (`checks/{scope,red_green,freeze}.py`, `core/artifacts/llm_output.py`, `orchestrator/{task_cycle,measurer,agent_runner,planner}.py`).
+- **3c a 3f:** segunda CLI com diversidade de autor, cache de medições, aceitação e repetição do experimento.
+- **Suíte completa** depois do TypeScript, do `AppendOnlyCheck` e do ajuste no executor de mutantes (a última, de 6593 passaram e 25 pulados, é anterior).
+
+Pendências abertas (cada uma é conhecida, nenhuma bloqueia o 3):
+- `TEST_ROOT = "tests"` fixo em `orchestrator/planner.py`: o autor de testes só escreve em `tests/`; um repositório com outro layout precisa de configuração.
+- A mensagem do `ScopeCheck` diz "in a refactoring" mesmo em correção (`checks/scope.py`).
+- `mypy src scripts` falha por módulo `core` duplicado em `scripts/medicao/defeitos/*/corrigido/core.py`.
+- Uma execução com tarefa bloqueada ainda sai com código `DELIVERED` (0): `exit_code_for` só olha o estado da execução.
+- `mypy` acusa 29 erros em 10 arquivos de `tests/` (pré-existentes); `src` limpo.
+- Quatro testes que falham no Linux estão em `[tool.forja.mutation] deselect`.
+- 1d/1h: falta execução viva completa com o Claude Code real e a aceitação 1h (gitleaks instalado).
+- Aproximações: CRAP do commit pai não é medido; limiares de pass-through e profundidade (razão 1,0; 10 instruções) sem calibração.
+

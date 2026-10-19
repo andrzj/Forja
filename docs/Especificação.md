@@ -350,7 +350,7 @@ Cada tarefa tem uma intenção, gera um commit por etapa aprovada, é integrada 
 | 4 | Build | Não compila |
 | 5 | Testes | Algum teste falha, exceto os em quarentena; testes congelados foram alterados |
 | 6 | E2E | Falha, ou tentou acesso à rede (os E2E rodam com rede desligada) |
-| 7 | Cobertura e mutação | Cobertura ou score de mutação do código tocado abaixo do limiar da linguagem |
+| 7 | Cobertura e mutação | Score de mutação do código tocado abaixo do limiar da linguagem, ou linha nova que nenhum teste executa (esta volta ao autor de testes, ver *Linha nova sem teste*) |
 | 8 | Métricas estruturais | CRAP ou complexidade acima do limiar; métrica oposta piorou (*pass-through*, razão interface/implementação) |
 | 9 | Arquitetura | Ciclo de dependência novo; violação de regra de camada; piora nas métricas de pacote |
 | 10 | Segurança e dependências | Achado novo do Semgrep; vulnerabilidade ou licença proibida em dependência; dependência nova inexistente ou suspeita no registro oficial |
@@ -360,6 +360,10 @@ Cada tarefa tem uma intenção, gera um commit por etapa aprovada, é integrada 
 | 14 | Documentação | Registro de mudança ausente ou incompleto; deriva em documento existente |
 
 Depois de integrar a tarefa na branch da execução, um **gate de integração** roda build e testes ali de novo, porque duas tarefas aprovadas isoladamente podem quebrar juntas.
+
+### Linha nova sem teste
+
+Quando a única razão da rejeição de uma tentativa do implementador no gate 7 é linha nova que nenhum teste executa, a tentativa não é descartada nem devolvida ao implementador: o código é commitado e um **estágio extra do autor de testes** recebe a lista das linhas. Esse estágio julga o código já commitado junto com os testes novos, mutação incluída, e, ao ser aprovado, encerra também o estágio do implementador. Ele só pode **acrescentar** arquivos de teste: alterar, mover ou apagar um teste que já existe (congelado pelo primeiro autor ou por um estágio extra anterior) reprova no gate 1. Se o estágio extra esgota as tentativas, a tarefa fica bloqueada com as linhas no motivo.
 
 ### Desfechos de uma tarefa
 
@@ -394,6 +398,8 @@ Cada linguagem é um adaptador que traduz as ferramentas nativas para o esquema 
 Camadas transversais às seis linguagens: **lizard** (complexidade ciclomática), **jscpd** (duplicação), **tree-sitter** (medidores próprios), **Semgrep** (SAST), **OSV-Scanner** (vulnerabilidades em dependências) e **gitleaks** (segredos).
 
 A mutação das seis linguagens segue o `unclebob/mutator`: sítios achados com tree-sitter pela mesma tabela de regras, um mutante por vez, o comando de testes inteiro, mutante morto quando os testes falham ou estouram o tempo (10× o baseline, no mínimo 2 s), nota = mortos / (mortos + sobreviventes), linha sem cobertura não é mutada. O mutator não tem C#; nele vale o conjunto de Java. Os limiares podem diferir por linguagem.
+
+**O que é do mutator e o que é da Forja.** O mutator não tem limiar: ele sai com 3 quando qualquer mutante sobrevive (exige 100%), e a nota é só relatório. O limiar do gate é da Forja, por linguagem, e o check nasce em modo observação até haver dados de calibração (valores iniciais: 0,80; 0,70 para Python e Go, onde a mutação é mais frágil). Também é da Forja a regra de que **linha nova que nenhum teste executa reprova**: o mutator só a deixa fora da nota. O mutator é diferencial por função alterada; a Forja muta as linhas que a tentativa adicionou, e a mutação diferencial dos arquivos já existentes entra no incremento 7 (mutação incremental).
 
 ### Regras para linters e formatadores
 
