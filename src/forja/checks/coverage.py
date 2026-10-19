@@ -86,10 +86,16 @@ async def _measure(
 
 def report_paths(worktree: Path, pattern: str) -> list[Path]:
     """The report files; a pattern with ``*`` stands for a tool that puts them in a directory it
-    names itself (a run id), one report per test project."""
+    names itself (a run id), one report per test project. A match that is a link, or that leaves
+    the worktree through one, is not a report and is never read or removed."""
     if "*" not in pattern:
         return [worktree / pattern]
-    return sorted(path for path in worktree.glob(pattern) if path.is_file())
+    inside = worktree.resolve()
+    return sorted(
+        path
+        for path in worktree.glob(pattern)
+        if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(inside)
+    )
 
 
 def merge_coverage(reports: list[CoverageReport]) -> CoverageReport:

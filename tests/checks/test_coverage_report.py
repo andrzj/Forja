@@ -1,7 +1,11 @@
 """A tool may name its own report directory (a run id), so the report is a pattern, and several
 reports (one per test project) become one."""
 
+import os
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from forja.checks.coverage import merge_coverage, report_paths
 from forja.core.reports.models import CoverageReport, FileCoverage
@@ -51,3 +55,26 @@ def test_a_line_is_covered_if_any_report_covers_it_and_the_tests_add_up() -> Non
     assert (a.covered, a.missed) == (frozenset({1, 2}), frozenset({3}))
     assert a.tests == {1: frozenset({"t1"}), 2: frozenset({"t2"})}
     assert merged.of("b.cs") is not None
+
+
+def link_directory(link: Path, target: Path) -> None:
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except OSError:  # Windows without the right to make links: a junction needs none
+        done = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True, check=False
+        )
+        if done.returncode != 0:
+            pytest.skip("this machine cannot make links")
+
+
+def test_a_report_behind_a_linked_directory_is_not_taken(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "report.xml").write_text("x", encoding="utf-8")
+    work = tmp_path / "work"
+    (work / ".cover" / "real").mkdir(parents=True)
+    (work / ".cover" / "real" / "report.xml").write_text("x", encoding="utf-8")
+    link_directory(work / ".cover" / "linked", outside)
+
+    assert report_paths(work, ".cover/*/report.xml") == [work / ".cover/real/report.xml"]
