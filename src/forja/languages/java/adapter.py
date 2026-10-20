@@ -92,6 +92,7 @@ class JavaAdapter:
     language = "java"
     grammar = "java"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
+    lint_config_files = ("pom.xml",)
 
     def __init__(self, *, maven: tuple[str, ...] | None = None) -> None:
         self._maven = maven or find_maven()

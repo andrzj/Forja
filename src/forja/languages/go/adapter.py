@@ -74,6 +74,14 @@ class GoAdapter:
     language = "go"
     grammar = "go"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
+    lint_config_files = (
+        ".golangci.yml",
+        ".golangci.yaml",
+        ".golangci.toml",
+        ".golangci.json",
+        "go.mod",
+        "go.sum",
+    )
 
     def __init__(
         self,

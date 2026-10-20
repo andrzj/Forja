@@ -90,6 +90,7 @@ class TypeScriptAdapter:
     language = "typescript"
     grammar = "typescript"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
+    lint_config_files = CONFIG_FILES
 
     def __init__(self, *, node: tuple[str, ...] = ("node",)) -> None:
         self._node = node

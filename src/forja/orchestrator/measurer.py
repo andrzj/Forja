@@ -18,7 +18,7 @@ from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_function
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
-from forja.checks.layout import FormatCheck, LintCheck, violations
+from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.pass_through import PassThroughCheck
@@ -110,10 +110,6 @@ class PipelineMeasurer:
 
     def _classify(self, path: str) -> FileClass:
         return self._adapters.classify(path)
-
-    def _owns(self, path: str) -> bool:
-        """Whether the adapter the tools are asked of claims the file."""
-        return self._adapter.classify(path) is not None
 
     def _run_sink(self, level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(self._log, level, target, operation)
@@ -255,7 +251,7 @@ class PipelineMeasurer:
     ) -> PipelineOutcome:
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
-        own = self._owns
+        own = own_files(self._adapters)
         before = await read_before(git, changes, own)
         # an extra test stage judges the code the implementer committed, read against what it was
         base = await self._code_base(git, ctx.task.reviews)
@@ -273,8 +269,8 @@ class PipelineMeasurer:
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks
             ),
-            FormatCheck(tools, adapter, worktree, changes, own),
-            LintCheck(tools, adapter, worktree, changes, before, own),
+            FormatCheck(tools, self._adapters, worktree, changes),
+            LintCheck(tools, self._adapters, worktree, changes, before),
             BuildCheck(tools, adapter, worktree),
             self._tests_check(ctx, tools, expectations, unstable, passing),
             MutationCheck(tools, adapter, worktree, code, production, self._env, share=share),

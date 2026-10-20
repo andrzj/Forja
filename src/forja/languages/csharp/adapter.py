@@ -92,6 +92,7 @@ class CSharpAdapter:
     language = "csharp"
     grammar = "csharp"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
+    lint_config_files = (".editorconfig", "Directory.Build.props", "global.json")
 
     def __init__(self, *, dotnet: tuple[str, ...] = ("dotnet",)) -> None:
         self._dotnet = dotnet
