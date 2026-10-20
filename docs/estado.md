@@ -158,14 +158,14 @@ Feito:
 
 Falta:
 - **Gradle** no adaptador de Java: só o Maven foi feito.
-- **Mutação diferencial** dos 8 arquivos do 3a (`checks/{scope,red_green,freeze}.py`, `core/artifacts/llm_output.py`, `orchestrator/{task_cycle,measurer,agent_runner,planner}.py`).
+- **Generalização do pipeline (passos 1 a 5 feitos, 20/10/2026; `plano-pipeline-todas-linguagens.md`):** lint, formato, build, testes e congelamento por arquivo valem para todas as linguagens; ponta a ponta real em Go, C# e Java. Passo 6 (mutação diferencial dos arquivos reescritos) feito: gate limpo, sobreviventes mortos em `tests/checks/test_layout_adapters.py`, `test_freeze.py` e `tests/cli/test_session_defaults.py`. Falta TypeScript ponta a ponta (decisão do dono sobre `node_modules` na worktree).
 - **3c a 3f:** segunda CLI com diversidade de autor, cache de medições, aceitação e repetição do experimento.
 - **Suíte completa** depois do TypeScript, do `AppendOnlyCheck` e do ajuste no executor de mutantes (a última, de 6593 passaram e 25 pulados, é anterior).
 
 Pendências do 3a resolvidas em 19/10/2026: mensagem do `ScopeCheck` neutra; `mypy` ignora os repositórios de amostra da medição (o `core` duplicado); código de saída 5 quando a entrega tem tarefa bloqueada e outra integrada (o 4, já existente, é para tudo bloqueado); `[tests] root` no TOML e `PythonAdapter.test_root` no lugar do `TEST_ROOT` fixo.
 
 Pendências abertas (nenhuma bloqueia o 3):
-- **Testes ao lado do código (Go, JS/TS):** o papel de autor de testes congela por diretório (`tree_digest` sobre `test_root`); com testes ao lado do código seria preciso congelar por arquivo classificado como teste. Hoje o autor de testes só funciona de ponta a ponta em Python.
+- **Testes ao lado do código (Go, JS/TS):** resolvido no passo 4 (`frozen_digest_of` congela por arquivo classificado como teste).
 - `mypy src scripts` ainda acusa 14 erros em `scripts/medicao/oracle.py` e `run.py` (importam os repositórios de amostra e módulos sem marcador); `mypy` na configuração padrão acusa 9 erros em 4 arquivos de `tests/` (`forja.cli` sem atributo `main`, `prepare`, `doctor`).
 - Quatro testes que falham no Linux estão em `[tool.forja.mutation] deselect`.
 - 1d/1h: falta execução viva completa com o Claude Code real e a aceitação 1h (gitleaks instalado).

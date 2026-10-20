@@ -221,7 +221,7 @@ Decisões do dono (12/10, "sim" a todas as propostas 1 a 6 e à divisão 6a/6b).
 ## Decisões
 
 1. Canal do manifesto: campo opcional `tests` em `LlmOutput`, no formato de `AuthoredTestsBody`; `_declared` o lê e o runner o entrega ao `judge`.
-2. `test_id` do manifesto é o id completo do pytest (`tests/test_x.py::test_nome`).
+2. `test_id` do manifesto é o id que o runner da linguagem imprime: em Python, o completo do pytest (`tests/test_x.py::test_nome`); nas outras, o que o adaptador reivindica por `owns_test` (o id do runner não traz o caminho).
 3. `Measurer.judge` ganha um parâmetro opcional com os critérios e o manifesto declarado.
 4. Só `FAILED` conta como vermelho. `ERROR` (importação, coleta, fixture) reprova a tentativa com a mensagem do pytest. O parser não guarda o tipo da exceção; fica fora do escopo.
 5. Congelamento: `path → sha256` dos arquivos TEST e FIXTURE da etapa 1 no payload de `STAGE COMMITTED`; acima de 4096 bytes, só o digest mais um artefato `TEST_MANIFEST`. Calculado também na ramificação de retomada.
