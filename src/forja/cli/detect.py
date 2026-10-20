@@ -13,9 +13,8 @@ from pathlib import Path
 from forja.cli.session import git_base_environment, git_executable
 from forja.core.adapters.executor import ExecutorChoice, find_executors, locate_in_path
 from forja.core.idempotency.git import Git
-from forja.executors import ClaudeCodeAdapter
+from forja.executors import KNOWN_CLIS
 
-KNOWN_CLIS = {"claude-code": ClaudeCodeAdapter}
 LOW_DISK_GIB = 2.0
 
 

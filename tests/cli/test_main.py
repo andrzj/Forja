@@ -12,8 +12,9 @@ from forja.cli import doctor as doctor_module
 from forja.cli import main as door
 from forja.cli import prepare as preparation
 from forja.cli.args import parse
-from forja.cli.settings import Execucao, Perfil, save_perfil
+from forja.cli.settings import Execucao, Perfil, load_perfil, save_perfil
 from forja.core.states import ExecutionState
+from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
 from tests.cli.test_resume import make_run
 
 pytestmark = pytest.mark.integration
@@ -172,6 +173,35 @@ def test_the_fix_plan_shows_the_defect_and_the_criteria(
     assert "Vou corrigir proj" in talk.text
     assert "erro: page 1 is wrong" in talk.text
     assert "critérios: 2" in talk.text
+
+
+def test_a_test_author_cli_that_is_not_known_is_refused(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--cli-testes", "nenhuma", "--plano"]
+    assert go(argv, talk, environ) == 2
+    assert "Não conheço a CLI `nenhuma`" in talk.text
+
+
+def test_each_role_of_a_fix_can_run_on_its_own_cli(
+    repo: Path, tmp_path: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(KNOWN_CLIS, "outra-cli", ClaudeCodeAdapter)
+    agent = next(iter(load_perfil(Path(environ["FORJA_CONFIG_HOME"])).executaveis.values()))
+    save_perfil(
+        Path(environ["FORJA_CONFIG_HOME"]),
+        Perfil(cli="claude-code", executaveis={"claude-code": agent, "outra-cli": agent}),
+    )
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--cli-testes", "outra-cli", "--plano"]
+    assert go(argv, talk, environ) == 0
+    assert "agente que escreve os testes: outra-cli 2.1.0" in talk.text
+    assert "agente que implementa: claude-code 2.1.0" in talk.text
 
 
 def test_the_description_file_brings_its_criteria_along(

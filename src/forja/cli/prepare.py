@@ -13,15 +13,16 @@ from pydantic import ValidationError
 
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
-from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
+from forja.cli.detect import Detection, installed_clis
 from forja.cli.session import new_config, policy_digest, repo_policy, standard_settings
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
+from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, run_probe, version_problem
-from forja.orchestrator.config import FixRequest, Objective, RunConfig
+from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig
 
 AVAILABLE = frozenset({"refatorar", "corrigir"})
 CRITERIA_FILE = "criterios.json"
@@ -130,12 +131,23 @@ def choose_cli(
     profile: Perfil,
     environ: Mapping[str, str],
     console: Console,
+    *,
+    tests: bool = False,
 ) -> tuple[str, ExecutorChoice, bool]:
-    """The CLI by name and where it is; whether the choice is worth offering to keep."""
-    name = args.cli or (saved.cli if saved else "") or profile.cli or "claude-code"
+    """The CLI by name and where it is; whether the choice is worth offering to keep.
+
+    ``tests`` asks for the CLI of the test author, which has no default of its own: the caller
+    only asks when ``--cli-testes`` or the saved ``cli_testes`` names one.
+    """
+    if tests:
+        name = args.cli_tests or (saved.cli_testes if saved else "")
+        path = saved.executavel_testes if saved else ""
+    else:
+        name = args.cli or (saved.cli if saved else "") or profile.cli or DEFAULT_CLI
+        path = saved.executavel if saved else ""
     if name not in KNOWN_CLIS:
         raise Refused(f"Não conheço a CLI `{name}`. As que conheço: {', '.join(KNOWN_CLIS)}.")
-    explicit = Path(saved.executavel) if saved and saved.executavel else None
+    explicit = Path(path) if path else None
     found = installed_clis(name, environ, profile.executaveis, explicit)
     if not found:
         raise Refused(
@@ -257,7 +269,16 @@ def summary_of(
             if fix
             else ()
         ),
-        f"  agente: {config.implementer.name} {config.implementer.version}",
+        *(
+            (
+                f"  agente que escreve os testes: {config.test_author.name} "
+                f"{config.test_author.version}",
+                f"  agente que implementa: {config.implementer.name} "
+                f"{config.implementer.version}",
+            )
+            if config.test_author
+            else (f"  agente: {config.implementer.name} {config.implementer.version}",)
+        ),
         f"  onde: {where}",
         f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
@@ -293,6 +314,16 @@ async def prepare(
         raise Refused(f"Só há {detection.disk_free_gib:.1f} GiB livres; a Forja pede ao menos 2.")
     name, choice, offer = choose_cli(args, saved, profile, environ, console)
     version = await prove(name, choice, environ, probe_cache(profile_dir), console)
+    author: tuple[str, ExecutorChoice, str] | None = None
+    tests_name = args.cli_tests or (saved.cli_testes if saved else "")
+    if fixing and tests_name and tests_name != name:
+        author_name, author_choice, _ = choose_cli(
+            args, saved, profile, environ, console, tests=True
+        )
+        author_version = await prove(
+            author_name, author_choice, environ, probe_cache(profile_dir), console
+        )
+        author = (author_name, author_choice, author_version)
     scope = args.scope or tuple(saved.escopo if saved else ())
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
@@ -303,6 +334,8 @@ async def prepare(
         agent_runs_tests=runs_tests, tasks=tasks,
         policy_version=policy_digest(policy),
         fix=fixing[0] if fixing else None,
+        test_author=ExecutorRef(name=author[0], path=str(author[1].path), version=author[2])
+        if author else None,
     )  # fmt: skip
     lines = summary_of(detection, config, scope, tokens, notes)
     execucao = Execucao(
@@ -311,6 +344,8 @@ async def prepare(
         criterios=fixing[2] if fixing else "",
         cli=name,
         executavel=str(choice.path),
+        cli_testes=author[0] if author else "",
+        executavel_testes=str(author[1].path) if author else "",
         escopo=list(scope),
         tokens=tokens,
         agente_roda_testes=runs_tests,

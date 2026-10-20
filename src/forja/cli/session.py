@@ -31,7 +31,7 @@ from forja.core.paths import forja_home, locks_dir, run_dir
 from forja.core.policy.config import EffectivePolicy, load_policy
 from forja.core.redaction import Redactor
 from forja.core.states import Level
-from forja.executors import ClaudeCodeAdapter
+from forja.executors import KNOWN_CLIS
 from forja.languages import (
     CSharpAdapter,
     GoAdapter,
@@ -173,6 +173,7 @@ def new_config(
     tasks: int = 5,
     policy_version: str = POLICY_VERSION,
     fix: FixRequest | None = None,
+    test_author: ExecutorRef | None = None,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
 
@@ -184,6 +185,7 @@ def new_config(
         implementer=ExecutorRef(
             name=executor_name, path=str(executor_path), version=executor_version
         ),
+        test_author=test_author,
         budget=Budget(tokens=tokens, tasks=tasks),
         forja_version=FORJA_VERSION,
         policy_version=policy_version,
@@ -314,7 +316,7 @@ async def _context(
 
     def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
         return ExecutorAgentRunner(
-            ClaudeCodeAdapter(),
+            KNOWN_CLIS[executor.name](),
             Path(executor.path),
             {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
             log,

@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.cli.console import Console
-from forja.cli.detect import KNOWN_CLIS, Detection, installed_clis
+from forja.cli.detect import Detection, installed_clis
 from forja.cli.prepare import LOW_DISK_GIB, Refused, prove
 from forja.cli.session import repo_python
 from forja.cli.settings import Perfil
 from forja.core.adapters.executor import locate_in_path
+from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, version_problem
 
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
@@ -138,7 +139,7 @@ async def run_checks(
     *,
     cli: str = "",
 ) -> list[Check]:
-    name = cli or profile.cli or "claude-code"
+    name = cli or profile.cli or DEFAULT_CLI
     checks = [
         Check("git", detection.git, "git no PATH" if detection.git else "git ausente", GIT_HELP),
         _module("ruff", "lint do código do projeto"),
@@ -178,6 +179,23 @@ async def run_checks(
         if detection.java:
             checks += _java_checks(environ)
     checks.append(await _agent_check(name, profile, environ, console, cache))
+    checks += await _other_clis(name, profile, environ)
+    return checks
+
+
+async def _other_clis(chosen: str, profile: Perfil, environ: Mapping[str, str]) -> list[Check]:
+    """The other known CLIs that are installed: a run can give one of them the tests. They are
+    only listed here; the proof of life runs when a run uses one."""
+    checks = []
+    for name, make in KNOWN_CLIS.items():
+        found = installed_clis(name, environ, profile.executaveis) if name != chosen else []
+        if found:
+            version = await executable_version(make(), found[0].path)
+            checks.append(
+                Check(
+                    f"CLI {name}", True, f"{found[0].path} ({version or '?'}) instalada", "", False
+                )
+            )
     return checks
 
 

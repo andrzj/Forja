@@ -1,15 +1,17 @@
 """The command line: few options, each there for something a person actually needs.
 
-``forja`` alone guides. The verbs are shortcuts for people who know what they want, and four
-options cover the rest: where to look (``--escopo``), which agent (``--cli``), what would be done
-(``--plano``) and a ready-made answer file for CI (``--config``). Everything else is in
-``execucao.toml`` or in the profile, so ``--help`` stays short. ``forja agente`` is for the agents
-and does not appear in the help.
+``forja`` alone guides. The verbs are shortcuts for people who know what they want, and a few
+options cover the rest: where to look (``--escopo``), which agent (``--cli``, and ``--cli-testes``
+for the one that writes the tests of a fix), what would be done (``--plano``) and a ready-made
+answer file for CI (``--config``). Everything else is in ``execucao.toml`` or in the profile, so
+``--help`` stays short. ``forja agente`` is for the agents and does not appear in the help.
 """
 
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from forja.executors import KNOWN_CLIS
 
 VERBS = {
     "refatorar": "melhora o código sem mudar o comportamento",
@@ -29,6 +31,7 @@ class Arguments:
     criteria: Path | None = None
     scope: tuple[str, ...] = ()
     cli: str = ""
+    cli_tests: str = ""
     plan_only: bool = False
     config: Path | None = None
     agent: tuple[str, ...] = field(default=())
@@ -41,7 +44,12 @@ def parser() -> argparse.ArgumentParser:
         "Sem argumentos, ele guia você.",
     )
     main.add_argument("--escopo", action="append", metavar="CAMINHO", help="só olhar este caminho")
-    main.add_argument("--cli", metavar="NOME", help="qual agente usar (claude-code)")
+    main.add_argument("--cli", metavar="NOME", help=f"qual agente usar ({', '.join(KNOWN_CLIS)})")
+    main.add_argument(
+        "--cli-testes",
+        metavar="NOME",
+        help="qual CLI escreve os testes do conserto (corrigir); padrão: a de --cli",
+    )
     main.add_argument("--plano", action="store_true", help="mostrar o plano, sem executar")
     main.add_argument(
         "--config", type=Path, metavar="ARQUIVO", help="rodar com execucao.toml, sem perguntas"
@@ -57,6 +65,7 @@ def parser() -> argparse.ArgumentParser:
             )
         item.add_argument("--escopo", action="append", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--cli", metavar="NOME", default=argparse.SUPPRESS)
+        item.add_argument("--cli-testes", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--plano", action="store_true", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
     agent = sub.add_parser("agente")  # for the agents: left out of the help
@@ -76,6 +85,7 @@ def parse(argv: list[str] | None = None) -> Arguments:
         criteria=getattr(found, "criterios", None),
         scope=tuple(found.escopo or ()),
         cli=found.cli or "",
+        cli_tests=found.cli_testes or "",
         plan_only=bool(found.plano),
         config=found.config,
         agent=(found.what, *found.rest) if command == "agente" else (),

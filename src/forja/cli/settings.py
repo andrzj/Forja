@@ -42,6 +42,8 @@ class Execucao(BaseModel):
     criterios: str = ""  # corrigir: the criteria file (CriteriaBody as JSON)
     cli: str = ""
     executavel: str = ""
+    cli_testes: str = ""  # corrigir: the CLI of the test author; empty is the implementer's
+    executavel_testes: str = ""
     escopo: list[str] = Field(default_factory=list)
     tokens: int = Field(default=DEFAULT_TOKENS, ge=1)
     agente_roda_testes: bool = True
