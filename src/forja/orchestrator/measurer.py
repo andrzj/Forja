@@ -111,9 +111,13 @@ class PipelineMeasurer:
     def _classify(self, path: str) -> FileClass:
         return self._adapters.classify(path)
 
-    def _active(self, worktree: Path) -> tuple[LanguageAdapter, ...]:
-        """The languages the project has; a project none of them claims is run as the first."""
-        found = tuple(adapter for adapter, _ in self._adapters.detect_all(worktree))
+    def _active(self, worktree: Path, changed: tuple[str, ...] = ()) -> tuple[LanguageAdapter, ...]:
+        """The languages the project has, and any that claims a file that changed: code is never
+        left out of a check because its manifest is not at the root. A project none of them
+        claims is run as the first."""
+        named = {adapter.language for adapter, _ in self._adapters.detect_all(worktree)}
+        named |= {a.language for p in changed if (a := self._adapters.for_file(p)) is not None}
+        found = tuple(a for a in self._adapters.languages() if a.language in named)
         return found or (next(self._adapters.languages()),)
 
     def _run_sink(self, level: Level, target: str, operation: str) -> LogEventSink:
@@ -278,7 +282,7 @@ class PipelineMeasurer:
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
         worktree = ctx.worktree
-        active = self._active(worktree)
+        active = self._active(worktree, production)
         share = CoverageShare()
         mutation = self._each(
             active,

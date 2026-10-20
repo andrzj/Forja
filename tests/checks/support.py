@@ -8,6 +8,7 @@ from typing import Any, cast
 from forja.core.adapters import (
     AdapterRegistry,
     CommandPlan,
+    Detection,
     EvidenceDraft,
     FileClass,
     LanguageAdapter,
@@ -230,6 +231,11 @@ class Stub(FakeLanguageAdapter):
         self.requests: list[OperationRequest] = []
         self.config_seen: list[bool] = []
         self._old = False
+
+    def detect(self, root: Path) -> Detection | None:
+        """Present where a file named ``<language>.marker`` is."""
+        marker = f"{self.language}.marker"
+        return Detection(self.language, (".",), (marker,)) if (root / marker).is_file() else None
 
     def classify(self, path: str) -> FileClass | None:
         return FileClass.PRODUCTION if path.endswith(self.suffix) else None

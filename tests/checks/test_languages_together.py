@@ -20,7 +20,8 @@ from forja.core.gates import (
     Rejected,
 )
 from forja.core.states import ExecutionState, Level
-from tests.checks.support import RUN, Stub, draft, sinks
+from forja.orchestrator.measurer import PipelineMeasurer
+from tests.checks.support import RUN, Stub, draft, registry_of, sinks
 from tests.core.events.support import FakeClock
 
 
@@ -139,3 +140,24 @@ def test_a_language_without_the_capability_is_not_applicable_and_never_runs() ->
 
     assert only_one == Approved() and not needs.ran and runs.ran
     assert none == NotApplicable(missing_capability="coverage")
+
+
+def test_a_language_that_claims_a_changed_file_is_checked_even_if_the_root_does_not_name_it(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "python.marker").write_text("", encoding="utf-8")
+    py = Stub("python", ".py", tmp_path)
+    go = Stub("go", ".go", tmp_path)
+    measurer = PipelineMeasurer(
+        adapters=registry_of(py, go),
+        git=None,  # type: ignore[arg-type]
+        log=None,  # type: ignore[arg-type]
+        workdir=tmp_path,
+        host_env={},
+        settings={},
+        lizard=("lizard",),
+    )
+
+    assert [a.language for a in measurer._active(tmp_path)] == ["python"]
+    assert [a.language for a in measurer._active(tmp_path, ("svc/main.go",))] == ["python", "go"]
+    assert [a.language for a in measurer._active(tmp_path, ("README.md",))] == ["python"]
