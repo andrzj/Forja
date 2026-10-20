@@ -117,3 +117,9 @@ file = "src/forja/checks/layout.py"
 function = "LintCheck._before"
 change = "True -> False"
 reason = "The copy leaves out every link through its ignore function, so no link reaches the copy and the symlinks flag has nothing to decide."
+
+[[suppress]]
+file = "src/forja/core/dependencies.py"
+function = "link_dependencies"
+change = "True -> False"
+reason = "The junction branch runs only on Windows and the gate runs on Linux, where a symbolic link always works; a test on Windows covers the link."
