@@ -10,6 +10,7 @@ from typing import Any
 
 from forja.core.adapters.executor import ErrorActivity, ErrorKind
 from forja.core.artifacts.llm_output import DeclaredTest
+from forja.core.dependencies import is_dependency
 from forja.core.events import OpenOperation
 from forja.core.gates import (
     Approved,
@@ -234,7 +235,7 @@ class ScriptedAgent:
 
         async def run() -> None:
             for entry in ctx.worktree.iterdir():
-                if entry.name == ".git":
+                if entry.name == ".git" or is_dependency(entry.name):
                     continue
                 shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
             shutil.copytree(source, ctx.worktree, dirs_exist_ok=True)

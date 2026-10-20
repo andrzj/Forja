@@ -5,6 +5,7 @@ and the pipeline in between is the real one (format, lint, build, tests, freeze,
 language whose tool chain is not installed is skipped.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -26,6 +27,8 @@ from forja.languages.go import GoAdapter
 from forja.languages.go.adapter import GO_ENVIRONMENT, find_golangci_lint
 from forja.languages.java import JavaAdapter
 from forja.languages.java.adapter import JAVA_ENVIRONMENT
+from forja.languages.typescript import TypeScriptAdapter
+from forja.languages.typescript.adapter import NODE_ENVIRONMENT
 from forja.orchestrator.config import ExecutorRef, FixRequest, Objective
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.ports import PlannedTask
@@ -40,6 +43,7 @@ from tests.checks.support import (
 from tests.languages.csharp.test_mutation import LIBRARY, SOLUTION
 from tests.languages.csharp.test_mutation import TESTS as CS_TESTS_PROJECT
 from tests.languages.java.test_mutation import POM
+from tests.languages.typescript.test_mutation import link
 from tests.orchestrator.fakes import ScriptedAgent, ScriptedPlanner
 from tests.orchestrator.harness import IDENTITY, World, minimal_env
 
@@ -166,7 +170,62 @@ JAVA = Project(
     env=frozenset({n.upper() for n in JAVA_ENVIRONMENT} | {"TEMP", "TMP", "SYSTEMROOT", "PATHEXT"}),
     adapter=lambda root: JavaAdapter(),
 )
-PROJECTS = [GO, CSHARP, JAVA]
+TS_PACKAGES = {"vitest": "5.0.5", "@vitest/coverage-v8": "5.0.5", "typescript": "5.9.3"}
+TS_CALC = "export function add(a: number, b: number): number {\n  return a - b;\n}\n"
+TS_TEST = (
+    'import {{ expect, test }} from "vitest";\nimport {{ add }} from "./calc";\n\n'
+    'test("{name}", () => {{\n  expect(add({a}, {b})).toBe({want});\n}});\n'
+)
+TYPESCRIPT = Project(
+    language="typescript",
+    tools=("node", "npm"),
+    base={
+        "package.json": json.dumps(
+            {"name": "calc", "type": "module", "devDependencies": TS_PACKAGES}
+        ),
+        "tsconfig.json": json.dumps(
+            {
+                "compilerOptions": {
+                    "strict": True,
+                    "target": "es2022",
+                    "module": "esnext",
+                    "moduleResolution": "bundler",
+                    "skipLibCheck": True,
+                }
+            }
+        ),
+        ".gitignore": "node_modules/\n.forja-coverage/\n",
+        "calc.ts": TS_CALC,
+        "zero.test.ts": TS_TEST.format(name="zero", a=0, b=0, want=0),
+    },
+    tests={"add.test.ts": TS_TEST.format(name="adds", a=2, b=3, want=5)},
+    declared=DeclaredTest(criterion_id=1, test_id="add.test.ts > adds", path="add.test.ts"),
+    fix={"calc.ts": TS_CALC.replace("a - b", "a + b")},
+    scope=("calc.ts",),
+    env=frozenset(NODE_ENVIRONMENT | {"TEMP", "TMP", "USERPROFILE", "SYSTEMROOT", "PATHEXT"}),
+    adapter=lambda root: TypeScriptAdapter(),
+)
+PROJECTS = [GO, CSHARP, JAVA, TYPESCRIPT]
+
+
+@pytest.fixture(scope="session")
+def ts_packages(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The TypeScript project's packages, installed once for the whole run."""
+    npm = shutil.which("npm")
+    if npm is None:
+        pytest.skip("typescript: the tool chain is not installed")
+    root = tmp_path_factory.mktemp("ts-packages")
+    (root / "package.json").write_text(TYPESCRIPT.base["package.json"], encoding="utf-8")
+    done = subprocess.run(
+        [npm, "install", "--no-audit", "--no-fund", "--loglevel=error"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        pytest.skip(f"typescript: the packages could not be installed: {done.stderr[-300:]}")
+    return root / "node_modules"
 
 
 def host_env(project: Project, base: Mapping[str, str]) -> dict[str, str]:
@@ -195,11 +254,13 @@ def commit(path: Path, files: Mapping[str, str], env: Mapping[str, str]) -> None
         subprocess.run([*git, *args], cwd=path, env=dict(env), check=True, capture_output=True)
 
 
-def world_of(project: Project, tmp_path: Path) -> World:
+def world_of(project: Project, tmp_path: Path, packages: Path | None = None) -> World:
     (tmp_path / "home").mkdir()
     repo = tmp_path / "repo"
     repo.mkdir()
     commit(repo, project.base, minimal_env(tmp_path / "home"))
+    if packages is not None:
+        link(packages, repo)
     found = World.at(tmp_path)
     found.config = found.config.model_copy(
         update={
@@ -211,8 +272,10 @@ def world_of(project: Project, tmp_path: Path) -> World:
     return found
 
 
-def repair(project: Project, tmp_path: Path, *fixes: Mapping[str, str]):  # type: ignore[no-untyped-def]
-    world = world_of(project, tmp_path)
+def repair(  # type: ignore[no-untyped-def]
+    project: Project, tmp_path: Path, packages: Path | None, *fixes: Mapping[str, str]
+):
+    world = world_of(project, tmp_path, packages)
     log = world.open()
     settings = {
         n: BLOCKING
@@ -255,6 +318,13 @@ def repair(project: Project, tmp_path: Path, *fixes: Mapping[str, str]):  # type
     return world, outcome, log
 
 
+def packages_of(project: Project, request: pytest.FixtureRequest) -> Path | None:
+    if project.language != "typescript":
+        return None
+    found: Path = request.getfixturevalue("ts_packages")
+    return found
+
+
 def why(log: EventLog) -> str:
     """The reasons attempts were rejected, for a failure to explain itself."""
     return "; ".join(
@@ -267,12 +337,12 @@ def why(log: EventLog) -> str:
 
 @pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.language)
 def test_a_repair_goes_through_every_gate_and_is_delivered(
-    project: Project, tmp_path: Path
+    project: Project, tmp_path: Path, request: pytest.FixtureRequest
 ) -> None:
     if any(shutil.which(tool) is None for tool in project.tools):
         pytest.skip(f"{project.language}: the tool chain is not installed")
 
-    world, outcome, log = repair(project, tmp_path)
+    world, outcome, log = repair(project, tmp_path, packages_of(project, request))
 
     assert outcome.state is ExecutionState.DELIVERED, log.state
     assert log.state.state_of(Level.TASK, "t1") is TaskState.INTEGRATED, why(log)
@@ -283,14 +353,16 @@ def test_a_repair_goes_through_every_gate_and_is_delivered(
 
 @pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.language)
 def test_an_implementer_that_touches_the_frozen_tests_is_sent_back(
-    project: Project, tmp_path: Path
+    project: Project, tmp_path: Path, request: pytest.FixtureRequest
 ) -> None:
     if any(shutil.which(tool) is None for tool in project.tools):
         pytest.skip(f"{project.language}: the tool chain is not installed")
     path, text = next(iter(project.tests.items()))
     tampered = {**project.fix, path: text + "\n"}
 
-    _, outcome, log = repair(project, tmp_path, tampered, project.fix)
+    _, outcome, log = repair(
+        project, tmp_path, packages_of(project, request), tampered, project.fix
+    )
 
     assert outcome.state is ExecutionState.DELIVERED, log.state
     rejected = log.state.transition_payload(Level.ATTEMPT, "t1-a1", AttemptState.REJECTED)
