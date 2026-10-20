@@ -44,7 +44,12 @@ ENVIRONMENT = frozenset(
 )  # fmt: skip
 
 # Overrides (``-c key=value``) for what a repository or a profile could otherwise inject.
-OVERRIDES = ("project_doc_max_bytes=0", "features.hooks=false")
+OVERRIDES = (
+    "project_doc_max_bytes=0",
+    "features.hooks=false",
+    "sandbox_workspace_write.network_access=false",
+    "sandbox_workspace_write.writable_roots=[]",
+)
 
 
 class CodexAdapter:

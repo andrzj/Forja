@@ -60,6 +60,8 @@ def test_nothing_of_the_repository_or_the_session_is_read_or_kept(tmp_path: Path
     assert "--ignore-rules" in argv
     assert "project_doc_max_bytes=0" in argv
     assert "features.hooks=false" in argv
+    assert "sandbox_workspace_write.network_access=false" in argv
+    assert "sandbox_workspace_write.writable_roots=[]" in argv
 
 
 @pytest.mark.parametrize(("can_edit", "sandbox"), [(True, "workspace-write"), (False, "read-only")])
