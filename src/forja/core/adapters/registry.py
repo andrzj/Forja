@@ -68,6 +68,13 @@ class AdapterRegistry:
                 found.append((adapter, detection))
         return found
 
+    def for_file(self, path: str) -> LanguageAdapter | None:
+        """The first adapter that claims the file, or ``None`` when nobody does."""
+        for adapter in self._languages.values():
+            if adapter.classify(path) is not None:
+                return adapter
+        return None
+
     def classify(self, path: str) -> FileClass:
         """The first adapter that claims the file decides; unclaimed files are ``OTHER``."""
         for adapter in self._languages.values():

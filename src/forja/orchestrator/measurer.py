@@ -18,7 +18,7 @@ from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_function
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
-from forja.checks.layout import SOURCE_SUFFIXES, FormatCheck, LintCheck, violations
+from forja.checks.layout import FormatCheck, LintCheck, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.pass_through import PassThroughCheck
@@ -28,6 +28,7 @@ from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
+    AdapterRegistry,
     CommandPlan,
     FileClass,
     LanguageAdapter,
@@ -67,7 +68,7 @@ class PipelineMeasurer:
     def __init__(
         self,
         *,
-        adapter: LanguageAdapter,
+        adapters: AdapterRegistry,
         git: GitAt,
         log: EventLog,
         workdir: Path,
@@ -78,7 +79,8 @@ class PipelineMeasurer:
         gitleaks: tuple[str, ...] = ("gitleaks",),
         timeouts: Mapping[str, float] | None = None,
     ) -> None:
-        self._adapter = adapter
+        self._adapters = adapters
+        self._adapter = next(adapters.languages())  # the one every tool is still asked of
         self._git = git
         self._log = log
         self._workdir = workdir
@@ -107,7 +109,11 @@ class PipelineMeasurer:
         )
 
     def _classify(self, path: str) -> FileClass:
-        return self._adapter.classify(path) or FileClass.OTHER
+        return self._adapters.classify(path)
+
+    def _owns(self, path: str) -> bool:
+        """Whether the adapter the tools are asked of claims the file."""
+        return self._adapter.classify(path) is not None
 
     def _run_sink(self, level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(self._log, level, target, operation)
@@ -220,11 +226,7 @@ class PipelineMeasurer:
 
     async def _production_files(self, worktree: Path) -> tuple[str, ...]:
         listed = await self._git.at(worktree).lines("ls-files")
-        return tuple(
-            p
-            for p in listed
-            if p.endswith(SOURCE_SUFFIXES) and self._classify(p) is FileClass.PRODUCTION
-        )
+        return tuple(p for p in listed if self._classify(p) is FileClass.PRODUCTION)
 
     async def _complexity(
         self, tools: Tools, worktree: Path, files: tuple[str, ...]
@@ -253,13 +255,12 @@ class PipelineMeasurer:
     ) -> PipelineOutcome:
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
-        before = await read_before(git, changes, SOURCE_SUFFIXES)
+        own = self._owns
+        before = await read_before(git, changes, own)
         # an extra test stage judges the code the implementer committed, read against what it was
         base = await self._code_base(git, ctx.task.reviews)
         code = changes if base == HEAD else await read_changes(git, base)
-        code_before = (
-            before if base == HEAD else await read_before(git, code, SOURCE_SUFFIXES, base)
-        )
+        code_before = before if base == HEAD else await read_before(git, code, own, base)
         before_shapes = await read_before(git, code, SHAPE_SUFFIXES, base)
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
@@ -272,8 +273,8 @@ class PipelineMeasurer:
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks
             ),
-            FormatCheck(tools, adapter, worktree, changes),
-            LintCheck(tools, adapter, worktree, changes, before),
+            FormatCheck(tools, adapter, worktree, changes, own),
+            LintCheck(tools, adapter, worktree, changes, before, own),
             BuildCheck(tools, adapter, worktree),
             self._tests_check(ctx, tools, expectations, unstable, passing),
             MutationCheck(tools, adapter, worktree, code, production, self._env, share=share),

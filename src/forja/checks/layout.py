@@ -2,6 +2,7 @@
 
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from forja.checks.tooling import Tools
 from forja.core.adapters import EvidenceDraft, LanguageAdapter, Operation, OperationRequest
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 
-SOURCE_SUFFIXES = (".py", ".pyi")
 LINT_CONFIG = ("pyproject.toml", "ruff.toml", ".ruff.toml", "setup.cfg")
 
 
@@ -23,6 +23,7 @@ class FormatCheck:
     adapter: LanguageAdapter
     worktree: Path
     changes: Changes
+    accepts: Callable[[str], bool]  # the files the adapter formats
     id: str = "format"
     gate: int = 3
     requires: frozenset[str] = frozenset()
@@ -31,7 +32,7 @@ class FormatCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        files = self.changes.current(SOURCE_SUFFIXES)
+        files = self.changes.current(self.accepts)
         if not files:
             return Approved()
         request = OperationRequest(root=self.worktree, files=files, check_only=True)
@@ -70,6 +71,7 @@ class LintCheck:
     worktree: Path
     changes: Changes
     before: dict[str, str]  # the parent commit's text of the changed files, by old path
+    accepts: Callable[[str], bool]  # the files the adapter lints
     id: str = "lint"
     gate: int = 3
     requires: frozenset[str] = frozenset()
@@ -78,7 +80,7 @@ class LintCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        files = self.changes.current(SOURCE_SUFFIXES)
+        files = self.changes.current(self.accepts)
         if not files:
             return Approved()
         overrides = overrides_from(self.adapter, data.values)

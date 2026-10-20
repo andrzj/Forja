@@ -120,3 +120,14 @@ def test_the_first_adapter_that_claims_a_file_decides_and_unclaimed_files_are_ot
     assert registry.classify("package-lock.json") is FileClass.OTHER
     assert registry.classify("") is FileClass.OTHER
     assert AdapterRegistry().classify("anything.py") is FileClass.OTHER
+
+
+def test_a_file_belongs_to_the_first_adapter_that_claims_it() -> None:
+    registry = AdapterRegistry()
+    python, go = FakeLanguageAdapter(), GoAdapter()
+    registry.register_language(python)
+    registry.register_language(go)
+
+    assert registry.for_file("pkg/main.go") is go
+    assert registry.for_file("pkg/main.py") is python
+    assert registry.for_file("package-lock.json") is None

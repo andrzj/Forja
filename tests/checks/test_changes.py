@@ -67,6 +67,7 @@ def test_only_files_that_exist_now_and_have_the_suffix_are_current() -> None:
 
     assert changes.current((".py",)) == ("a.py", "d.py")
     assert changes.current() == ("a.py", "c.md", "d.py")
+    assert changes.current(lambda path: not path.endswith(".py")) == ("c.md",)
 
 
 @pytest.mark.parametrize(
@@ -260,6 +261,9 @@ def test_the_parent_commits_text_is_read_by_the_old_path_and_written_elsewhere(
     write_files(contents, tmp_path / "out")
 
     assert contents == {"a.py": "one\ntwo\n"}
+    assert asyncio.run(read_before(repo.git, changes, lambda path: path == "notes.md")) == {
+        "notes.md": "x\n"
+    }
     assert (tmp_path / "out" / "a.py").read_text(encoding="utf-8") == "one\ntwo\n"
 
 

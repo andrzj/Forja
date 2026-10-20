@@ -8,9 +8,18 @@ from pathlib import Path
 import pytest
 
 from forja.core.states import AttemptState, ExecutionState, Level, TaskState
+from forja.languages.python import PythonAdapter
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.ports import PlannedTask
-from tests.checks.support import BLOCKING, FAKE_GITLEAKS, LIZARD, OBSERVATION, PREMISE, SAMPLE
+from tests.checks.support import (
+    BLOCKING,
+    FAKE_GITLEAKS,
+    LIZARD,
+    OBSERVATION,
+    PREMISE,
+    SAMPLE,
+    registry_of,
+)
 from tests.orchestrator.fakes import ScriptedAgent, ScriptedPlanner
 from tests.orchestrator.harness import IDENTITY, World, minimal_env
 
@@ -59,9 +68,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
     log = world.open()
     settings = {n: BLOCKING for n in ("scope", "secrets", "format", "lint", "build", "tests")}
     measurer = PipelineMeasurer(
-        adapter=__import__("forja.languages.python", fromlist=["PythonAdapter"]).PythonAdapter(
-            cache_dir=world.root / "pycache"
-        ),
+        adapters=registry_of(PythonAdapter(cache_dir=world.root / "pycache")),
         git=world.repo.git,
         log=log,
         workdir=world.run_dir / "measure",

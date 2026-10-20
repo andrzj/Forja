@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
+from forja.core.adapters import AdapterRegistry
 from forja.core.adapters.executor import RolePermissions, locate_in_path
 from forja.core.artifacts.models import Producer
 from forja.core.authorization import ProtectedBranches
@@ -63,6 +64,13 @@ IN_USER_ENVIRONMENT = Confirmation(
 def git_base_environment(environ: Mapping[str, str]) -> dict[str, str]:
     wanted = {name.upper() for name in GIT_ENVIRONMENT}
     return {name: value for name, value in environ.items() if name.upper() in wanted}
+
+
+def languages(repo: Path) -> AdapterRegistry:
+    """The language adapters of a run."""
+    registry = AdapterRegistry()
+    registry.register_language(PythonAdapter(python=repo_python(repo)))
+    return registry
 
 
 def repo_python(repo: Path) -> tuple[str, ...]:
@@ -261,7 +269,7 @@ async def _context(
         return LogEventSink(log, level, target, operation)
 
     measurer = PipelineMeasurer(
-        adapter=PythonAdapter(python=repo_python(repo)),
+        adapters=languages(repo),
         git=git,
         log=log,
         workdir=directory / "measure",

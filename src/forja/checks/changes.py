@@ -1,6 +1,7 @@
 """What an attempt changed, read from git once and shared by every check."""
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -15,6 +16,13 @@ class ChangeKind(StrEnum):
     MODIFIED = "M"
     DELETED = "D"
     RENAMED = "R"
+
+
+Selector = tuple[str, ...] | Callable[[str], bool]  # suffixes (none: all), or a predicate
+
+
+def selects(which: Selector, path: str) -> bool:
+    return which(path) if callable(which) else path.endswith(which or ("",))
 
 
 @dataclass(frozen=True)
@@ -42,11 +50,9 @@ class Changes:
     patch: tuple[str, ...]  # the diff with no context, for scanners that read text
     ignored: tuple[str, ...] = ()  # files git ignores that are in the tree anyway
 
-    def current(self, suffixes: tuple[str, ...] = ()) -> tuple[str, ...]:
-        """Paths that exist after the change, optionally only those with one of the suffixes."""
-        return tuple(
-            c.path for c in self.files if c.exists_now and c.path.endswith(suffixes or ("",))
-        )
+    def current(self, which: Selector = ()) -> tuple[str, ...]:
+        """Paths that exist after the change, optionally only the ones ``which`` selects."""
+        return tuple(c.path for c in self.files if c.exists_now and selects(which, c.path))
 
 
 class Git(Protocol):
@@ -156,13 +162,13 @@ def added_lines(patch: tuple[str, ...]) -> list[AddedLine]:
 
 
 async def read_before(
-    git: Git, changes: Changes, suffixes: tuple[str, ...], base: str = "HEAD"
+    git: Git, changes: Changes, which: Selector, base: str = "HEAD"
 ) -> dict[str, str]:
     """The parent commit's (or ``base``'s) text of every changed file that had one, by old path."""
     contents = {}
     for change in changes.files:
         before = change.before
-        if before is not None and before.endswith(suffixes):
+        if before is not None and selects(which, before):
             text = "\n".join(await git.lines("show", f"{base}:{before}"))
             contents[before] = text + "\n"
     return contents

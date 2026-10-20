@@ -5,6 +5,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from forja.core.adapters import AdapterRegistry, LanguageAdapter
 from forja.core.events import EventLog
 from forja.core.gates import CheckSettings, InconclusivePolicy, Mode
 from forja.core.process import ProcessIdentity
@@ -42,6 +43,13 @@ def deep(name: str, branches: int) -> str:
     """A function with ``branches + 1`` as its cyclomatic complexity."""
     body = "".join(f"    if n == {i}:\n        return {i}\n" for i in range(branches))
     return f"def {name}(n: int) -> int:\n{body}    return -1\n"
+
+
+def registry_of(*adapters: LanguageAdapter) -> AdapterRegistry:
+    registry = AdapterRegistry()
+    for adapter in adapters:
+        registry.register_language(adapter)
+    return registry
 
 
 class Run:
@@ -148,7 +156,7 @@ class Scene:
             "module_depth": OBSERVATION,
         }
         return PipelineMeasurer(
-            adapter=self.adapter,
+            adapters=registry_of(self.adapter),
             git=self.repo.git,
             log=self.log,
             workdir=workdir or self.work / "run",
