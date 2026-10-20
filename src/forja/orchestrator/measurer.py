@@ -24,7 +24,7 @@ from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.red_green import RedGreenCheck
-from forja.checks.scope import ScopeCheck
+from forja.checks.scope import TEST_AUTHOR_CLASSES, ScopeCheck
 from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.tooling import Tools
@@ -240,6 +240,14 @@ class PipelineMeasurer:
             metrics["functions"] = float(len(complexity))
         return metrics
 
+    def is_test(self, path: str) -> bool:
+        return self._classify(path) in TEST_AUTHOR_CLASSES
+
+    async def test_files(self, worktree: Path) -> tuple[str, ...]:
+        """The tracked files the language adapters class as tests or fixtures."""
+        listed = await self._git.at(worktree).lines("ls-files")
+        return tuple(p for p in listed if self.is_test(p))
+
     async def _production_files(self, worktree: Path) -> tuple[str, ...]:
         listed = await self._git.at(worktree).lines("ls-files")
         return tuple(p for p in listed if self._classify(p) is FileClass.PRODUCTION)
@@ -325,7 +333,7 @@ class PipelineMeasurer:
         )
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
-            *self._frozen(ctx, changes),
+            *await self._frozen(ctx, changes),
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks
             ),
@@ -352,13 +360,18 @@ class PipelineMeasurer:
             raise RuntimeError(f"the work of stage {stage} is not in the history")
         return f"{found[0]}^"
 
-    def _frozen(self, ctx: AttemptContext, changes: Changes) -> list[Check]:
+    async def _frozen(self, ctx: AttemptContext, changes: Changes) -> list[Check]:
         task = ctx.task
-        if task.reviews and task.test_root:  # an extra test stage only adds tests
-            return [AppendOnlyCheck(changes, task.test_root)]
-        if not (task.frozen_digest and task.test_root):
+        if task.reviews:  # an extra test stage only adds tests
+            return [AppendOnlyCheck(changes, task.test_root, self.is_test)]
+        if not task.frozen_digest:
             return []
-        return [FreezeCheck(ctx.worktree, changes, task.test_root, task.frozen_digest)]
+        tests = await self.test_files(ctx.worktree)
+        return [
+            FreezeCheck(
+                ctx.worktree, changes, task.test_root, task.frozen_digest, tests, self.is_test
+            )
+        ]
 
     def _tests_check(
         self,

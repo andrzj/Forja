@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.freeze import AppendOnlyCheck, FreezeCheck, tree_digest
+from forja.checks.freeze import AppendOnlyCheck, FreezeCheck, frozen_digest_of
 from forja.core.gates import Approved, GateInput, Rejected
 
 NOTHING = Changes((), 0, ())
@@ -21,7 +21,7 @@ def frozen(tmp_path: Path) -> str:
     write(tmp_path, "tests/test_a.py", "def test_a(): ...\n")
     write(tmp_path, "tests/data/case.json", "{}")
     write(tmp_path, "src/a.py", "x = 1\n")
-    return tree_digest(tmp_path, "tests")
+    return frozen_digest_of(tmp_path, "tests", ())
 
 
 def judge(tmp_path: Path, digest: str, changes: Changes = NOTHING) -> list[str] | None:
@@ -121,3 +121,72 @@ def test_an_extra_test_stage_may_not_change_move_or_delete_an_existing_test() ->
         "tests/test_a.py",
         "tests/test_b.py",
     ]
+
+
+def beside_the_code(name: str) -> bool:
+    return name.endswith("_test.go")
+
+
+def frozen_beside_the_code(tmp_path: Path) -> tuple[str, tuple[str, ...]]:
+    write(tmp_path, "pkg/a.go", "package pkg\n")
+    write(tmp_path, "pkg/a_test.go", "package pkg\n")
+    tests = ("pkg/a_test.go",)
+    return frozen_digest_of(tmp_path, "", tests), tests
+
+
+def judge_beside_the_code(
+    tmp_path: Path, digest: str, tests: tuple[str, ...], changes: Changes = NOTHING
+) -> list[str] | None:
+    check = FreezeCheck(tmp_path, changes, "", digest, tests, beside_the_code)
+    result = asyncio.run(check.evaluate(DATA))
+    if isinstance(result, Approved):
+        return None
+    assert isinstance(result, Rejected)
+    return [f.describe() for f in result.findings]
+
+
+def test_tests_beside_the_code_are_frozen_without_a_tests_root(tmp_path: Path) -> None:
+    digest, tests = frozen_beside_the_code(tmp_path)
+    write(tmp_path, "pkg/a.go", "package pkg // changed\n")
+    assert judge_beside_the_code(tmp_path, digest, tests) is None
+
+    write(tmp_path, "pkg/a_test.go", "package pkg // changed\n")
+    changes = Changes((Change(ChangeKind.MODIFIED, "pkg/a_test.go"),), 1, ())
+
+    assert judge_beside_the_code(tmp_path, digest, tests, changes) == [
+        "a frozen test file was changed [pkg/a_test.go]"
+    ]
+
+
+def test_a_test_file_added_beside_the_code_is_a_change(tmp_path: Path) -> None:
+    digest, _ = frozen_beside_the_code(tmp_path)
+    write(tmp_path, "pkg/b_test.go", "package pkg\n")
+    changes = Changes((Change(ChangeKind.ADDED, "pkg/b_test.go"),), 1, ())
+
+    assert judge_beside_the_code(tmp_path, digest, ("pkg/a_test.go", "pkg/b_test.go"), changes) == [
+        "a frozen test file was changed [pkg/b_test.go]"
+    ]
+
+
+def test_a_test_renamed_to_a_production_name_is_a_change(tmp_path: Path) -> None:
+    digest, _ = frozen_beside_the_code(tmp_path)
+    (tmp_path / "pkg" / "a_test.go").rename(tmp_path / "pkg" / "b.go")
+    changes = Changes((Change(ChangeKind.RENAMED, "pkg/b.go", "pkg/a_test.go"),), 1, ())
+
+    assert judge_beside_the_code(tmp_path, digest, (), changes) == [
+        "a frozen test file was changed [pkg/a_test.go]"
+    ]
+
+
+def test_an_extra_test_stage_beside_the_code_may_only_add_test_files() -> None:
+    def judged(*changes: Change) -> list[str] | None:
+        check = AppendOnlyCheck(Changes(changes, 0, ()), "", beside_the_code)
+        result = asyncio.run(check.evaluate(DATA))
+        if isinstance(result, Approved):
+            return None
+        assert isinstance(result, Rejected)
+        return [f.target for f in result.findings]
+
+    assert judged(Change(ChangeKind.ADDED, "pkg/b_test.go")) is None
+    assert judged(Change(ChangeKind.MODIFIED, "pkg/a_test.go")) == ["pkg/a_test.go"]
+    assert judged(Change(ChangeKind.MODIFIED, "pkg/a.go")) is None

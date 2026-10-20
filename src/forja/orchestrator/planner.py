@@ -10,7 +10,7 @@ from pathlib import Path
 from forja.checks.complexity import DEFAULT_MAX_CCN
 from forja.core.artifacts.models import Producer
 from forja.orchestrator.config import Budget, FixRequest
-from forja.orchestrator.ports import Baseline, PlannedTask
+from forja.orchestrator.ports import TEST_ROOT, Baseline, PlannedTask
 
 # (file, function) -> cyclomatic complexity
 Functions = Callable[[Path], Awaitable[Mapping[tuple[str, str], int]]]
@@ -38,11 +38,6 @@ class ComplexityPlanner:
             )
             for _, file, name in worst[: budget.tasks]
         ]
-
-
-TEST_ROOT = (
-    "tests"  # where the test author may put tests; the Python layout the 3a repositories use
-)
 
 
 class FixPlanner:

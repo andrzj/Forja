@@ -94,7 +94,7 @@ AUTHOR_INSTRUCTIONS = """\
 You are writing tests for a defect. You do not fix it and you do not touch production code: the
 defect stays, and your tests must show it.
 
-{commands}Read the files you need and write the tests with the edit tools, only under `{test_root}`.
+{commands}Read the files you need and write the tests with the edit tools, only {tests_in}.
 Write at least one test for each numbered criterion of the task. Every test you declare must FAIL
 on the code as it is now, by an assertion about the behaviour in the criterion. Your work is
 rejected if a declared test passes now, if it errors out (an import, a syntax or a collection
@@ -116,9 +116,9 @@ had to guess. Then answer with one short sentence.
 """
 
 FIX_INSTRUCTIONS = """\
-You are fixing a defect. The tests under `{test_root}` were written for it and are frozen: they
-fail now and must pass when you are done. Do not change, add, move or remove anything under
-`{test_root}`, and do not add dependencies. Change only what the defect needs.
+You are fixing a defect. The tests {tests_in} were written for it and are frozen: they
+fail now and must pass when you are done. Do not change, add, move or remove anything
+{tests_in}, and do not add dependencies. Change only what the defect needs.
 
 {commands}Read the tests and the files you need and change the code with the edit tools.
 
@@ -201,17 +201,16 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
     result = redactor.redact(items)
     author = task.role is Producer.TEST_AUTHOR
     commands = FACADE_COMMANDS if facade else NO_COMMANDS
+    tests_in = f"under `{task.test_root}`" if task.test_root else "in the project's test files"
     template = (
-        AUTHOR_INSTRUCTIONS if author else FIX_INSTRUCTIONS if task.test_root else INSTRUCTIONS
+        AUTHOR_INSTRUCTIONS if author else FIX_INSTRUCTIONS if task.frozen_digest else INSTRUCTIONS
     )
     parts = [
         f"# Task\n\n{task.intent}\n",
-        template.format(
-            agent_dir=AGENT_DIR, output=OUTPUT, commands=commands, test_root=task.test_root
-        ),
+        template.format(agent_dir=AGENT_DIR, output=OUTPUT, commands=commands, tests_in=tests_in),
         "## What you may change\n",
         (
-            f"Only inside: `{task.test_root}`. The production files below are for reading."
+            f"Only {tests_in}. The production files below are for reading."
             if author
             else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
         ),

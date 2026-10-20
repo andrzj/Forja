@@ -84,6 +84,15 @@ def languages(repo: Path) -> AdapterRegistry:
     return registry
 
 
+def _test_root(configured: str | None, registry: AdapterRegistry, repo: Path) -> str:
+    """Where the test author writes: the policy's, else Python's ``tests`` for a Python-only
+    repository. The other languages keep tests beside the code, so no directory holds them."""
+    if configured is not None:
+        return configured
+    found = {adapter.language for adapter, _ in registry.detect_all(repo)}
+    return PythonAdapter.test_root if found == {PythonAdapter.language} else ""
+
+
 def repo_python(repo: Path) -> tuple[str, ...]:
     """The interpreter of the repository itself, which has what its tests import."""
     for relative in (".venv/Scripts/python.exe", ".venv/bin/python", "venv/Scripts/python.exe",
@@ -279,8 +288,9 @@ async def _context(
     def sinks(level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(log, level, target, operation)
 
+    registry = languages(repo)
     measurer = PipelineMeasurer(
-        adapters=languages(repo),
+        adapters=registry,
         git=git,
         log=log,
         workdir=directory / "measure",
@@ -316,11 +326,12 @@ async def _context(
 
     agents: dict[Producer, AgentRunner] = {}
     planner: Planner = ComplexityPlanner(functions)
+    test_root = _test_root(policy.test_root, registry, repo)
     if config.fix is not None:
         agents[Producer.TEST_AUTHOR] = runner(
             config.test_author or config.implementer, Producer.TEST_AUTHOR
         )
-        planner = FixPlanner(config.fix, config.scope, policy.test_root or PythonAdapter.test_root)
+        planner = FixPlanner(config.fix, config.scope, test_root)
     return RunContext(
         journal=Journal(log),
         config=config,
@@ -331,5 +342,7 @@ async def _context(
         planner=planner,
         meter=Meter(config.budget.tokens, log.path, enforce=not interactive),
         run_dir=directory,
+        test_files=measurer.test_files,
+        test_root=test_root,
         max_network_probes=None if interactive else NETWORK_PROBES_WITHOUT_A_PERSON,
     )

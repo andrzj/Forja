@@ -14,6 +14,7 @@ from forja.core.manifest import (
     build_manifest,
     diff_manifests,
     find_violations,
+    manifest_of,
 )
 
 
@@ -314,3 +315,13 @@ def test_a_difference_is_empty_only_when_nothing_was_created_modified_or_removed
     assert not ManifestDiff(("a",), (), ()).is_empty
     assert not ManifestDiff((), ("a",), ()).is_empty
     assert not ManifestDiff((), (), ("a",)).is_empty
+
+
+def test_a_manifest_of_listed_files_holds_those_that_exist_as_files(tmp_path: Path) -> None:
+    _write(tmp_path, "pkg/a_test.go", b"one")
+    _write(tmp_path, "pkg/b.go", b"two")
+
+    manifest = manifest_of(tmp_path, ("pkg/a_test.go", "pkg/gone_test.go", "pkg"))
+
+    assert set(manifest.entries) == {"pkg/a_test.go"}
+    assert manifest.entries["pkg/a_test.go"] == build_manifest(tmp_path).entries["pkg/a_test.go"]

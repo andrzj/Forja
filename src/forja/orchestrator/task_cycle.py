@@ -16,7 +16,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from forja.checks.freeze import tree_digest
+from forja.checks.freeze import frozen_digest_of
 from forja.core.adapters.executor import ErrorKind
 from forja.core.artifacts.models import Producer
 from forja.core.events.state import RunState
@@ -25,7 +25,6 @@ from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.config import Objective
 from forja.orchestrator.outcome import StopRun
-from forja.orchestrator.planner import TEST_ROOT
 from forja.orchestrator.ports import (
     AgentResult,
     AttemptContext,
@@ -214,7 +213,7 @@ class TaskCycle:
             author,
             stage_id=f"{info.task_id}-t{number}",
             attempt_prefix=f"{info.task_id}-t{number}a",
-            test_root=author.test_root or TEST_ROOT,
+            test_root=author.test_root or self._ctx.test_root,
             reviews=info.stage_id,
         )
 
@@ -253,7 +252,7 @@ class TaskCycle:
                 Level.STAGE,
                 info.stage_id,
                 StageState.COMMITTED,
-                payload=self._frozen(info, ctx.workspace.attempt_worktree(attempt)),
+                payload=await self._frozen(info, ctx.workspace.attempt_worktree(attempt)),
             )
         elif self._untested_by(attempt):
             await self._commit_attempt(info, attempt)
@@ -447,15 +446,15 @@ class TaskCycle:
             Level.STAGE,
             info.stage_id,
             StageState.COMMITTED,
-            payload=self._frozen(info, ctx.worktree),
+            payload=await self._frozen(info, ctx.worktree),
         )
 
-    @staticmethod
-    def _frozen(info: TaskInfo, worktree: Path) -> dict[str, JsonValue] | None:
+    async def _frozen(self, info: TaskInfo, worktree: Path) -> dict[str, JsonValue] | None:
         """The test author freezes its tests; the implementer must leave them as they are."""
-        if info.role is not Producer.TEST_AUTHOR or not info.test_root:
+        if info.role is not Producer.TEST_AUTHOR:
             return None
-        return {"frozen_digest": tree_digest(worktree, info.test_root)}
+        tests = await self._ctx.test_files(worktree)
+        return {"frozen_digest": frozen_digest_of(worktree, info.test_root, tests)}
 
     # -- infrastructure failures ----------------------------------------------------------------
 

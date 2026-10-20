@@ -63,7 +63,7 @@ def kinds(scene: Scene, **task: Any) -> list[type]:
     info = TaskInfo("t1", "t1-s", "x", (), 8, 400, **task)
     context = AttemptContext(info, "t1-a1", scene.repo.path, None)
     changes = asyncio.run(read_changes(scene.repo.git))
-    return [type(check) for check in scene.measurer._frozen(context, changes)]
+    return [type(check) for check in asyncio.run(scene.measurer._frozen(context, changes))]
 
 
 def test_a_stage_that_only_adds_tests_is_judged_by_what_it_added(scene: Scene) -> None:
@@ -74,9 +74,9 @@ def test_the_implementer_is_judged_by_what_the_test_author_froze(scene: Scene) -
     assert kinds(scene, test_root="tests", frozen_digest="abc") == [FreezeCheck]
 
 
-def test_nothing_is_checked_without_a_tests_root(scene: Scene) -> None:
-    assert kinds(scene, reviews="t1-s") == []
-    assert kinds(scene, frozen_digest="abc") == []
+def test_tests_beside_the_code_are_held_without_a_tests_root(scene: Scene) -> None:
+    assert kinds(scene, reviews="t1-s") == [AppendOnlyCheck]
+    assert kinds(scene, frozen_digest="abc") == [FreezeCheck]
 
 
 def test_nothing_is_checked_without_a_digest_to_hold_the_tests_to(scene: Scene) -> None:

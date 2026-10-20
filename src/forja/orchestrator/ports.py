@@ -189,8 +189,17 @@ class Workspace(Protocol):
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 
 
+TEST_ROOT = (
+    "tests"  # where the test author may put tests; the Python layout the 3a repositories use
+)
+
+
 async def _network_is_up() -> bool:
     return True
+
+
+async def _no_test_files(worktree: Path) -> Sequence[str]:
+    return ()
 
 
 @dataclass
@@ -211,6 +220,10 @@ class RunContext:
     probe_interval: float = 60.0
     max_network_probes: int | None = None  # None waits for the network as long as it takes
     agents: Mapping[Producer, AgentRunner] = field(default_factory=dict)
+    # the tracked test files of a worktree, for the digest the test author freezes; with none,
+    # only what lies under the task's ``test_root`` is frozen
+    test_files: Callable[[Path], Awaitable[Sequence[str]]] = _no_test_files
+    test_root: str = TEST_ROOT  # where a test author with no root of its own writes
 
     def runner(self, role: Producer) -> AgentRunner:
         return self.agents.get(role, self.agent)

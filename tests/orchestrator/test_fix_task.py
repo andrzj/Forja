@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from forja.checks.freeze import tree_digest
+from forja.checks.freeze import frozen_digest_of
 from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog
@@ -182,4 +182,4 @@ def test_the_implementer_is_told_what_the_test_author_froze(
     for name, text in TESTS.items():
         (tmp_path / "expected" / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / "expected" / name).write_text(text, encoding="utf-8")
-    assert second.frozen_digest == tree_digest(tmp_path / "expected", "tests")
+    assert second.frozen_digest == frozen_digest_of(tmp_path / "expected", "tests", ())

@@ -21,7 +21,7 @@ import pytest
 
 from forja.checks.build_and_tests import TestsCheck
 from forja.checks.changes import Changes
-from forja.checks.freeze import FreezeCheck, tree_digest
+from forja.checks.freeze import FreezeCheck, frozen_digest_of
 from forja.checks.red_green import RedGreenCheck
 from forja.core.adapters import FileClass
 from forja.core.adapters.executor import RolePermissions, find_executors
@@ -153,7 +153,7 @@ def test_the_real_cli_writes_the_tests_and_then_fixes_the_defect(
     assert asyncio.run(red.evaluate(data())) == Approved()
 
     # stage 2: the implementer makes them pass and leaves them as they are
-    frozen = tree_digest(worktree, planned.test_root)
+    frozen = frozen_digest_of(worktree, planned.test_root, ())
     info, attempt = stage(planned, Producer.IMPLEMENTER, frozen)
     call(Producer.IMPLEMENTER, info, attempt)
     freeze = FreezeCheck(worktree, Changes((), 0, ()), planned.test_root, frozen)

@@ -1,5 +1,6 @@
 """What a task's log says about its test author and about attempts sent back to it."""
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -102,17 +103,20 @@ def test_the_stage_waits_for_the_test_author_on_its_last_attempt_only(tmp_path: 
     assert cycle._returned(cycle.info("x1")) == "x1-a2"
 
 
-def freezing(worktree: Path, **task: Any) -> dict[str, JsonValue] | None:
+def freezing(cycle: TaskCycle, worktree: Path, **task: Any) -> dict[str, JsonValue] | None:
     info = TaskInfo("x1", "x1-t", "x", (), 8, 400, **task)
-    return TaskCycle._frozen(info, worktree)
+    return asyncio.run(cycle._frozen(info, worktree))
 
 
-def test_only_the_test_author_with_a_tests_root_freezes_tests(tmp_path: Path) -> None:
+def test_only_the_test_author_freezes_tests(tmp_path: Path) -> None:
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_a.py").write_text("x = 1\n", encoding="utf-8")
+    cycle, _ = cycle_for(tmp_path / "run")
 
-    frozen = freezing(tmp_path, role=Producer.TEST_AUTHOR, test_root="tests")
+    frozen = freezing(cycle, tmp_path, role=Producer.TEST_AUTHOR, test_root="tests")
 
     assert frozen is not None and frozen["frozen_digest"]
-    assert freezing(tmp_path, role=Producer.IMPLEMENTER, test_root="tests") is None
-    assert freezing(tmp_path, role=Producer.TEST_AUTHOR) is None
+    assert freezing(cycle, tmp_path, role=Producer.IMPLEMENTER, test_root="tests") is None
+    assert (
+        freezing(cycle, tmp_path, role=Producer.TEST_AUTHOR) is not None
+    )  # no root: the files count

@@ -112,6 +112,18 @@ def _scan(
             )
 
 
+def manifest_of(root: Path, paths: Collection[str]) -> Manifest:
+    """Manifest of the listed regular files under ``root``; any other path is left out."""
+    entries: dict[str, ManifestEntry] = {}
+    for relative in paths:
+        path = root / relative
+        if path.is_file() and not path.is_symlink():
+            entries[relative] = ManifestEntry(
+                relative, EntryKind.FILE, _hash_file(str(path)), _executable_bit(path)
+            )
+    return Manifest(entries)
+
+
 def _hash_file(path: str) -> str:
     with open(path, "rb") as handle:
         return hashlib.file_digest(handle, hashlib.sha256).hexdigest()
@@ -119,6 +131,10 @@ def _hash_file(path: str) -> str:
 
 def _is_executable(entry: os.DirEntry[str]) -> bool:
     return _HAS_EXECUTE_BIT and bool(entry.stat().st_mode & stat.S_IXUSR)
+
+
+def _executable_bit(path: Path) -> bool:
+    return _HAS_EXECUTE_BIT and bool(path.stat().st_mode & stat.S_IXUSR)
 
 
 def diff_manifests(before: Manifest, after: Manifest) -> ManifestDiff:
