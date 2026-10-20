@@ -22,7 +22,7 @@ from forja.core.adapters import (
 )
 from forja.core.events import EventLog
 from forja.core.evidence import Target, TargetKind
-from forja.core.gates import Approved, GateInput, NotApplicable, Rejected
+from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
 from forja.core.states import ExecutionState, Level
 from tests.checks.support import RUN, registry_of, sinks
 from tests.core.adapters.fakes import FakeLanguageAdapter
@@ -181,7 +181,7 @@ def test_the_old_text_is_linted_with_the_config_its_adapter_names(
     assert py.config_seen == [True]
 
 
-def test_a_linter_that_cannot_run_on_the_old_text_leaves_its_files_alone(
+def test_a_linter_that_cannot_run_on_the_old_text_is_inconclusive_not_a_pass(
     tools: Tools, tmp_path: Path
 ) -> None:
     java = Stub(
@@ -189,4 +189,7 @@ def test_a_linter_that_cannot_run_on_the_old_text_leaves_its_files_alone(
     )
     check = LintCheck(tools, registry_of(java), tmp_path, changes_of("A.java"), {"A.java": "x\n"})
 
-    assert asyncio.run(check.evaluate(data())) == NotApplicable(missing_capability="lint")
+    result = asyncio.run(check.evaluate(data()))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "lint: the java linter cannot run on the old files"

@@ -21,7 +21,15 @@ from forja.core.adapters import (
     OperationRequest,
     Parsed,
 )
-from forja.core.gates import Approved, Finding, GateInput, GateResult, NotApplicable
+from forja.core.gates import (
+    Approved,
+    Finding,
+    GateInput,
+    GateResult,
+    Inconclusive,
+    InconclusiveReason,
+    NotApplicable,
+)
 
 
 def lint_config(adapter: LanguageAdapter) -> tuple[str, ...]:
@@ -109,8 +117,8 @@ class LintCheck:
     """Only violations the attempt added reprove: the old ones are a task for the planner.
 
     A violation is counted per file and rule, so moving code inside a file, or renaming the file,
-    does not make an old violation look new. An adapter whose linter cannot run on the old version
-    of the files has nothing to compare with, so its files are left alone.
+    does not make an old violation look new. An adapter whose linter runs on the new files but not
+    on the old version has nothing to compare with: the answer is inconclusive, never a pass.
     """
 
     tools: Tools
@@ -141,7 +149,12 @@ class LintCheck:
                 continue
             was = await self._before(adapter, overrides)
             if was is None:
-                continue
+                raise Undecided(
+                    Inconclusive(
+                        reason=InconclusiveReason.TOOL_FAILED,
+                        detail=f"lint: the {adapter.language} linter cannot run on the old files",
+                    )
+                )
             offered = True
             for (path, rule), count in sorted(violations(parsed.drafts).items()):
                 old = was[(self._origin(path), rule)]
@@ -165,7 +178,8 @@ class LintCheck:
         self, adapter: LanguageAdapter, overrides: dict[str, dict[str, tuple[str, ...]]]
     ) -> Counter[tuple[str, str]] | None:
         """Lint of the parent commit's version of the adapter's files, in a private directory;
-        ``None`` when the linter cannot run there."""
+        ``None`` when the linter cannot run there (a project-wide tool needs more than a few
+        files and their config)."""
         texts = {
             path: text
             for path, text in self.before.items()
