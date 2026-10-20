@@ -4,6 +4,7 @@ Each file goes to the adapter that claims it. An adapter that offers no such ope
 the project does not use) leaves its files alone; the check is not applicable only when none does.
 """
 
+import shutil
 import tempfile
 from collections import Counter
 from collections.abc import Awaitable, Callable
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.base import Undecided, decided, measure, overrides_from, rejected
-from forja.checks.changes import Changes, write_files
+from forja.checks.changes import ChangeKind, Changes, write_files
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
     AdapterRegistry,
@@ -30,11 +31,6 @@ from forja.core.gates import (
     InconclusiveReason,
     NotApplicable,
 )
-
-
-def lint_config(adapter: LanguageAdapter) -> tuple[str, ...]:
-    """The files that change what the adapter's linter says; an adapter may name none."""
-    return tuple(getattr(adapter, "lint_config_files", ()))
 
 
 def by_adapter(
@@ -177,9 +173,9 @@ class LintCheck:
     async def _before(
         self, adapter: LanguageAdapter, overrides: dict[str, dict[str, tuple[str, ...]]]
     ) -> Counter[tuple[str, str]] | None:
-        """Lint of the parent commit's version of the adapter's files, in a private directory;
-        ``None`` when the linter cannot run there (a project-wide tool needs more than a few
-        files and their config)."""
+        """Lint of the parent commit's version of the adapter's files, in a private copy of the
+        worktree turned back into that commit: a linter that type-checks needs the files next to
+        the ones it is asked about. ``None`` when the linter cannot run there."""
         texts = {
             path: text
             for path, text in self.before.items()
@@ -189,10 +185,17 @@ class LintCheck:
             return Counter()
         with tempfile.TemporaryDirectory(prefix="forja-before-") as directory:
             root = Path(directory)
+            shutil.copytree(
+                self.worktree,
+                root,
+                symlinks=True,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git"),
+            )
+            for change in self.changes.files:
+                if change.kind in (ChangeKind.ADDED, ChangeKind.RENAMED):
+                    (root / change.path).unlink(missing_ok=True)
             write_files(texts, root)
-            for name in lint_config(adapter):
-                if (self.worktree / name).is_file():
-                    (root / name).write_bytes((self.worktree / name).read_bytes())
             request = OperationRequest(root=root, files=tuple(sorted(texts)))
             parsed = await measured(
                 measure(self.tools, adapter, Operation.LINT, "lint_before", request, overrides)

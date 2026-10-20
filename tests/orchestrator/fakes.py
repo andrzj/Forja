@@ -198,7 +198,7 @@ class ScriptedAgent:
         for name, content in files.items():
             path = target / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            path.write_text(content, encoding="utf-8", newline="\n")
         log.write_text(f"[out] wrote {len(files)} file(s)\n", encoding="utf-8")
         sink.effect(
             operation_id,

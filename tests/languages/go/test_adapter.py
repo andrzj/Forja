@@ -112,8 +112,9 @@ def test_format_lists_what_is_not_canonical_and_rewrites_only_when_asked(project
 
 def test_lint_runs_golangci_lint_and_is_not_supported_without_it(project: Path) -> None:
     assert argv(Operation.LINT, project) == ("gl", "run", "--color=never")
-    assert argv(Operation.LINT_FIX, project, files=("a.go",)) == (
-        "gl", "run", "--color=never", "--fix", "a.go",
+    # a package is type-checked whole, so the files go as the directories that hold them
+    assert argv(Operation.LINT_FIX, project, files=("a.go", "b.go", "pkg/c.go")) == (
+        "gl", "run", "--color=never", "--fix", ".", "./pkg",
     )  # fmt: skip
     for operation in (Operation.LINT, Operation.LINT_FIX):
         assert isinstance(plan(ADAPTER, operation, project), NotSupported)

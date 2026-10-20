@@ -133,6 +133,7 @@ class World:
         token_limit: int = 2_000_000,
         hook: Hook | None = None,
         agents: Mapping[Producer, Any] | None = None,
+        extra: Mapping[str, Any] | None = None,
     ) -> RunContext:
         config = self.config.model_copy(update={"budget": budget or Budget()})
         journal = Journal(log, hook=hook) if hook is not None else Journal(log)
@@ -148,6 +149,7 @@ class World:
             run_dir=self.run_dir,
             sleep=self.sleep,
             network_is_up=self.network_is_up,
+            **(extra or {}),
         )
 
     def run(
@@ -162,6 +164,7 @@ class World:
         hook: Hook | None = None,
         agents: Mapping[Producer, Any] | None = None,
         config: RunConfig | None = None,
+        extra: Mapping[str, Any] | None = None,
     ) -> tuple[Outcome, EventLog]:
         opened = log or self.open()
         if config is not None:
@@ -178,6 +181,7 @@ class World:
             token_limit=token_limit,
             hook=hook,
             agents=agents,
+            extra=extra,
         )
         return asyncio.run(Orchestrator(ctx).run()), opened
 

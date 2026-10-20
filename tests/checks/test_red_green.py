@@ -13,6 +13,7 @@ from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.events import EventLog
 from forja.core.gates import Approved, Rejected
 from forja.core.states import ExecutionState, Level
+from forja.languages.go import GoAdapter
 from forja.languages.python import PythonAdapter
 from tests.checks.support import RUN
 from tests.checks.test_units import data, tools
@@ -171,3 +172,16 @@ def test_a_test_id_must_belong_to_its_file(log: EventLog, tmp_path: Path) -> Non
     assert described(result) == [
         "the test id does not belong to tests/test_new.py [tests/test_old.py::test_x]"
     ]
+
+
+def test_an_id_may_not_carry_the_path_where_the_language_runner_does_not_print_it(
+    tmp_path: Path,
+) -> None:
+    def check_of(adapter: Any) -> RedGreenCheck:
+        return RedGreenCheck(None, (adapter,), tmp_path, classify, frozenset({1}), ())  # type: ignore[arg-type]
+
+    go = DeclaredTest(criterion_id=1, test_id="example.com/calc/TestAdd", path="calc_add_test.go")
+    py = DeclaredTest(criterion_id=1, test_id="example.com/calc/TestAdd", path="tests/test_a.py")
+
+    assert check_of(GoAdapter())._owns(go)
+    assert not check_of(PythonAdapter())._owns(py)

@@ -181,5 +181,5 @@ def test_the_implementer_is_told_what_the_test_author_froze(
     assert second.frozen_digest
     for name, text in TESTS.items():
         (tmp_path / "expected" / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / "expected" / name).write_text(text, encoding="utf-8")
+        (tmp_path / "expected" / name).write_text(text, encoding="utf-8", newline="\n")
     assert second.frozen_digest == frozen_digest_of(tmp_path / "expected", "tests", ())

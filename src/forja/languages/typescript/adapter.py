@@ -103,6 +103,10 @@ class TypeScriptAdapter:
         probe = VersionProbe(self._plan(root, (*self._node, "--version")), _NODE_VERSION)
         return Detection("typescript", (".",), (MANIFEST, TSCONFIG), probe)
 
+    def owns_test(self, test_id: str, path: str) -> bool:
+        """The runner's ids do not carry the path of the file, so any id may be the file's."""
+        return True
+
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")
         name, directories = parts[-1], frozenset(parts[:-1])

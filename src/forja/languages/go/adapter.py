@@ -62,6 +62,13 @@ GO_ENVIRONMENT = frozenset(
 )
 
 
+def _packages(files: tuple[str, ...]) -> tuple[str, ...]:
+    """The package directories of the files: the linter type-checks a package, and a file given
+    alone does not compile without the others of its package."""
+    directories = {Path(f).parent.as_posix() for f in files}
+    return tuple(sorted("." if d == "." else f"./{d}" for d in directories))
+
+
 def find_golangci_lint(environ: Mapping[str, str] | None = None) -> tuple[str, ...] | None:
     """The golangci-lint on the PATH, or ``None``: it is not installed by Forja."""
     path = (environ or {}).get("PATH")
@@ -102,6 +109,10 @@ class GoAdapter:
         probe = VersionProbe(self._plan(root, (*self._go, "version")), _GO_VERSION)
         return Detection("go", (".",), (MANIFEST,), probe)
 
+    def owns_test(self, test_id: str, path: str) -> bool:
+        """The runner's ids do not carry the path of the file, so any id may be the file's."""
+        return True
+
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")
         name, directories = parts[-1], parts[:-1]
@@ -137,7 +148,7 @@ class GoAdapter:
             case Operation.LINT | Operation.LINT_FIX:
                 assert self._lint is not None
                 fix = ("--fix",) if operation is Operation.LINT_FIX else ()
-                argv = (*self._lint, "run", "--color=never", *fix, *request.files)
+                argv = (*self._lint, "run", "--color=never", *fix, *_packages(request.files))
             case Operation.BUILD:
                 argv = (*self._go, "build", "./...")
             case Operation.TEST | Operation.COVERAGE if request.test_files or request.tests:

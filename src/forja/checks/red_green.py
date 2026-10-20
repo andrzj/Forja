@@ -60,13 +60,24 @@ class RedGreenCheck:
                 findings.append(
                     Finding(message="the declared file is not a test file", target=test.path)
                 )
-            elif not test.test_id.startswith(f"{test.path}::"):
+            elif not self._owns(test):
                 findings.append(
                     Finding(
                         message=f"the test id does not belong to {test.path}", target=test.test_id
                     )
                 )
         return findings
+
+    def _owns(self, test: DeclaredTest) -> bool:
+        """Whether the id can belong to the file: the adapter that claims the file says so; with
+        no word from it, the id is pytest's, ``path::name``."""
+        for adapter in self.adapters:
+            if adapter.classify(test.path) is not None:
+                owns = getattr(adapter, "owns_test", None)
+                if owns is not None:
+                    return bool(owns(test.test_id, test.path))
+                break
+        return test.test_id.startswith(f"{test.path}::")
 
     async def _judge(self, data: GateInput) -> GateResult:
         outcomes = await outcomes_of(self.tools, self.adapters, self.worktree, data.values)
