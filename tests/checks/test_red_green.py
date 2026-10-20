@@ -60,7 +60,7 @@ def run(
     values = {"commands": {"test": [sys.executable, "-c", script]}}
     check = RedGreenCheck(
         tools(log, tmp_path),
-        ADAPTER,
+        (ADAPTER,),
         tmp_path,
         classify,
         criteria,

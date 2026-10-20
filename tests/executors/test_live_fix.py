@@ -144,7 +144,7 @@ def test_the_real_cli_writes_the_tests_and_then_fixes_the_defect(
     criteria = frozenset(int(c.id) for c in fix.criteria.criteria)
     red = RedGreenCheck(
         tools(log, tmp_path),
-        python,
+        (python,),
         worktree,
         lambda path: python.classify(path) or FileClass.OTHER,
         criteria,
@@ -158,5 +158,5 @@ def test_the_real_cli_writes_the_tests_and_then_fixes_the_defect(
     call(Producer.IMPLEMENTER, info, attempt)
     freeze = FreezeCheck(worktree, Changes((), 0, ()), planned.test_root, frozen)
     assert asyncio.run(freeze.evaluate(data())) == Approved()
-    green = TestsCheck(tools(log, tmp_path), python, worktree)
+    green = TestsCheck(tools(log, tmp_path), (python,), worktree)
     assert asyncio.run(green.evaluate(data())) == Approved()

@@ -67,7 +67,9 @@ def judge(
         DeclaredTest(criterion_id=n, test_id=f"{path}::{function}", path=path)
         for n, function in zip(sorted(ids), functions, strict=False)
     )
-    check = RedGreenCheck(tools(log, tmp_path), ADAPTER, tmp_path / "work", classify, ids, declared)
+    check = RedGreenCheck(
+        tools(log, tmp_path), (ADAPTER,), tmp_path / "work", classify, ids, declared
+    )
     return asyncio.run(check.evaluate(data()))
 
 

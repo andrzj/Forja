@@ -1,7 +1,6 @@
 """Format and lint over more than one language: each file goes to the adapter that claims it."""
 
 import asyncio
-import sys
 from pathlib import Path
 
 import pytest
@@ -9,72 +8,11 @@ import pytest
 from forja.checks.changes import Change, ChangeKind, Changes
 from forja.checks.layout import FormatCheck, LintCheck
 from forja.checks.tooling import Tools
-from forja.core.adapters import (
-    CommandPlan,
-    EvidenceDraft,
-    FileClass,
-    NotSupported,
-    Operation,
-    OperationRequest,
-    Parsed,
-    ParseResult,
-    ToolOutput,
-)
 from forja.core.events import EventLog
-from forja.core.evidence import Target, TargetKind
 from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
 from forja.core.states import ExecutionState, Level
-from tests.checks.support import RUN, registry_of, sinks
-from tests.core.adapters.fakes import FakeLanguageAdapter
+from tests.checks.support import RUN, Stub, draft, registry_of, sinks
 from tests.core.events.support import FakeClock
-
-
-class Stub(FakeLanguageAdapter):
-    """Claims the files with one suffix; the tool it plans is a process that does nothing, and
-    what it reads out of it is what the test says (the old text and the new text apart)."""
-
-    def __init__(
-        self,
-        language: str,
-        suffix: str,
-        home: Path,
-        *,
-        after: tuple[EvidenceDraft, ...] = (),
-        before: tuple[EvidenceDraft, ...] = (),
-        offers: bool = True,
-        offers_before: bool = True,
-        config: tuple[str, ...] = (),
-    ) -> None:
-        self.language = language
-        self.suffix = suffix
-        self.home = home
-        self.after, self.before = after, before
-        self.offers, self.offers_before = offers, offers_before
-        self.lint_config_files = config
-        self.requests: list[OperationRequest] = []
-        self.config_seen: list[bool] = []
-        self._old = False
-
-    def classify(self, path: str) -> FileClass | None:
-        return FileClass.PRODUCTION if path.endswith(self.suffix) else None
-
-    def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
-        self._old = request.root != self.home
-        if not (self.offers_before if self._old else self.offers):
-            return NotSupported(operation.value, "not offered")
-        self.requests.append(request)
-        if self._old:
-            self.config_seen.append(
-                all((request.root / c).is_file() for c in self.lint_config_files)
-            )
-        return CommandPlan((sys.executable, "-c", "pass"), request.root)
-
-    def parse(self, operation: Operation, output: ToolOutput) -> ParseResult:
-        return Parsed(self.before if self._old else self.after)
-
-
-def draft(measurement: str, path: str, value: int = 1) -> EvidenceDraft:
-    return EvidenceDraft(measurement, Target(kind=TargetKind.FILE, id=path), value, "violations")
 
 
 def changes_of(*paths: str) -> Changes:

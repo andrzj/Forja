@@ -1,12 +1,13 @@
 """Gate 5 for the test author: the new tests fail on the code with the defect, nothing else does."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from forja.checks.base import decided, measure, overrides_from, rejected
+from forja.checks.base import decided, rejected
+from forja.checks.build_and_tests import outcomes_of
 from forja.checks.tooling import Tools
-from forja.core.adapters import FileClass, LanguageAdapter, Operation, OperationRequest
+from forja.core.adapters import FileClass, LanguageAdapter
 from forja.core.artifacts.llm_output import DeclaredTest
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 
@@ -23,7 +24,7 @@ class RedGreenCheck:
     """
 
     tools: Tools
-    adapter: LanguageAdapter
+    adapters: Sequence[LanguageAdapter]
     worktree: Path
     classify: Callable[[str], FileClass]
     criteria: frozenset[int]
@@ -68,14 +69,7 @@ class RedGreenCheck:
         return findings
 
     async def _judge(self, data: GateInput) -> GateResult:
-        request = OperationRequest(root=self.worktree)
-        overrides = overrides_from(self.adapter, data.values)
-        parsed = await measure(
-            self.tools, self.adapter, Operation.TEST, "tests", request, overrides
-        )
-        outcomes = {
-            d.target.id: str(d.value) for d in parsed.drafts if d.measurement == "test.outcome"
-        }
+        outcomes = await outcomes_of(self.tools, self.adapters, self.worktree, data.values)
         wanted = {t.test_id for t in self.declared}
         findings = []
         for test in sorted(wanted):

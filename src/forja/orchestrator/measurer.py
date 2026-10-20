@@ -5,18 +5,19 @@ complexity totals), and judges each attempt and each integration with the checks
 """
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import JsonValue
 
 from forja.checks.base import Undecided, measure, overrides_from
-from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck
+from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
 from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
+from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
@@ -80,7 +81,6 @@ class PipelineMeasurer:
         timeouts: Mapping[str, float] | None = None,
     ) -> None:
         self._adapters = adapters
-        self._adapter = next(adapters.languages())  # the one every tool is still asked of
         self._git = git
         self._log = log
         self._workdir = workdir
@@ -111,6 +111,11 @@ class PipelineMeasurer:
     def _classify(self, path: str) -> FileClass:
         return self._adapters.classify(path)
 
+    def _active(self, worktree: Path) -> tuple[LanguageAdapter, ...]:
+        """The languages the project has; a project none of them claims is run as the first."""
+        found = tuple(adapter for adapter, _ in self._adapters.detect_all(worktree))
+        return found or (next(self._adapters.languages()),)
+
     def _run_sink(self, level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(self._log, level, target, operation)
 
@@ -131,23 +136,25 @@ class PipelineMeasurer:
     async def format_worktree(self, worktree: Path) -> None:
         """Safe lint fixes, then the formatter, over the whole tree: the ``style:`` commit."""
         tools = self._tools(self._run_sink, Level.EXECUTION, self._run_id)
-        for operation, name in (
-            (Operation.LINT_FIX, "normalize_lint"),
-            (Operation.FORMAT, "normalize_format"),
-        ):
-            plan = self._adapter.plan(operation, OperationRequest(root=worktree))
-            if isinstance(plan, CommandPlan):
-                await tools.run(name, plan)
+        for adapter in self._active(worktree):
+            for operation, name in (
+                (Operation.LINT_FIX, "normalize_lint"),
+                (Operation.FORMAT, "normalize_format"),
+            ):
+                plan = adapter.plan(operation, OperationRequest(root=worktree))
+                if isinstance(plan, CommandPlan):
+                    await tools.run(name, plan)
 
     # -- the base ------------------------------------------------------------------------------
 
     async def baseline(self, worktree: Path, sinks: SinkFactory) -> Baseline:
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
         problems: list[str] = []
+        active = self._active(worktree)
         try:
-            problems += await self._build_problems(tools, worktree)
-            first = await self._outcomes(tools, worktree)
-            second = await self._outcomes(tools, worktree)
+            problems += await self._build_problems(tools, worktree, active)
+            first = await self._outcomes(tools, worktree, active)
+            second = await self._outcomes(tools, worktree, active)
         except Undecided as stop:
             return Baseline(False, (_describe(stop),))
         failing = {t for t, o in first.items() if o in FAILED} & {
@@ -160,54 +167,63 @@ class PipelineMeasurer:
                 t for t, o in first.items() if o == "passed" and second.get(t) == "passed"
             )
             self._save_base(unstable, stable)
-        metrics = await self._metrics(tools, worktree, len(first), len(unstable))
+        metrics = await self._metrics(tools, worktree, active, len(first), len(unstable))
         return Baseline(not problems, tuple(problems), metrics)
 
-    def _overrides(self, check_id: str) -> dict[str, dict[str, tuple[str, ...]]]:
+    def _overrides(
+        self, adapter: LanguageAdapter, check_id: str
+    ) -> dict[str, dict[str, tuple[str, ...]]]:
         """The repository's own command for this check, if its ``forja.toml`` names one."""
-        return overrides_from(self._adapter, self._values.get(check_id, {}))
+        return overrides_from(adapter, self._values.get(check_id, {}))
 
     def _save_base(self, unstable: list[str], passing: list[str]) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
         document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
         atomic_write_bytes(self._base_file, document.encode("utf-8"))
 
-    async def _build_problems(self, tools: Tools, worktree: Path) -> list[str]:
-        parsed = await measure(
-            tools,
-            self._adapter,
-            Operation.BUILD,
-            "build",
-            OperationRequest(root=worktree),
-            self._overrides("build"),
-        )
-        return [f"build: {d.target.id} does not compile" for d in parsed.drafts]
+    async def _build_problems(
+        self, tools: Tools, worktree: Path, active: tuple[LanguageAdapter, ...]
+    ) -> list[str]:
+        problems = []
+        for adapter in active:
+            parsed = await measure(
+                tools,
+                adapter,
+                Operation.BUILD,
+                "build",
+                OperationRequest(root=worktree),
+                self._overrides(adapter, "build"),
+            )
+            problems += [f"build: {d.target.id} does not compile" for d in parsed.drafts]
+        return problems
 
-    async def _outcomes(self, tools: Tools, worktree: Path) -> dict[str, str]:
-        parsed = await measure(
-            tools,
-            self._adapter,
-            Operation.TEST,
-            "tests",
-            OperationRequest(root=worktree),
-            self._overrides("tests"),
-        )
-        return {d.target.id: str(d.value) for d in parsed.drafts if d.measurement == "test.outcome"}
+    async def _outcomes(
+        self, tools: Tools, worktree: Path, active: tuple[LanguageAdapter, ...]
+    ) -> dict[str, str]:
+        return await outcomes_of(tools, active, worktree, self._values.get("tests", {}))
 
     async def _metrics(
-        self, tools: Tools, worktree: Path, tests: int, unstable: int
+        self,
+        tools: Tools,
+        worktree: Path,
+        active: tuple[LanguageAdapter, ...],
+        tests: int,
+        unstable: int,
     ) -> dict[str, float]:
         metrics: dict[str, float] = {"tests": float(tests), "unstable_tests": float(unstable)}
+        found = 0
         try:
-            lint = await measure(
-                tools,
-                self._adapter,
-                Operation.LINT,
-                "lint",
-                OperationRequest(root=worktree),
-                self._overrides("lint"),
-            )
-            metrics["lint_violations"] = float(sum(violations(lint.drafts).values()))
+            for adapter in active:
+                lint = await measure(
+                    tools,
+                    adapter,
+                    Operation.LINT,
+                    "lint",
+                    OperationRequest(root=worktree),
+                    self._overrides(adapter, "lint"),
+                )
+                found += sum(violations(lint.drafts).values())
+            metrics["lint_violations"] = float(found)
         except Undecided:
             pass  # a metric that could not be taken is left out, not made up
         files = await self._production_files(worktree)
@@ -261,8 +277,48 @@ class PipelineMeasurer:
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
-        adapter, worktree = self._adapter, ctx.worktree
+        worktree = ctx.worktree
+        active = self._active(worktree)
         share = CoverageShare()
+        mutation = self._each(
+            active,
+            lambda a: MutationCheck(
+                tools,
+                a,
+                worktree,
+                code,
+                self._files_of(a, production),
+                self._env,
+                a.language,
+                share=share,
+            ),
+        )
+        complexity = self._each(
+            active,
+            lambda a: ComplexityCheck(
+                tools,
+                worktree,
+                code,
+                self._files_of(a, production),
+                self._texts_of(a, code_before),
+                self._lizard,
+                a.language,
+            ),
+        )
+        crap = self._each(
+            active,
+            lambda a: CrapCheck(
+                tools,
+                a,
+                worktree,
+                code,
+                self._files_of(a, production),
+                self._texts_of(a, code_before),
+                self._lizard,
+                a.language,
+                share=share,
+            ),
+        )
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
             *self._frozen(ctx, changes),
@@ -271,19 +327,17 @@ class PipelineMeasurer:
             ),
             FormatCheck(tools, self._adapters, worktree, changes),
             LintCheck(tools, self._adapters, worktree, changes, before),
-            BuildCheck(tools, adapter, worktree),
-            self._tests_check(ctx, tools, expectations, unstable, passing),
-            MutationCheck(tools, adapter, worktree, code, production, self._env, share=share),
-            ComplexityCheck(tools, worktree, code, production, code_before, self._lizard),
-            CrapCheck(
-                tools, adapter, worktree, code, production, code_before, self._lizard, share=share
-            ),
+            BuildCheck(tools, active, worktree),
+            self._tests_check(ctx, tools, active, expectations, unstable, passing),
+            mutation,
+            complexity,
+            crap,
             PassThroughCheck(worktree, code, production, before_shapes),
             ModuleDepthCheck(worktree, code, production, before_shapes),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
-        return await self._pipeline(checks).run(data, _capabilities(adapter))
+        return await self._pipeline(checks).run(data, _capabilities(active))
 
     async def _code_base(self, git: GitAt, stage: str) -> str:
         """The commit before the one that holds the work of ``stage``; ``HEAD`` for no stage."""
@@ -306,6 +360,7 @@ class PipelineMeasurer:
         self,
         ctx: AttemptContext,
         tools: Tools,
+        active: tuple[LanguageAdapter, ...],
         expectations: Expectations | None,
         unstable: frozenset[str],
         passing: frozenset[str],
@@ -313,11 +368,11 @@ class PipelineMeasurer:
         """The test author's tests are red on purpose, so its stage has its own judge of them;
         the tests of an extra stage describe code that exists, so they must pass."""
         if ctx.task.role is not Producer.TEST_AUTHOR or ctx.task.reviews:
-            return TestsCheck(tools, self._adapter, ctx.worktree, unstable, passing)
+            return TestsCheck(tools, active, ctx.worktree, unstable, passing)
         assert expectations is not None  # the cycle gives them to every test author stage
         return RedGreenCheck(
             tools,
-            self._adapter,
+            active,
             ctx.worktree,
             self._classify,
             expectations.criteria,
@@ -330,13 +385,28 @@ class PipelineMeasurer:
         git = self._git.at(worktree)
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
         unstable, passing = self._read_base()
+        active = self._active(worktree)
         checks: list[Check] = [
-            BuildCheck(tools, self._adapter, worktree),
-            TestsCheck(tools, self._adapter, worktree, unstable, passing),
+            BuildCheck(tools, active, worktree),
+            TestsCheck(tools, active, worktree, unstable, passing),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, "integration", "integration", "integration")
-        return await self._pipeline(checks).run(data, _capabilities(self._adapter))
+        return await self._pipeline(checks).run(data, _capabilities(active))
+
+    def _files_of(self, adapter: LanguageAdapter, files: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(p for p in files if self._adapters.for_file(p) is adapter)
+
+    def _texts_of(self, adapter: LanguageAdapter, texts: dict[str, str]) -> dict[str, str]:
+        return {p: t for p, t in texts.items() if self._adapters.for_file(p) is adapter}
+
+    @staticmethod
+    def _each(
+        active: tuple[LanguageAdapter, ...], make: Callable[[LanguageAdapter], Check]
+    ) -> Check:
+        """The check made for every language of the project, answering as one."""
+        parts = [Part(make(adapter), frozenset(_capabilities([adapter]))) for adapter in active]
+        return EachLanguage(parts, parts[0].check.id, parts[0].check.gate)
 
     def _pipeline(self, checks: list[Check]) -> GatePipeline:
         return GatePipeline(checks, self._settings, self._values)
@@ -346,8 +416,8 @@ class PipelineMeasurer:
         return Reconciliation(Decision.REDO)
 
 
-def _capabilities(adapter: LanguageAdapter) -> set[str]:
-    return {capability.value for capability in adapter.capabilities}
+def _capabilities(adapters: Iterable[LanguageAdapter]) -> set[str]:
+    return {capability.value for adapter in adapters for capability in adapter.capabilities}
 
 
 def _describe(stop: Undecided) -> str:

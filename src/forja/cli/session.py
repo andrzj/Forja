@@ -32,7 +32,14 @@ from forja.core.policy.config import EffectivePolicy, load_policy
 from forja.core.redaction import Redactor
 from forja.core.states import Level
 from forja.executors import ClaudeCodeAdapter
-from forja.languages.python import PythonAdapter
+from forja.languages import (
+    CSharpAdapter,
+    GoAdapter,
+    JavaAdapter,
+    PythonAdapter,
+    TypeScriptAdapter,
+)
+from forja.languages.go.adapter import find_golangci_lint
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig, load_config
@@ -70,6 +77,10 @@ def languages(repo: Path) -> AdapterRegistry:
     """The language adapters of a run."""
     registry = AdapterRegistry()
     registry.register_language(PythonAdapter(python=repo_python(repo)))
+    registry.register_language(GoAdapter(golangci_lint=find_golangci_lint()))
+    registry.register_language(TypeScriptAdapter())
+    registry.register_language(CSharpAdapter())
+    registry.register_language(JavaAdapter())
     return registry
 
 

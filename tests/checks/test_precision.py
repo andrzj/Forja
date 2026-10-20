@@ -344,6 +344,8 @@ def test_the_checks_are_built_with_the_files_the_attempt_changed(
     )
     assert secrets.reports == scene.work / "run" / "secrets" / "t1-a1"
     assert secrets.gitleaks == (sys.executable, str(FAKE_GITLEAKS))
+    (part,) = complexity.parts  # one language: one part
+    complexity = part.check
     assert complexity.files == ("src/sample/mod.py", "src/sample/other.py")
     assert complexity.lizard == scene.lizard
     assert set(complexity.before) == {"src/sample/mod.py", "src/sample/other.py"}

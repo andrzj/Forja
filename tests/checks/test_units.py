@@ -290,7 +290,7 @@ def test_a_command_of_the_repository_replaces_the_adapters_in_every_check(
     changes = Changes((Change(ChangeKind.MODIFIED, "a.py"),), 1, ())
     values = {"commands": {operation: [sys.executable, "-c", "raise SystemExit(3)"]}}
     arguments: tuple[object, ...] = {
-        TestsCheck: (tools(log, tmp_path), adapter, tmp_path),
+        TestsCheck: (tools(log, tmp_path), (adapter,), tmp_path),
         FormatCheck: (tools(log, tmp_path), registry_of(adapter), tmp_path, changes),
         LintCheck: (tools(log, tmp_path), registry_of(adapter), tmp_path, changes, {}),
     }[check]
@@ -305,7 +305,7 @@ def test_a_build_that_failed_without_naming_a_file_is_the_build_that_failed(
     log: EventLog, tmp_path: Path
 ) -> None:
     values = {"commands": {"build": [sys.executable, "-c", "raise SystemExit(1)"]}}
-    check = BuildCheck(tools(log, tmp_path), PythonAdapter(), tmp_path)
+    check = BuildCheck(tools(log, tmp_path), (PythonAdapter(),), tmp_path)
 
     result = asyncio.run(check.evaluate(data(values)))
 
@@ -319,9 +319,9 @@ def test_no_test_at_all_is_a_failure_when_the_base_had_some_and_fine_when_it_had
     values = {"commands": {"test": [sys.executable, "-c", "raise SystemExit(5)"]}}
     adapter = PythonAdapter()
 
-    none_before = TestsCheck(tools(log, tmp_path), adapter, tmp_path)
+    none_before = TestsCheck(tools(log, tmp_path), (adapter,), tmp_path)
     some_before = TestsCheck(
-        tools(log, tmp_path), adapter, tmp_path, passing=frozenset({"tests/a.py::t"})
+        tools(log, tmp_path), (adapter,), tmp_path, passing=frozenset({"tests/a.py::t"})
     )
 
     assert asyncio.run(none_before.evaluate(data(values))) == Approved()
