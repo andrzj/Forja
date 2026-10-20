@@ -100,6 +100,13 @@ class FormatCheck:
         return rejected(findings) if findings else Approved()
 
 
+def _skip_git_and_links(directory: str, names: list[str]) -> set[str]:
+    """What the private copy leaves out: git's own directory and any link, which could lead out of
+    the copy when the old texts are written into it."""
+    base = Path(directory)
+    return {n for n in names if n == ".git" or (base / n).is_symlink() or (base / n).is_junction()}
+
+
 def violations(drafts: tuple[EvidenceDraft, ...]) -> Counter[tuple[str, str]]:
     """Violations per (file, rule)."""
     counts: Counter[tuple[str, str]] = Counter()
@@ -190,7 +197,7 @@ class LintCheck:
                 root,
                 symlinks=True,
                 dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns(".git"),
+                ignore=_skip_git_and_links,
             )
             for change in self.changes.files:
                 if change.kind in (ChangeKind.ADDED, ChangeKind.RENAMED):
