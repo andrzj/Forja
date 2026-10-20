@@ -74,7 +74,8 @@ SCANNERS_OFF = {
     f"GROK_{vendor}_{kind}_ENABLED": "0" for vendor in ("CLAUDE", "CURSOR") for kind in _SCANNERS
 }
 
-DENIED = ("WebFetch", "WebSearch", "MCPTool")
+# the role must not rewrite its own rules: deny beats allow
+DENIED = ("WebFetch", "WebSearch", "MCPTool", f"Edit(**/{AGENT_DIR}/**)")
 END_OK = "end_turn"
 
 

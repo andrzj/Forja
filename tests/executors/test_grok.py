@@ -130,7 +130,11 @@ def test_each_command_is_an_allow_rule_with_its_parentheses_escaped() -> None:
 def test_the_web_and_mcp_are_denied() -> None:
     config = config_of()
 
-    assert config.splitlines()[2] == 'deny = ["WebFetch", "WebSearch", "MCPTool"]'
+    assert '"WebFetch", "WebSearch", "MCPTool"' in config
+
+
+def test_the_role_cannot_edit_its_own_rules() -> None:
+    assert f'"Edit(**/{AGENT_DIR}/**)"' in config_of().split("deny = ")[1]
 
 
 # -- reading the stream ----------------------------------------------------------------------------
