@@ -7,6 +7,7 @@ from forja.executors.claude_code import ClaudeCodeAdapter
 from forja.executors.codex import CodexAdapter
 from forja.executors.cursor import CursorAdapter
 from forja.executors.gemini import GeminiAdapter
+from forja.executors.grok import GrokAdapter
 
 # The one place that knows which CLIs exist: a new CLI is an adapter module and a line here.
 KNOWN_CLIS: dict[str, Callable[[], ExecutorAdapter]] = {
@@ -14,6 +15,7 @@ KNOWN_CLIS: dict[str, Callable[[], ExecutorAdapter]] = {
     "codex": CodexAdapter,
     "cursor": CursorAdapter,
     "gemini": GeminiAdapter,
+    "grok": GrokAdapter,
 }
 DEFAULT_CLI = "claude-code"
 
@@ -24,4 +26,5 @@ __all__ = [
     "CodexAdapter",
     "CursorAdapter",
     "GeminiAdapter",
+    "GrokAdapter",
 ]
