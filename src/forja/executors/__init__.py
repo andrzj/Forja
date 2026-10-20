@@ -4,9 +4,13 @@ from collections.abc import Callable
 
 from forja.core.adapters.executor import ExecutorAdapter
 from forja.executors.claude_code import ClaudeCodeAdapter
+from forja.executors.codex import CodexAdapter
 
 # The one place that knows which CLIs exist: a new CLI is an adapter module and a line here.
-KNOWN_CLIS: dict[str, Callable[[], ExecutorAdapter]] = {"claude-code": ClaudeCodeAdapter}
+KNOWN_CLIS: dict[str, Callable[[], ExecutorAdapter]] = {
+    "claude-code": ClaudeCodeAdapter,
+    "codex": CodexAdapter,
+}
 DEFAULT_CLI = "claude-code"
 
-__all__ = ["DEFAULT_CLI", "KNOWN_CLIS", "ClaudeCodeAdapter"]
+__all__ = ["DEFAULT_CLI", "KNOWN_CLIS", "ClaudeCodeAdapter", "CodexAdapter"]
