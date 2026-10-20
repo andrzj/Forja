@@ -781,3 +781,24 @@ def test_an_agent_cannot_add_trailers_that_reconciliation_would_believe(
         settle(workspace, "commit_stage", {"task_branch": TASK_BRANCH, "stage_id": "other-stage"})
         == Decision.REDO
     )
+
+
+def test_the_installed_dependencies_are_linked_into_an_attempt_and_never_committed(
+    workspace: GitWorkspace, repo: Repo
+) -> None:
+    packages = repo.path / "node_modules" / "lib"
+    packages.mkdir(parents=True)
+    (packages / "index.js").write_text("x\n", encoding="utf-8")
+    start_task(workspace, repo)
+    attempt = workspace.layout.attempt_worktree(ATTEMPT)
+    edit_in_attempt(workspace)
+
+    do(workspace.commit_stage(TASK, "s1", ATTEMPT, MESSAGE))
+
+    assert (attempt / "node_modules" / "lib" / "index.js").is_file()
+    assert repo.sh("ls-tree", "-r", "--name-only", f"refs/heads/{TASK_BRANCH}").split() == [
+        "base.txt",
+        "new.txt",
+    ]
+    do(workspace.remove_worktree(ATTEMPT))
+    assert (packages / "index.js").is_file()

@@ -9,14 +9,13 @@ the mutant, and the timeout is ten times the baseline, never below two seconds.
 import asyncio
 import os
 import shutil
-import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar, Protocol
 
+from forja.core.dependencies import link_dependencies
 from forja.core.reports.models import MutantResult, MutantStatus, MutationReport
 
 LEFT_OUT = (".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".ruff_cache")
@@ -58,32 +57,9 @@ class BaselineFailed(Exception):
     """The tests do not pass on the unchanged copy, so a failure would prove nothing."""
 
 
-def _link_dependencies(source: Path, target: Path) -> None:
-    """Let the copy use the installed packages of the repository (``node_modules``) without
-    copying them: a link, a junction where Windows allows no link, a copy as the last resort."""
-    packages = source / "node_modules"
-    if not packages.is_dir():
-        return
-    link = target / "node_modules"
-    try:
-        os.symlink(packages, link, target_is_directory=True)
-        return
-    except OSError:
-        pass
-    if sys.platform == "win32":
-        junction = subprocess.run(
-            ["cmd", "/c", "mklink", "/J", str(link), str(packages)],
-            capture_output=True,
-            check=False,
-        )
-        if junction.returncode == 0:
-            return
-    shutil.copytree(packages, link, symlinks=True)
-
-
 def _fresh_copy(source: Path, target: Path) -> None:
     shutil.copytree(source, target, ignore=shutil.ignore_patterns(*LEFT_OUT))
-    _link_dependencies(source, target)
+    link_dependencies(source, target)
 
 
 def _clean_bytecode(root: Path) -> None:

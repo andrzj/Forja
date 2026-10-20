@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from forja.core.dependencies import link_dependencies, stage_all, unlink_dependencies
 from forja.core.events import OpenOperation
 from forja.core.gitguard import GitWatch
 from forja.core.idempotency import (
@@ -189,8 +190,10 @@ class GitWorkspace:
         run_id: str,
         layout: Layout,
         git_running: Callable[[], bool] = git_is_running,
+        repo: Path | None = None,
     ) -> None:
         self._git = git
+        self._repo = repo  # where the installed dependencies are; None links nothing
         self._git_running = git_running
         self.run_id = run_id
         self.layout = layout
@@ -249,7 +252,7 @@ class GitWorkspace:
             await apply(worktree)
             git = self._git.at(worktree)
             if await git.lines("status", "--porcelain"):
-                await git.lines("add", "-A")
+                await stage_all(git)
                 await git.lines(
                     "commit",
                     "-m",
@@ -282,7 +285,7 @@ class GitWorkspace:
 
         async def run() -> None:
             git = self._git.at(self.layout.attempt_worktree(attempt_id))
-            await git.lines("add", "-A")
+            await stage_all(git)
             if (await git.run("diff", "--cached", "--quiet")).exit_code == 0:
                 raise NothingToCommit(f"attempt {attempt_id} changed nothing")
             args = ["commit", "-m", message.subject]
@@ -376,6 +379,8 @@ class GitWorkspace:
         async def run() -> None:
             await self._clear(path)
             await self._git.lines("worktree", "add", str(path), branch)
+            if self._repo is not None:
+                link_dependencies(self._repo, path)
 
         return Step(payload, run)
 
@@ -393,6 +398,7 @@ class GitWorkspace:
     async def _clear(self, path: Path) -> None:
         """Make ``path`` and git's record of it disappear, whatever state an interruption left."""
         if path.exists():
+            unlink_dependencies(path)
             # only read-only files (Windows) need the handler; Linux cannot tell it from none
             shutil.rmtree(path, onexc=_make_writable_and_retry)
         await self._git.lines("worktree", "prune")

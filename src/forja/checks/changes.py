@@ -7,6 +7,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from forja.core.dependencies import is_dependency, stage_all
+
 _OCTAL = re.compile(r"\\([0-7]{3})")
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
 
@@ -66,7 +68,7 @@ async def read_changes(git: Git, base: str = "HEAD") -> Changes:
     Staging changes only the index of a disposable worktree and lets git see renames, which a
     plain status of untracked files cannot.
     """
-    await git.lines("add", "-A")
+    await stage_all(git)
     status = await git.lines("diff", "--cached", "--name-status", "-M", base)
     numstat = await git.lines("diff", "--cached", "--numstat", "-M", base)
     patch = await git.lines(
@@ -77,7 +79,7 @@ async def read_changes(git: Git, base: str = "HEAD") -> Changes:
         parse_status(status),
         count_lines(numstat),
         tuple(patch),
-        tuple(unquote(path) for path in ignored),
+        tuple(p for p in map(unquote, ignored) if not is_dependency(p)),
     )
 
 

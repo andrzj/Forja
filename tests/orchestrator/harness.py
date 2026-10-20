@@ -77,7 +77,9 @@ def make_workspace(repo: Repo, root: Path) -> GitWorkspace:
         log_dir=root / "logs" / "guard",
         protected=ProtectedBranches(frozenset({"main"})),
     )
-    return GitWorkspace(git, run_id=RUN, layout=Layout(root / "wt"), git_running=lambda: False)
+    return GitWorkspace(
+        git, run_id=RUN, layout=Layout(root / "wt"), git_running=lambda: False, repo=repo.path
+    )
 
 
 class World:

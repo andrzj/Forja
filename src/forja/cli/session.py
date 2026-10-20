@@ -283,7 +283,7 @@ async def _context(
             frozenset({"main", "master", branch, *policy.protected_branches})
         ),
     )
-    workspace = GitWorkspace(git, run_id=run_id, layout=Layout.for_run(base, run_id))
+    workspace = GitWorkspace(git, run_id=run_id, layout=Layout.for_run(base, run_id), repo=repo)
 
     def sinks(level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(log, level, target, operation)

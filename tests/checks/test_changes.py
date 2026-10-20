@@ -18,6 +18,7 @@ from forja.checks.changes import (
     unquote,
     write_files,
 )
+from forja.core.dependencies import link_dependencies
 from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - the fixture is used below
 
 
@@ -277,3 +278,20 @@ def test_the_names_of_ignored_files_are_unquoted_like_the_others(repo: Repo) -> 
     changes = asyncio.run(read_changes(repo.git))
 
     assert changes.ignored == ("café.local",)
+
+
+@pytest.mark.parametrize("ignore", ["", "node_modules\n"])
+def test_the_linked_dependencies_are_not_a_change(repo: Repo, tmp_path: Path, ignore: str) -> None:  # noqa: F811
+    installed = tmp_path / "installed"
+    (installed / "node_modules" / "lib").mkdir(parents=True)
+    (installed / "node_modules" / "lib" / "index.js").write_text("x\n", encoding="utf-8")
+    (repo.path / ".gitignore").write_text(ignore, encoding="utf-8")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "start", "--allow-empty")
+    link_dependencies(installed, repo.path)
+    (repo.path / "fresh.py").write_text("x\n", encoding="utf-8")
+
+    changes = asyncio.run(read_changes(repo.git))
+
+    assert [c.path for c in changes.files] == ["fresh.py"]
+    assert changes.ignored == ()
