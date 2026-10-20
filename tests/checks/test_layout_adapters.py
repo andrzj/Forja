@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.layout import FormatCheck, LintCheck
+from forja.checks.layout import FormatCheck, LintCheck, _skip_git_and_links
 from forja.checks.tooling import Tools
 from forja.core.events import EventLog
 from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
@@ -131,3 +131,37 @@ def test_a_linter_that_cannot_run_on_the_old_text_is_inconclusive_not_a_pass(
 
     assert isinstance(result, Inconclusive)
     assert result.detail == "lint: the java linter cannot run on the old files"
+
+
+def test_a_linter_nobody_offers_makes_the_lint_not_applicable(tools: Tools, tmp_path: Path) -> None:
+    go = Stub("go", ".go", tmp_path, offers=False)
+    check = LintCheck(tools, registry_of(go), tmp_path, changes_of("b.go"), {"b.go": "y\n"})
+
+    assert asyncio.run(check.evaluate(data())) == NotApplicable(missing_capability="lint")
+
+
+def test_an_added_file_missing_from_the_copy_does_not_stop_the_old_side_lint(
+    tools: Tools, tmp_path: Path
+) -> None:
+    py = Stub("python", ".py", tmp_path, after=(draft("lint.E1", "new.py"),))
+    added = Changes(
+        (Change(ChangeKind.ADDED, "new.py"), Change(ChangeKind.MODIFIED, "a.py")), 1, ()
+    )
+    check = LintCheck(tools, registry_of(py), tmp_path, added, {"a.py": "x\n"})
+
+    result = asyncio.run(check.evaluate(data()))
+
+    assert isinstance(result, Rejected)
+
+
+def test_the_private_copy_leaves_out_git_and_each_link_on_its_own(tmp_path: Path) -> None:
+    (tmp_path / "real").mkdir()
+    (tmp_path / ".git").mkdir()
+    try:
+        (tmp_path / "link").symlink_to(tmp_path / "real", target_is_directory=True)
+    except OSError:
+        pytest.skip("symbolic links are not allowed here")
+
+    assert _skip_git_and_links(str(tmp_path), [".git"]) == {".git"}
+    assert _skip_git_and_links(str(tmp_path), ["link"]) == {"link"}
+    assert _skip_git_and_links(str(tmp_path), ["real"]) == set()

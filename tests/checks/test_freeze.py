@@ -190,3 +190,14 @@ def test_an_extra_test_stage_beside_the_code_may_only_add_test_files() -> None:
     assert judged(Change(ChangeKind.ADDED, "pkg/b_test.go")) is None
     assert judged(Change(ChangeKind.MODIFIED, "pkg/a_test.go")) == ["pkg/a_test.go"]
     assert judged(Change(ChangeKind.MODIFIED, "pkg/a.go")) is None
+
+
+def test_a_change_nobody_listed_beside_the_code_names_the_tests_as_the_target(
+    tmp_path: Path,
+) -> None:
+    digest, tests = frozen_beside_the_code(tmp_path)
+    write(tmp_path, "pkg/a_test.go", "package pkg // changed\n")
+
+    assert judge_beside_the_code(tmp_path, digest, tests) == [
+        "the frozen tests were changed [tests]"
+    ]

@@ -111,3 +111,9 @@ file = "src/forja/core/gitguard/guarded.py"
 function = "GuardedGit.run"
 change = "or -> and"
 reason = "The constructor refuses a mutex without a timeout and the reverse, so the conditions never differ and or and and give the same result."
+
+[[suppress]]
+file = "src/forja/checks/layout.py"
+function = "LintCheck._before"
+change = "True -> False"
+reason = "The copy leaves out every link through its ignore function, so no link reaches the copy and the symlinks flag has nothing to decide."
