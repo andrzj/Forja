@@ -27,6 +27,7 @@ from forja.core.adapters.executor import (
     RolePermissions,
     TextActivity,
     UsageActivity,
+    model_args,
 )
 from forja.core.artifacts.models import Producer
 from forja.executors.claude_code import classify_error
@@ -82,7 +83,7 @@ class CodexAdapter:
         argv = (
             str(executable), "exec", "--json", "--ephemeral", "--ignore-rules",
             "--color", "never", "--cd", str(request.workdir),
-            *overrides, *setup.extra_args,
+            *overrides, *model_args(request), *setup.extra_args,
             "-",
         )  # fmt: skip
         return CommandPlan(

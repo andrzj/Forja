@@ -204,6 +204,23 @@ def test_each_role_of_a_fix_can_run_on_its_own_cli(
     assert "agente que implementa: claude-code 2.1.0" in talk.text
 
 
+def test_the_model_is_the_clis_own_unless_one_is_asked_for_per_role(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    plain = Talk()
+    assert go(["corrigir", "x", "--criterios", str(criteria), "--plano"], plain, environ) == 0
+    assert "modelo" not in plain.text
+
+    chosen = Talk()
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--modelo", "m1"]
+    argv += ["--modelo-testes", "m2", "--plano"]
+    assert go(argv, chosen, environ) == 0
+    assert "agente que escreve os testes: claude-code 2.1.0, modelo m2" in chosen.text
+    assert "agente que implementa: claude-code 2.1.0, modelo m1" in chosen.text
+
+
 def test_the_description_file_brings_its_criteria_along(
     repo: Path, tmp_path: Path, environ: dict[str, str]
 ) -> None:

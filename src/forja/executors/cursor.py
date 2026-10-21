@@ -40,6 +40,7 @@ from forja.core.adapters.executor import (
     RolePermissions,
     TextActivity,
     UsageActivity,
+    model_args,
 )
 from forja.core.artifacts.models import Producer
 from forja.executors.claude_code import classify_error
@@ -100,7 +101,7 @@ class CursorAdapter:
         argv = (
             str(executable), "-p", "--output-format", "stream-json",
             "--sandbox", "enabled", "--trust", "--workspace", str(request.workdir),
-            *setup.extra_args,
+            *model_args(request), *setup.extra_args,
             f"Read the file {request.package} and do what it asks.",
         )  # fmt: skip
         return CommandPlan(

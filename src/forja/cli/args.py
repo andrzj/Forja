@@ -32,6 +32,8 @@ class Arguments:
     scope: tuple[str, ...] = ()
     cli: str = ""
     cli_tests: str = ""
+    model: str = ""
+    model_tests: str = ""
     plan_only: bool = False
     config: Path | None = None
     agent: tuple[str, ...] = field(default=())
@@ -50,6 +52,16 @@ def parser() -> argparse.ArgumentParser:
         metavar="NOME",
         help="qual CLI escreve os testes do conserto (corrigir); padrão: a de --cli",
     )
+    main.add_argument(
+        "--modelo",
+        metavar="NOME",
+        help="qual modelo a CLI usa; padrão: o que está configurado nela",
+    )
+    main.add_argument(
+        "--modelo-testes",
+        metavar="NOME",
+        help="qual modelo escreve os testes do conserto (corrigir); padrão: o configurado na CLI",
+    )
     main.add_argument("--plano", action="store_true", help="mostrar o plano, sem executar")
     main.add_argument(
         "--config", type=Path, metavar="ARQUIVO", help="rodar com execucao.toml, sem perguntas"
@@ -66,6 +78,8 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--escopo", action="append", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--cli", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--cli-testes", metavar="NOME", default=argparse.SUPPRESS)
+        item.add_argument("--modelo", metavar="NOME", default=argparse.SUPPRESS)
+        item.add_argument("--modelo-testes", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--plano", action="store_true", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
     agent = sub.add_parser("agente")  # for the agents: left out of the help
@@ -86,6 +100,8 @@ def parse(argv: list[str] | None = None) -> Arguments:
         scope=tuple(found.escopo or ()),
         cli=found.cli or "",
         cli_tests=found.cli_testes or "",
+        model=found.modelo or "",
+        model_tests=found.modelo_testes or "",
         plan_only=bool(found.plano),
         config=found.config,
         agent=(found.what, *found.rest) if command == "agente" else (),

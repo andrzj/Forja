@@ -44,6 +44,8 @@ class Execucao(BaseModel):
     executavel: str = ""
     cli_testes: str = ""  # corrigir: the CLI of the test author; empty is the implementer's
     executavel_testes: str = ""
+    modelo: str = ""  # empty: the model configured in the CLI
+    modelo_testes: str = ""  # corrigir: empty is the implementer's
     escopo: list[str] = Field(default_factory=list)
     tokens: int = Field(default=DEFAULT_TOKENS, ge=1)
     agente_roda_testes: bool = True

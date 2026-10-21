@@ -89,10 +89,18 @@ class AgentRequest:
     package: Path
     workdir: Path
     permissions: RolePermissions
+    model: str = ""  # empty: the model the user configured in the CLI
 
     def __post_init__(self) -> None:
         if self.role is Producer.FORJA:
             raise ValueError("Forja itself is not an agent role")
+        if self.model.startswith("-"):
+            raise ValueError("a model name cannot start with a dash")
+
+
+def model_args(request: AgentRequest) -> tuple[str, ...]:
+    """The ``--model`` flag every supported CLI takes; nothing when the user's own is wanted."""
+    return ("--model", request.model) if request.model else ()
 
 
 @dataclass(frozen=True)

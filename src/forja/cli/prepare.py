@@ -14,7 +14,13 @@ from pydantic import ValidationError
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
-from forja.cli.session import new_config, policy_digest, repo_policy, standard_settings
+from forja.cli.session import (
+    executor_ref,
+    new_config,
+    policy_digest,
+    repo_policy,
+    standard_settings,
+)
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
 from forja.core.artifacts.schemas import CriteriaBody
@@ -271,13 +277,11 @@ def summary_of(
         ),
         *(
             (
-                f"  agente que escreve os testes: {config.test_author.name} "
-                f"{config.test_author.version}",
-                f"  agente que implementa: {config.implementer.name} "
-                f"{config.implementer.version}",
+                f"  agente que escreve os testes: {_agent(config.test_author)}",
+                f"  agente que implementa: {_agent(config.implementer)}",
             )
             if config.test_author
-            else (f"  agente: {config.implementer.name} {config.implementer.version}",)
+            else (f"  agente: {_agent(config.implementer)}",)
         ),
         f"  onde: {where}",
         f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
@@ -290,6 +294,11 @@ def summary_of(
         *(("  forja.toml do repositório muda o padrão:", *(f"    {note}" for note in policy_notes))
           if policy_notes else ()),
     )  # fmt: skip
+
+
+def _agent(executor: ExecutorRef) -> str:
+    model = f", modelo {executor.model}" if executor.model else ""
+    return f"{executor.name} {executor.version}{model}"
 
 
 async def prepare(
@@ -314,6 +323,8 @@ async def prepare(
         raise Refused(f"Só há {detection.disk_free_gib:.1f} GiB livres; a Forja pede ao menos 2.")
     name, choice, offer = choose_cli(args, saved, profile, environ, console)
     version = await prove(name, choice, environ, probe_cache(profile_dir), console)
+    model = args.model or (saved.modelo if saved else "")
+    model_tests = args.model_tests or (saved.modelo_testes if saved else "")
     author: tuple[str, ExecutorChoice, str] | None = None
     tests_name = args.cli_tests or (saved.cli_testes if saved else "")
     if fixing and tests_name and tests_name != name:
@@ -324,17 +335,19 @@ async def prepare(
             author_name, author_choice, environ, probe_cache(profile_dir), console
         )
         author = (author_name, author_choice, author_version)
+    elif fixing and model_tests:  # the same CLI, another model
+        author = (name, choice, version)
     scope = args.scope or tuple(saved.escopo if saved else ())
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
     tasks = saved.tarefas if saved else 5
     config = new_config(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
-        executor_version=version, tokens=tokens, scope=scope,
+        executor_version=version, executor_model=model, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks,
         policy_version=policy_digest(policy),
         fix=fixing[0] if fixing else None,
-        test_author=ExecutorRef(name=author[0], path=str(author[1].path), version=author[2])
+        test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
     lines = summary_of(detection, config, scope, tokens, notes)
@@ -346,6 +359,8 @@ async def prepare(
         executavel=str(choice.path),
         cli_testes=author[0] if author else "",
         executavel_testes=str(author[1].path) if author else "",
+        modelo=model,
+        modelo_testes=model_tests,
         escopo=list(scope),
         tokens=tokens,
         agente_roda_testes=runs_tests,

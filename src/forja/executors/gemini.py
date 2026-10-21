@@ -39,6 +39,7 @@ from forja.core.adapters.executor import (
     RolePermissions,
     TextActivity,
     UsageActivity,
+    model_args,
 )
 from forja.core.artifacts.models import Producer
 from forja.executors.claude_code import classify_error
@@ -96,7 +97,7 @@ class GeminiAdapter:
             str(executable), "-p", INSTRUCTION, "--output-format", "stream-json",
             "--approval-mode", "default",
             "--allowed-mcp-server-names", NO_MCP_SERVER,
-            *setup.extra_args,
+            *model_args(request), *setup.extra_args,
         )  # fmt: skip
         return CommandPlan(
             argv,

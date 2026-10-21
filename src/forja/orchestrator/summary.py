@@ -142,6 +142,7 @@ def render_summary(
         "## Ambiente e garantias",
         "",
         *_environment(state, config),
+        *_agents(config),
         "",
         "## Para publicar",
         "",
@@ -187,6 +188,26 @@ def _environment(state: RunState, config: RunConfig) -> list[str]:
                 lines.append(f"- {GUARANTEE_TEXT[guarantee]}: {STATUS_TEXT[status]}.")
     tests = "pôde" if config.agent_runs_tests else "não pôde"
     lines += ["", f"O agente {tests} rodar os testes do projeto (`forja agente testar`)."]
+    return lines
+
+
+def _agents(config: RunConfig) -> list[str]:
+    """Which CLI and model each role used, and the CLIs that do not hold their role to the rules."""
+    roles = [("implementa", config.implementer)]
+    if config.test_author:
+        roles.append(("escreve os testes", config.test_author))
+    lines = [""]
+    for role, executor in roles:
+        model = f", modelo `{executor.model}`" if executor.model else ""
+        lines.append(f"- Quem {role}: `{executor.name}` {executor.version}{model}.")
+    for role, executor in roles:
+        if executor.enforces_permissions is False:
+            lines.append(
+                f"- Limitação: a CLI `{executor.name}` ({role}) não garante as permissões do "
+                "papel. A Forja pediu só leitura, edição de arquivos e os comandos permitidos, "
+                "mas a CLI não impede que o agente faça mais; a Forja confere o resultado "
+                "(escopo, congelamento dos testes, git antes e depois de cada chamada)."
+            )
     return lines
 
 

@@ -51,3 +51,29 @@ def test_a_cli_plans_an_invocation_for_every_agent_role(
 @pytest.mark.parametrize("text", ["", "not json", "{", "[]", '{"type": 1}'])
 def test_a_cli_never_raises_on_a_line_it_does_not_understand(key: str, text: str) -> None:
     KNOWN_CLIS[key]().parse_event(text)
+
+
+@pytest.mark.parametrize("name", list(KNOWN_CLIS))
+def test_every_cli_takes_the_model_by_the_flag_and_none_by_default(
+    name: str, tmp_path: Path
+) -> None:
+    adapter = KNOWN_CLIS[name]()
+    permissions = RolePermissions(can_edit_files=True)
+
+    def argv_of(model: str) -> tuple[str, ...]:
+        request = AgentRequest(
+            Producer.IMPLEMENTER, tmp_path / "p.md", tmp_path, permissions, model
+        )
+        setup = adapter.permission_setup(Producer.IMPLEMENTER, permissions)
+        return adapter.plan_invocation(request, setup, Path("/bin/x")).argv
+
+    chosen = argv_of("some-model")
+    assert chosen[chosen.index("--model") + 1] == "some-model"
+    assert "--model" not in argv_of("")
+
+
+def test_a_model_name_cannot_pass_for_a_flag(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="dash"):
+        AgentRequest(
+            Producer.IMPLEMENTER, tmp_path, tmp_path, RolePermissions(can_edit_files=True), "--yolo"
+        )

@@ -30,7 +30,7 @@ from forja.core.gates import (
 from forja.core.idempotency import Decision, Reconciliation, reconcile_call_agent_cli
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.budget import Meter
-from forja.orchestrator.config import Budget, confirmed_payload
+from forja.orchestrator.config import Budget, ExecutorRef, RunConfig, confirmed_payload
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
 from forja.orchestrator.ports import (
@@ -438,6 +438,8 @@ def test_the_summary_says_everything_in_this_order(world: MemoryWorld) -> None:
             "",
             "O agente pôde rodar os testes do projeto (`forja agente testar`).",
             "",
+            "- Quem implementa: `fake-cli` 1.0.",
+            "",
             "## Para publicar",
             "",
             "A Forja não faz push. Se aprovar o resultado: "
@@ -750,3 +752,42 @@ def test_waiting_for_the_network_is_noted_under_that_name(world: MemoryWorld) ->
         if raw
     ]
     assert "waiting_for_network" in kinds
+
+
+# -- who did each role -----------------------------------------------------------------------------
+
+
+def _with_executors(config: RunConfig, **changes: object) -> RunConfig:
+    return config.model_copy(update=changes)
+
+
+def test_the_summary_names_the_cli_and_the_model_of_each_role(world: MemoryWorld) -> None:
+    _, log = world.run()
+    author = ExecutorRef(name="gemini", path="p", version="1.0", model="gemini-x")
+    config = _with_executors(world.config, test_author=author)
+
+    text = render_summary(log.state, Facts(), config, "branch", Path("x"))
+
+    assert "Quem escreve os testes: `gemini` 1.0, modelo `gemini-x`." in text
+    assert "Quem implementa: " in text
+    assert ", modelo `" not in text.split("Quem implementa: ")[1].splitlines()[0]
+
+
+def test_the_summary_records_a_cli_that_does_not_hold_its_role_to_the_permissions(
+    world: MemoryWorld,
+) -> None:
+    _, log = world.run()
+    loose = world.config.implementer.model_copy(update={"enforces_permissions": False})
+    held = world.config.implementer.model_copy(update={"enforces_permissions": True})
+
+    said = render_summary(
+        log.state, Facts(), _with_executors(world.config, implementer=loose), "b", Path("x")
+    )
+    silent = render_summary(
+        log.state, Facts(), _with_executors(world.config, implementer=held), "b", Path("x")
+    )
+    unknown = render_summary(log.state, Facts(), world.config, "b", Path("x"))
+
+    assert "Limitação: a CLI" in said
+    assert "Limitação" not in silent
+    assert "Limitação" not in unknown

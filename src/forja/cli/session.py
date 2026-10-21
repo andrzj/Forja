@@ -160,6 +160,16 @@ class Session:
         self.log.close()
 
 
+def executor_ref(name: str, path: Path, version: str, model: str = "") -> ExecutorRef:
+    return ExecutorRef(
+        name=name,
+        path=str(path),
+        version=version,
+        model=model,
+        enforces_permissions=KNOWN_CLIS[name]().enforces_permissions,
+    )
+
+
 def new_config(
     *,
     repo: Path,
@@ -168,6 +178,7 @@ def new_config(
     executor_path: Path,
     executor_version: str,
     tokens: int,
+    executor_model: str = "",
     scope: tuple[str, ...] = (),
     agent_runs_tests: bool = True,
     tasks: int = 5,
@@ -175,16 +186,14 @@ def new_config(
     fix: FixRequest | None = None,
     test_author: ExecutorRef | None = None,
 ) -> RunConfig:
-    from forja.orchestrator.config import Budget, ExecutorRef, Objective  # noqa: PLC0415
+    from forja.orchestrator.config import Budget, Objective  # noqa: PLC0415
 
     return RunConfig(
         repo=str(repo),
         base_commit=base_commit,
         objective=Objective.REFACTOR if fix is None else Objective.FIX,
         fix=fix,
-        implementer=ExecutorRef(
-            name=executor_name, path=str(executor_path), version=executor_version
-        ),
+        implementer=executor_ref(executor_name, executor_path, executor_version, executor_model),
         test_author=test_author,
         budget=Budget(tokens=tokens, tasks=tasks),
         forja_version=FORJA_VERSION,
@@ -324,6 +333,7 @@ async def _context(
             redactor=Redactor(policy.redaction, sensitive),
             role=role,
             permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
+            model=executor.model,
         )
 
     agents: dict[Producer, AgentRunner] = {}

@@ -28,6 +28,7 @@ from forja.core.adapters.executor import (
     RolePermissions,
     TextActivity,
     UsageActivity,
+    model_args,
 )
 from forja.core.artifacts.models import Producer
 
@@ -144,7 +145,7 @@ class ClaudeCodeAdapter:
             "--permission-mode", "dontAsk",
             "--setting-sources", "user", "--settings", f"{AGENT_DIR}/{SETTINGS_FILE}",
             "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence",
-            *setup.extra_args,
+            *model_args(request), *setup.extra_args,
         )  # fmt: skip
         return CommandPlan(
             argv,

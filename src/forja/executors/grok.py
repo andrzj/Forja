@@ -50,6 +50,7 @@ from forja.core.adapters.executor import (
     RolePermissions,
     TextActivity,
     UsageActivity,
+    model_args,
 )
 from forja.core.artifacts.models import Producer
 from forja.executors.claude_code import classify_error
@@ -127,7 +128,7 @@ class GrokAdapter:
             str(executable), "--no-auto-update", "--cwd", str(request.workdir),
             "--output-format", "streaming-json",
             "--no-subagents", "--no-plan", "--no-memory", "--disable-web-search",
-            *setup.extra_args,
+            *model_args(request), *setup.extra_args,
             "--prompt-file", str(request.package),
         )  # fmt: skip
         return CommandPlan(

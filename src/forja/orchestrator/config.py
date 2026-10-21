@@ -29,6 +29,9 @@ class ExecutorRef(BaseModel):
     name: NonEmpty
     path: NonEmpty
     version: NonEmpty
+    model: str = ""  # empty: the model the user configured in the CLI
+    # whether the CLI itself holds the role to its permissions; None: not recorded (older run)
+    enforces_permissions: bool | None = None
 
 
 class FixRequest(BaseModel):

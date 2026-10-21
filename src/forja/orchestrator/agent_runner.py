@@ -307,6 +307,7 @@ class ExecutorAgentRunner:
         sensitive: SensitivePaths | None = None,
         role: Producer = Producer.IMPLEMENTER,
         permissions: RolePermissions = RolePermissions(can_edit_files=True),  # noqa: B008
+        model: str = "",
         idle_limit: float = IDLE_LIMIT,
         poll: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
@@ -314,7 +315,7 @@ class ExecutorAgentRunner:
         self._adapter, self._executable, self._env, self._log = adapter, executable, host_env, log
         self._sensitive = sensitive or SensitivePaths.with_defaults()
         self._redactor = redactor or Redactor(sensitive=self._sensitive)
-        self._role, self._permissions = role, permissions
+        self._role, self._permissions, self._model = role, permissions, model
         self._idle_limit, self._poll, self._clock = idle_limit, poll, clock
 
     # -- the copy the agent works in ------------------------------------------------------------
@@ -346,7 +347,7 @@ class ExecutorAgentRunner:
     async def call(self, ctx: AttemptContext, operation_id: str, sink: EventSink) -> AgentResult:
         workcopy = workcopy_of(ctx)
         request = AgentRequest(
-            self._role, workcopy / AGENT_DIR / PACKAGE, workcopy, self._permissions
+            self._role, workcopy / AGENT_DIR / PACKAGE, workcopy, self._permissions, self._model
         )
         setup = self._adapter.permission_setup(self._role, self._permissions)
         plan = self._adapter.plan_invocation(request, setup, self._executable)
