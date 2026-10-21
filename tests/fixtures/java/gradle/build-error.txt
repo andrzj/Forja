@@ -1,0 +1,25 @@
+
+> Task :compileJava FAILED
+C:\work\calc\src\main\java\com\acme\Broken.java:1: error: illegal start of expression
+class X { int a = ; }
+                  ^
+1 error
+
+[Incubating] Problems report is available at: file:///C:/work/calc/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Compilation failed; see the compiler output below.
+  C:\work\calc\src\main\java\com\acme\Broken.java:1: error: illegal start of expression
+  class X { int a = ; }
+                    ^
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 1s
+1 actionable task: 1 executed

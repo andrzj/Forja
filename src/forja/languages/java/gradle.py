@@ -95,8 +95,10 @@ def lint_argv(gradle: tuple[str, ...], tasks: tuple[str, ...]) -> tuple[str, ...
 def format_argv(
     gradle: tuple[str, ...], root: Path, files: tuple[str, ...], check_only: bool
 ) -> tuple[str, ...]:
-    """One file goes through Spotless' IDE hook; anything else, the whole project."""
-    task = "spotlessCheck" if check_only else "spotlessApply"
+    """Applying to one file goes through Spotless' IDE hook. Checking always asks the whole
+    project: with the hook Spotless only prints ``IS DIRTY``, without saying which file."""
+    if check_only:
+        return (*gradle, *_BASE, "spotlessCheck")
     if len(files) == 1:
-        return (*gradle, *_BASE, f"-PspotlessIdeHook={root / files[0]}", task)
-    return (*gradle, *_BASE, task)
+        return (*gradle, *_BASE, f"-PspotlessIdeHook={root / files[0]}", "spotlessApply")
+    return (*gradle, *_BASE, "spotlessApply")

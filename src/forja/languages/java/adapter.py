@@ -276,15 +276,16 @@ class JavaAdapter:
     # -- reading what they print ---------------------------------------------------------------
 
     def parse(self, operation: Operation, output: ToolOutput) -> ParseResult:
+        gradle_run = self._uses_gradle
         match operation:
             case Operation.FORMAT:
-                return parsers.parse_format(output)
+                return parsers.parse_format(output, gradle=gradle_run)
             case Operation.LINT:
-                return parsers.parse_lint(output)
+                return parsers.parse_lint(output, gradle=gradle_run)
             case Operation.BUILD:
-                return parsers.parse_build(output)
+                return parsers.parse_build(output, gradle=gradle_run)
             case Operation.TEST:
-                return parsers.parse_tests(output)
+                return parsers.parse_tests(output, gradle=gradle_run)
         return Unparseable(f"the Java adapter does not read {operation.value} output")
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:

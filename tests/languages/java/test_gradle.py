@@ -10,7 +10,10 @@ from forja.core.adapters import (
     NotSupported,
     Operation,
     OperationRequest,
+    Parsed,
     ToolInfo,
+    ToolOutput,
+    Unparseable,
 )
 from forja.core.reports import ReportFormat
 from forja.languages.java import JavaAdapter, gradle
@@ -114,23 +117,28 @@ def test_an_undeclared_tool_is_not_supported(tmp_path: Path, operation: Operatio
     assert "does not declare" in result.reason
 
 
-def test_format_one_file_goes_through_the_ide_hook(tmp_path: Path) -> None:
+def test_format_apply_to_one_file_goes_through_the_ide_hook(tmp_path: Path) -> None:
     root = project(tmp_path)
-    check = planned(root, Operation.FORMAT, files=("src/main/java/A.java",), check_only=True)
-    assert check.argv[-2:] == (
-        f"-PspotlessIdeHook={root / 'src/main/java/A.java'}",
-        "spotlessCheck",
-    )
     apply = planned(root, Operation.FORMAT, files=("src/main/java/A.java",), check_only=False)
-    assert apply.argv[-1] == "spotlessApply"
+    assert apply.argv[-2:] == (
+        f"-PspotlessIdeHook={root / 'src/main/java/A.java'}",
+        "spotlessApply",
+    )
+
+
+def test_format_check_asks_the_project_because_the_hook_names_no_file(tmp_path: Path) -> None:
+    argv = planned(
+        project(tmp_path), Operation.FORMAT, files=("src/main/java/A.java",), check_only=True
+    ).argv
+    assert argv == ("g", "--console", "plain", "spotlessCheck")
 
 
 @pytest.mark.parametrize("files", [(), ("A.java", "B.java")])
-def test_format_none_or_several_files_goes_through_the_project(
+def test_format_apply_to_none_or_several_files_goes_through_the_project(
     tmp_path: Path, files: tuple[str, ...]
 ) -> None:
-    argv = planned(project(tmp_path), Operation.FORMAT, files=files, check_only=True).argv
-    assert argv == ("g", "--console", "plain", "spotlessCheck")
+    argv = planned(project(tmp_path), Operation.FORMAT, files=files, check_only=False).argv
+    assert argv == ("g", "--console", "plain", "spotlessApply")
 
 
 @pytest.mark.parametrize("operation", [Operation.TEST, Operation.COVERAGE])
@@ -150,3 +158,113 @@ def test_what_it_reports_follows_the_build_tool(tmp_path: Path) -> None:
     assert isinstance(info, ToolInfo)
     assert info.tool == "gradle"
     assert info.tool_probe.pattern == gradle.VERSION
+
+
+# -- reading what Gradle leaves behind ----------------------------------------------------------
+
+FIXTURES = Path(__file__).parents[2] / "fixtures" / "java" / "gradle"
+WORK = Path("C:/work/calc")
+BACKSLASHED = chr(92).join(("C:", "work", "calc"))
+
+
+def localize(text: str, root: Path) -> str:
+    return text.replace(BACKSLASHED, str(root)).replace("C:/work/calc", root.as_posix())
+
+
+def gradle_adapter(root: Path) -> JavaAdapter:
+    adapter = JavaAdapter(maven=("m",), gradle=GRADLE)
+    adapter.detect(project(root))
+    return adapter
+
+
+def log_of(tmp_path: Path, name: str, root: Path) -> Path:
+    log = tmp_path / name
+    log.write_text(localize((FIXTURES / name).read_text(encoding="utf-8"), root), encoding="utf-8")
+    return log
+
+
+def put(root: Path, relative: str, name: str) -> None:
+    target = root / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    text = localize((FIXTURES / name).read_text(encoding="utf-8"), root)
+    target.write_text(text, encoding="utf-8")
+
+
+def facts(result: object) -> list[tuple[str, str, object]]:
+    assert isinstance(result, Parsed), result
+    return [(d.measurement, d.target.id, d.value) for d in result.drafts]
+
+
+def test_a_compile_error_is_the_file_javac_names(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    log = log_of(tmp_path, "build-error.txt", root)
+    result = gradle_adapter(root).parse(Operation.BUILD, ToolOutput(1, log, root))
+    assert facts(result) == [("build.compile_error", "src/main/java/com/acme/Broken.java", 1)]
+
+
+def test_a_failed_build_with_no_javac_line_is_a_failed_build(tmp_path: Path) -> None:
+    log = tmp_path / "b.log"
+    log.write_text("FAILURE: Build failed with an exception.", encoding="utf-8")
+    result = gradle_adapter(tmp_path / "w").parse(Operation.BUILD, ToolOutput(1, log, tmp_path))
+    assert facts(result) == [("build.failed", "build", 1)]
+
+
+def test_the_test_outcomes_are_read_from_the_build_directory(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    put(root, "build/test-results/test/TEST-com.acme.CalcTest.xml", "TEST-fail.xml")
+    log = tmp_path / "t.log"
+    log.write_text("", encoding="utf-8")
+    result = gradle_adapter(root).parse(Operation.TEST, ToolOutput(1, log, root))
+    assert facts(result) == [
+        ("test.outcome", "com.acme.CalcTest.adds()", "passed"),
+        ("test.outcome", "com.acme.CalcTest.fails()", "failed"),
+    ]
+
+
+def test_a_passing_run_whose_reports_list_a_failure_is_not_understood(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    put(root, "build/test-results/test/TEST-com.acme.CalcTest.xml", "TEST-fail.xml")
+    log = tmp_path / "t.log"
+    log.write_text("", encoding="utf-8")
+    result = gradle_adapter(root).parse(Operation.TEST, ToolOutput(0, log, root))
+    assert isinstance(result, Unparseable)
+
+
+def test_no_test_report_is_no_test_collected(tmp_path: Path) -> None:
+    log = tmp_path / "t.log"
+    log.write_text("", encoding="utf-8")
+    result = gradle_adapter(tmp_path / "w").parse(Operation.TEST, ToolOutput(0, log, tmp_path))
+    assert facts(result) == [("test.collected", "tests", 0)]
+
+
+def test_spotless_lists_the_files_without_the_diff_lines(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    log = log_of(tmp_path, "format.txt", root)
+    result = gradle_adapter(root).parse(Operation.FORMAT, ToolOutput(1, log, root))
+    assert facts(result) == [
+        ("format.unformatted", "src/main/java/com/acme/Bad.java", 1),
+        ("format.unformatted", "src/test/java/com/acme/CalcTest.java", 1),
+    ]
+
+
+def test_lint_reads_checkstyle_and_spotbugs_from_their_reports(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    put(root, "build/reports/checkstyle/main.xml", "checkstyle.xml")
+    put(root, "build/reports/spotbugs/main.xml", "spotbugs.xml")
+    bad = root / "src" / "main" / "java" / "com" / "acme"
+    bad.mkdir(parents=True)
+    (bad / "Bad.java").write_text("class Bad {}", encoding="utf-8")
+    log = tmp_path / "l.log"
+    log.write_text("", encoding="utf-8")
+    result = facts(gradle_adapter(root).parse(Operation.LINT, ToolOutput(0, log, root)))
+    path = "src/main/java/com/acme/Bad.java"
+    assert ("lint.checkstyle.LineLength", path, 1) in result
+    assert ("lint.spotbugs.ES_COMPARING_PARAMETER_STRING_WITH_EQ", path, 1) in result
+    assert ("lint.checkstyle.LineLength", "src/main/java/com/acme/Calc.java", 1) in result
+
+
+def test_lint_that_failed_without_a_report_is_not_understood(tmp_path: Path) -> None:
+    log = tmp_path / "l.log"
+    log.write_text("FAILURE: Build failed", encoding="utf-8")
+    result = gradle_adapter(tmp_path / "w").parse(Operation.LINT, ToolOutput(1, log, tmp_path))
+    assert isinstance(result, Unparseable)

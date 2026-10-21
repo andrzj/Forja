@@ -1,0 +1,64 @@
+> Task :spotlessInternalRegisterDependencies
+> Task :spotlessJava
+> Task :spotlessJavaCheck FAILED
+
+[Incubating] Problems report is available at: file:///C:/work/calc/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':spotlessJavaCheck' (registered in build file 'build.gradle').
+> The following files had format violations:
+      src\main\java\com\acme\Bad.java
+          @@ -1,7 +1,7 @@
+          -package com.acme;\n
+          -\n
+          -public class Bad {\n
+          -  public boolean same(String a) {\n
+          -    return a == "x";\n
+          -  }\n
+          -}\n
+          +package com.acme;\r\n
+          +\r\n
+          +public class Bad {\r\n
+          +  public boolean same(String a) {\r\n
+          +    return a == "x";\r\n
+          +  }\r\n
+          +}\r\n
+      src\test\java\com\acme\CalcTest.java
+          @@ -1,9 +1,17 @@
+           package·com.acme;
+           
+           import·static·org.junit.jupiter.api.Assertions.assertEquals;
+          +
+           import·org.junit.jupiter.api.Test;
+           
+           class·CalcTest·{
+          -··@Test·void·adds()·{·assertEquals(3,·new·Calc().add(1,·2));·}
+          -··@Test·void·fails()·{·assertEquals(4,·new·Calc().add(1,·2));·}
+          +··@Test
+          +··void·adds()·{
+          +····assertEquals(3,·new·Calc().add(1,·2));
+          +··}
+          +
+          +··@Test
+          +··void·fails()·{
+          +····assertEquals(4,·new·Calc().add(1,·2));
+          +··}
+           }
+  Run 'gradlew.bat spotlessApply' to fix all violations.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 1s
+3 actionable tasks: 3 executed

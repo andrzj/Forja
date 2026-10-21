@@ -1,11 +1,13 @@
-"""Reading what Maven, Spotless, Checkstyle, PMD, SpotBugs and Surefire leave behind.
+"""Reading what Maven or Gradle, Spotless, Checkstyle, PMD, SpotBugs and JUnit leave behind.
 
 Every parser works from the text of the log and never raises: a line it does not understand is
 skipped, and output it cannot make sense of at all is ``Unparseable``, which the gate turns into an
 inconclusive result instead of a pass. Surefire, PMD and SpotBugs write XML reports under
 ``target`` instead of printing their findings; those are read from the directory the command ran
 in (``ToolOutput.root``), and the command starts with ``clean`` so no report is left over from an
-earlier run. Paths are made relative to that directory.
+earlier run. Paths are made relative to that directory. Where the two build tools differ, the
+parsers take ``gradle``: Gradle prints ``javac``'s own error lines and Spotless' list without the
+``[ERROR]`` prefix, and writes the Checkstyle, PMD, SpotBugs and test reports under ``build``.
 """
 
 import re
@@ -27,6 +29,9 @@ _CHECKSTYLE = re.compile(
     r"^\[(?:WARN|WARNING|ERROR)\]\s+(?P<path>.+?\.java):\d+(?::\d+)?: .*\[(?P<rule>\w+)\]\s*$"
 )
 _COMPILE_ERROR = re.compile(r"^\[ERROR\]\s+(?P<path>.+?\.java):\[\d+,\d+\] ")
+_GRADLE_SPOTLESS_FILE = re.compile(r"^ {6}(?P<path>\S.*\.java)\s*$")
+_JAVAC_ERROR = re.compile(r"^\s*(?P<path>.+?\.java):\d+: error: ")
+_RULE = re.compile(r"(\w+?)(?:Check)?$")
 _OK = (0, 1)
 
 
@@ -71,22 +76,33 @@ def _reports(output: ToolOutput, pattern: str) -> list[Path]:
     )
 
 
-def parse_format(output: ToolOutput) -> ParseResult:
+def parse_format(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
     """The files Spotless says are not in the form google-java-format writes."""
     if output.exit_code not in _OK:
         return Unparseable(f"spotless ended with {output.exit_code}")
+    listed = _GRADLE_SPOTLESS_FILE if gradle else _SPOTLESS_FILE
     files = sorted(
-        {
-            _path(found["path"], output)
-            for found in map(_SPOTLESS_FILE.match, _lines(output))
-            if found
-        }
+        {_path(found["path"], output) for found in map(listed.match, _lines(output)) if found}
     )
     if output.exit_code == 1 and not files:
         return Unparseable("spotless failed in a form this parser does not know")
     return Parsed(
         tuple(_draft("format.unformatted", TargetKind.FILE, path, 1, "files") for path in files)
     )
+
+
+def _checkstyle_report(output: ToolOutput) -> Counter[tuple[str, str]]:
+    """Gradle's report: the rule is the last part of ``source``, without ``Check``."""
+    counts: Counter[tuple[str, str]] = Counter()
+    for report in _reports(output, "**/build/reports/checkstyle/main.xml"):
+        for file in _each(load_xml(report.read_text(encoding="utf-8")), "file"):
+            path = _path(file.get("name", ""), output)
+            for error in _each(file, "error"):
+                last = error.get("source", "").rsplit(".", 1)[-1]
+                found = _RULE.match(last)
+                rule = found[1] if found else last
+                counts[(path, f"checkstyle.{rule or 'violation'}")] += 1
+    return counts
 
 
 def _checkstyle(output: ToolOutput) -> Counter[tuple[str, str]]:
@@ -98,9 +114,9 @@ def _checkstyle(output: ToolOutput) -> Counter[tuple[str, str]]:
     return counts
 
 
-def _pmd(output: ToolOutput) -> Counter[tuple[str, str]]:
+def _pmd(output: ToolOutput, pattern: str) -> Counter[tuple[str, str]]:
     counts: Counter[tuple[str, str]] = Counter()
-    for report in _reports(output, "target/pmd.xml"):
+    for report in _reports(output, pattern):
         for file in _each(load_xml(report.read_text(encoding="utf-8")), "file"):
             path = _path(file.get("name", ""), output)
             for violation in _each(file, "violation"):
@@ -108,9 +124,9 @@ def _pmd(output: ToolOutput) -> Counter[tuple[str, str]]:
     return counts
 
 
-def _spotbugs(output: ToolOutput) -> Counter[tuple[str, str]]:
+def _spotbugs(output: ToolOutput, pattern: str) -> Counter[tuple[str, str]]:
     counts: Counter[tuple[str, str]] = Counter()
-    for report in _reports(output, "target/spotbugsXml.xml"):
+    for report in _reports(output, pattern):
         tree = load_xml(report.read_text(encoding="utf-8"))
         for bug in tree.iter("BugInstance"):
             where = next((s for s in bug.iter("SourceLine") if s.get("sourcepath")), None)
@@ -130,16 +146,29 @@ def _source_path(output: ToolOutput, sourcepath: str) -> str:
     return sourcepath
 
 
-def parse_lint(output: ToolOutput) -> ParseResult:
-    """Findings per file and rule of Checkstyle (the log), PMD and SpotBugs (their reports)."""
+def parse_lint(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+    """Findings per file and rule of Checkstyle (Maven's log, Gradle's report), PMD and SpotBugs
+    (their reports)."""
+    tool = "gradle" if gradle else "maven"
     if output.exit_code not in _OK:
-        return Unparseable(f"maven ended with {output.exit_code}")
+        return Unparseable(f"{tool} ended with {output.exit_code}")
     try:
-        counts = _checkstyle(output) + _pmd(output) + _spotbugs(output)
+        if gradle:
+            counts = (
+                _checkstyle_report(output)
+                + _pmd(output, "**/build/reports/pmd/main.xml")
+                + _spotbugs(output, "**/build/reports/spotbugs/main.xml")
+            )
+        else:
+            counts = (
+                _checkstyle(output)
+                + _pmd(output, "target/pmd.xml")
+                + _spotbugs(output, "target/spotbugsXml.xml")
+            )
     except (OSError, ReportError) as error:
         return Unparseable(f"a lint report cannot be read ({error})")
     if output.exit_code == 1 and not counts:
-        return Unparseable("maven failed in a form this parser does not know")
+        return Unparseable(f"{tool} failed in a form this parser does not know")
     return Parsed(
         tuple(
             _draft(f"lint.{rule}", TargetKind.FILE, path, count, "violations")
@@ -148,15 +177,14 @@ def parse_lint(output: ToolOutput) -> ParseResult:
     )
 
 
-def parse_build(output: ToolOutput) -> ParseResult:
+def parse_build(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
     """The files ``javac`` could not compile."""
     if output.exit_code is None:
-        return Unparseable("maven did not finish")
+        return Unparseable(f"{'gradle' if gradle else 'maven'} did not finish")
     if output.exit_code == 0:
         return Parsed(())
-    paths = sorted(
-        {_path(m["path"], output) for m in map(_COMPILE_ERROR.match, _lines(output)) if m}
-    )
+    error = _JAVAC_ERROR if gradle else _COMPILE_ERROR
+    paths = sorted({_path(m["path"], output) for m in map(error.match, _lines(output)) if m})
     if not paths:
         return Parsed((_draft("build.failed", TargetKind.MODULE, "build", 1, "failures"),))
     return Parsed(
@@ -164,14 +192,20 @@ def parse_build(output: ToolOutput) -> ParseResult:
     )
 
 
-def parse_tests(output: ToolOutput) -> ParseResult:
-    """Outcome of every test case in the Surefire reports."""
+def parse_tests(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+    """Outcome of every test case in the Surefire (Maven) or Gradle test reports."""
     code = output.exit_code
+    tool = "gradle" if gradle else "maven"
     if code not in _OK:
-        return Unparseable(f"maven ended with {code}")
+        return Unparseable(f"{tool} ended with {code}")
+    pattern = (
+        "**/build/test-results/test/TEST-*.xml"
+        if gradle
+        else "**/target/surefire-reports/TEST-*.xml"
+    )
     outcomes: dict[str, str] = {}
     try:
-        for report in _reports(output, "**/target/surefire-reports/TEST-*.xml"):
+        for report in _reports(output, pattern):
             for case in load_xml(report.read_text(encoding="utf-8")).iter("testcase"):
                 name = f"{case.get('classname', '')}.{case.get('name', '')}".strip(".")
                 if case.find("failure") is not None or case.find("error") is not None:
@@ -184,9 +218,9 @@ def parse_tests(output: ToolOutput) -> ParseResult:
         return Unparseable(f"a test report cannot be read ({error})")
     failed = any(o == "failed" for o in outcomes.values())
     if code == 1 and not failed:
-        return Unparseable("maven reported a failure in a form this parser does not know")
+        return Unparseable(f"{tool} reported a failure in a form this parser does not know")
     if code == 0 and failed:
-        return Unparseable("maven passed but its reports list failures")
+        return Unparseable(f"{tool} passed but its reports list failures")
     if not outcomes:
         return Parsed((_draft("test.collected", TargetKind.MODULE, "tests", 0, "tests"),))
     drafts = [

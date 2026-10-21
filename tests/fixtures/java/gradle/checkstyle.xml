@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="10.24.0">
+<file name="C:\work\calc\src\main\java\com\acme\Bad.java">
+<error line="4" severity="warning" message="Line is longer than 30 characters (found 33)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="C:\work\calc\src\main\java\com\acme\Calc.java">
+<error line="4" severity="warning" message="Line is longer than 30 characters (found 32)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+</checkstyle>
