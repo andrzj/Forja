@@ -26,6 +26,7 @@ from forja.core.adapters import (
     VersionProbe,
 )
 from forja.core.adapters.executor import locate_in_path
+from forja.core.adapters.ownership import says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.go import parsers
 
@@ -81,14 +82,6 @@ class GoAdapter:
     language = "go"
     grammar = "go"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
-    lint_config_files = (
-        ".golangci.yml",
-        ".golangci.yaml",
-        ".golangci.toml",
-        ".golangci.json",
-        "go.mod",
-        "go.sum",
-    )
 
     def __init__(
         self,
@@ -109,9 +102,10 @@ class GoAdapter:
         probe = VersionProbe(self._plan(root, (*self._go, "version")), _GO_VERSION)
         return Detection("go", (".",), (MANIFEST,), probe)
 
-    def owns_test(self, test_id: str, path: str) -> bool:
-        """The runner's ids do not carry the path of the file, so any id may be the file's."""
-        return True
+    def owns_test(self, test_id: str, path: str, text: str) -> bool:
+        """The ids (``package/TestX/sub``) do not carry the file: ``func TestX`` has to be in it."""
+        name = next((s for s in test_id.split("/") if s.startswith("Test")), "")
+        return says(text, f"func {name}") if name else False
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

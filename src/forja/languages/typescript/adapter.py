@@ -90,7 +90,6 @@ class TypeScriptAdapter:
     language = "typescript"
     grammar = "typescript"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
-    lint_config_files = CONFIG_FILES
 
     def __init__(self, *, node: tuple[str, ...] = ("node",)) -> None:
         self._node = node
@@ -103,9 +102,12 @@ class TypeScriptAdapter:
         probe = VersionProbe(self._plan(root, (*self._node, "--version")), _NODE_VERSION)
         return Detection("typescript", (".",), (MANIFEST, TSCONFIG), probe)
 
-    def owns_test(self, test_id: str, path: str) -> bool:
-        """The runner's ids do not carry the path of the file, so any id may be the file's."""
-        return True
+    def owns_test(self, test_id: str, path: str, text: str) -> bool:
+        """The ids are ``file > suite > test`` with the file relative to the runner's root, which
+        may be a folder below the repository's; a file that did not load is its own id."""
+        head = test_id.split(" > ")[0].replace("\\", "/")
+        where = path.replace("\\", "/")
+        return bool(head) and (where == head or where.endswith("/" + head))
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

@@ -60,7 +60,6 @@ class PythonAdapter:
     contract_version = CONTRACT_VERSION
     language = "python"
     grammar = "python"
-    lint_config_files = ("pyproject.toml", "ruff.toml", ".ruff.toml", "setup.cfg")
     test_root = "tests"  # the directory the test author writes in unless the policy says otherwise
     capabilities = frozenset(
         {

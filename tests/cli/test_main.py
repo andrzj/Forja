@@ -186,6 +186,31 @@ def test_a_test_author_cli_that_is_not_known_is_refused(
     assert "Não conheço a CLI `nenhuma`" in talk.text
 
 
+def test_a_repository_with_no_language_is_refused(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    git(repo, "rm", "-q", "pyproject.toml")
+    (repo / "notes.txt").write_text("x", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "no language")
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    assert go(["corrigir", "x", "--criterios", str(criteria), "--plano"], talk, environ) == 2
+    assert "Não encontrei nenhuma linguagem" in talk.text
+
+
+def test_the_suspended_gemini_cli_is_not_a_known_cli(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--cli", "gemini", "--plano"]
+    assert go(argv, talk, environ) == 2
+    assert "Não conheço a CLI `gemini`" in talk.text
+
+
 def test_each_role_of_a_fix_can_run_on_its_own_cli(
     repo: Path, tmp_path: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -28,6 +28,7 @@ from forja.core.adapters import (
     Unparseable,
     VersionProbe,
 )
+from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.csharp import parsers
 
@@ -92,7 +93,6 @@ class CSharpAdapter:
     language = "csharp"
     grammar = "csharp"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
-    lint_config_files = (".editorconfig", "Directory.Build.props", "global.json")
 
     def __init__(self, *, dotnet: tuple[str, ...] = ("dotnet",)) -> None:
         self._dotnet = dotnet
@@ -108,9 +108,11 @@ class CSharpAdapter:
         probe = VersionProbe(self._plan(root, (*self._dotnet, "--version")), _DOTNET_VERSION)
         return Detection("csharp", (".",), tuple(manifests), probe)
 
-    def owns_test(self, test_id: str, path: str) -> bool:
-        """The runner's ids do not carry the path of the file, so any id may be the file's."""
-        return True
+    def owns_test(self, test_id: str, path: str, text: str) -> bool:
+        """The ids (``Namespace.Class.Method``) do not carry the file: its class and method are
+        written in it."""
+        names = dotted_names(test_id)
+        return names is not None and all(says(text, name) for name in names)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

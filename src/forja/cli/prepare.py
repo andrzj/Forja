@@ -117,10 +117,16 @@ def check_repository(detection: Detection) -> Path:
         )
     if detection.repo is None:
         raise Refused("Rode `forja` dentro de um repositório git.")
-    if not detection.python:
+    if not (
+        detection.python
+        or detection.go
+        or detection.typescript
+        or detection.csharp
+        or detection.java
+    ):
         raise Refused(
-            "Não encontrei pyproject.toml neste repositório. Por enquanto a Forja trabalha "
-            "com Python (outras linguagens chegam nos incrementos 3 e 5)."
+            "Não encontrei nenhuma linguagem neste repositório (pyproject.toml, go.mod, "
+            "package.json com tsconfig.json, .sln ou .csproj, pom.xml)."
         )
     if detection.changed:
         sample = ", ".join(detection.changed[:3])

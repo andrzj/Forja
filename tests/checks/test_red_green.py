@@ -183,5 +183,7 @@ def test_an_id_may_not_carry_the_path_where_the_language_runner_does_not_print_i
     go = DeclaredTest(criterion_id=1, test_id="example.com/calc/TestAdd", path="calc_add_test.go")
     py = DeclaredTest(criterion_id=1, test_id="example.com/calc/TestAdd", path="tests/test_a.py")
 
+    (tmp_path / "calc_add_test.go").write_text("func TestAdd(t *testing.T) {}", encoding="utf-8")
+
     assert check_of(GoAdapter())._owns(go)
     assert not check_of(PythonAdapter())._owns(py)

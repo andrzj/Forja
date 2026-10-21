@@ -75,9 +75,15 @@ class RedGreenCheck:
             if adapter.classify(test.path) is not None:
                 owns = getattr(adapter, "owns_test", None)
                 if owns is not None:
-                    return bool(owns(test.test_id, test.path))
+                    return bool(owns(test.test_id, test.path, self._text_of(test.path)))
                 break
         return test.test_id.startswith(f"{test.path}::")
+
+    def _text_of(self, path: str) -> str:
+        try:
+            return (self.worktree / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
 
     async def _judge(self, data: GateInput) -> GateResult:
         outcomes = await outcomes_of(self.tools, self.adapters, self.worktree, data.values)

@@ -14,9 +14,8 @@ KNOWN_CLIS: dict[str, Callable[[], ExecutorAdapter]] = {
     "claude-code": ClaudeCodeAdapter,
     "codex": CodexAdapter,
     "cursor": CursorAdapter,
-    "gemini": GeminiAdapter,
     "grok": GrokAdapter,
-}
+}  # TODO: Gemini CLI is suspended (adapter kept in executors/gemini.py, not registered)
 DEFAULT_CLI = "claude-code"
 
 __all__ = [

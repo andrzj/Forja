@@ -29,6 +29,7 @@ from forja.core.adapters import (
     VersionProbe,
 )
 from forja.core.adapters.executor import locate_in_path
+from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.java import parsers
 
@@ -92,7 +93,6 @@ class JavaAdapter:
     language = "java"
     grammar = "java"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
-    lint_config_files = ("pom.xml",)
 
     def __init__(self, *, maven: tuple[str, ...] | None = None) -> None:
         self._maven = maven or find_maven()
@@ -105,9 +105,10 @@ class JavaAdapter:
         probe = VersionProbe(self._plan(root, (*self._maven, "-v")), _MAVEN_VERSION)
         return Detection("java", (".",), (MANIFEST,), probe)
 
-    def owns_test(self, test_id: str, path: str) -> bool:
-        """The runner's ids do not carry the path of the file, so any id may be the file's."""
-        return True
+    def owns_test(self, test_id: str, path: str, text: str) -> bool:
+        """The ids (``pkg.Class.method``) do not carry the file: its class and method are in it."""
+        names = dotted_names(test_id)
+        return names is not None and all(says(text, name) for name in names)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")
