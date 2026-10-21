@@ -1,12 +1,13 @@
-"""The Java adapter: Maven for build and tests, Spotless (google-java-format) for format,
-Checkstyle, PMD and SpotBugs for lint, and JaCoCo for coverage.
+"""The Java adapter: Maven or Gradle for build and tests, Spotless (google-java-format) for
+format, Checkstyle, PMD and SpotBugs for lint, and JaCoCo for coverage.
 
 It only describes commands and reads their output; the core runs them. Forja installs none of
 these: a formatter or linter runs only when the project's ``pom.xml`` declares its plugin, and
 without it the operation is not supported (the ``doctor`` and the summary say so). JaCoCo is
 different: its goals are named in full, so a project needs nothing for it. Every goal starts with
-``clean`` so the reports a tool writes under ``target`` are the ones of this very run. Gradle is
-not offered yet.
+``clean`` so the reports a tool writes under ``target`` are the ones of this very run. A root
+with a ``pom.xml`` is a Maven project even if it also has a Gradle build file; otherwise a
+``build.gradle[.kts]`` makes it a Gradle one (``forja.languages.java.gradle``).
 """
 
 import re
@@ -31,7 +32,7 @@ from forja.core.adapters import (
 from forja.core.adapters.executor import locate_in_path
 from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
-from forja.languages.java import parsers
+from forja.languages.java import gradle, parsers
 
 MANIFEST = "pom.xml"
 CONFIG_FILES = (
@@ -94,16 +95,29 @@ class JavaAdapter:
     grammar = "java"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
 
-    def __init__(self, *, maven: tuple[str, ...] | None = None) -> None:
+    def __init__(
+        self, *, maven: tuple[str, ...] | None = None, gradle: tuple[str, ...] | None = None
+    ) -> None:
         self._maven = maven or find_maven()
+        self._gradle = gradle
+        self._uses_gradle = False  # what ``detect`` last found: ``tool_info`` has no root
 
     # -- finding and classifying ---------------------------------------------------------------
 
     def detect(self, root: Path) -> Detection | None:
-        if not (root / MANIFEST).is_file():
+        if (root / MANIFEST).is_file():
+            self._uses_gradle = False
+            probe = VersionProbe(self._plan(root, (*self._maven, "-v")), _MAVEN_VERSION)
+            return Detection("java", (".",), (MANIFEST,), probe)
+        manifest = next((m for m in gradle.MANIFESTS if (root / m).is_file()), None)
+        if manifest is None:
             return None
-        probe = VersionProbe(self._plan(root, (*self._maven, "-v")), _MAVEN_VERSION)
-        return Detection("java", (".",), (MANIFEST,), probe)
+        self._uses_gradle = True
+        probe = VersionProbe(self._plan(root, (*self._gradle_for(root), "-v")), gradle.VERSION)
+        return Detection("java", (".",), (manifest,), probe)
+
+    def _gradle_for(self, root: Path) -> tuple[str, ...]:
+        return self._gradle or gradle.find_gradle(root)
 
     def owns_test(self, test_id: str, path: str, text: str) -> bool:
         """The ids (``pkg.Class.method``) do not carry the file: its class and method are in it."""
@@ -124,6 +138,8 @@ class JavaAdapter:
     # -- commands ----------------------------------------------------------------------------
 
     def tool_info(self, operation: Operation) -> ToolInfo | NotSupported:
+        if self._uses_gradle:
+            return self._gradle_info(operation)
         maven = VersionProbe(self._plan(Path("."), (*self._maven, "-v")), _MAVEN_VERSION)
         match operation:
             case Operation.FORMAT:
@@ -136,10 +152,24 @@ class JavaAdapter:
                 return ToolInfo("jacoco", maven, "maven", maven)
         return NotSupported(operation.value, "the Java adapter does not offer it")
 
+    def _gradle_info(self, operation: Operation) -> ToolInfo | NotSupported:
+        tool = self._gradle_for(Path("."))
+        probe = VersionProbe(self._plan(Path("."), (*tool, "-v")), gradle.VERSION)
+        match operation:
+            case Operation.FORMAT:
+                return ToolInfo("spotless", probe, "gradle", probe)
+            case Operation.LINT:
+                return ToolInfo("checkstyle, pmd, spotbugs", probe, "gradle", probe)
+            case Operation.BUILD | Operation.TEST:
+                return ToolInfo("gradle", probe, "gradle", probe)
+            case Operation.COVERAGE:
+                return ToolInfo("jacoco", probe, "gradle", probe)
+        return NotSupported(operation.value, "the Java adapter does not offer it")
+
     def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
         pom = _pom(request.root)
         if pom is None:
-            return NotSupported(operation.value, "the root has no pom.xml")
+            return self._plan_gradle(operation, request)
         mvn = (*self._maven, *_BASE)
         match operation:
             case Operation.FORMAT if "spotless-maven-plugin" in pom:
@@ -171,6 +201,40 @@ class JavaAdapter:
                 return NotSupported(operation.value, "the Java adapter does not offer it")
         return self._plan(request.root, argv, config_files=CONFIG_FILES)
 
+    def _plan_gradle(
+        self, operation: Operation, request: OperationRequest
+    ) -> CommandPlan | NotSupported:
+        build = gradle.manifest(request.root)
+        if build is None:
+            return NotSupported(operation.value, "the root has no pom.xml or build.gradle")
+        tool = self._gradle_for(request.root)
+        tasks = gradle.linter_tasks(build)
+        match operation:
+            case Operation.FORMAT if gradle.declares_spotless(build):
+                argv = gradle.format_argv(tool, request.root, request.files, request.check_only)
+            case Operation.LINT if tasks:
+                argv = gradle.lint_argv(tool, tasks)
+            case Operation.BUILD:
+                argv = gradle.build_argv(tool)
+            case Operation.TEST | Operation.COVERAGE if request.tests or request.test_files:
+                return NotSupported(operation.value, "filtering the tests is not offered")
+            case Operation.TEST:
+                argv = gradle.test_argv(tool)
+            case Operation.COVERAGE:
+                argv = gradle.coverage_argv(tool)
+            case Operation.FORMAT | Operation.LINT:
+                return NotSupported(operation.value, "the project does not declare that tool")
+            case _:
+                return NotSupported(operation.value, "the Java adapter does not offer it")
+        env = JAVA_ENVIRONMENT | gradle.ENVIRONMENT
+        return CommandPlan(
+            argv,
+            request.root,
+            env_allow=env,
+            env_set={"NO_COLOR": "1"},
+            config_files=gradle.CONFIG_FILES,
+        )
+
     def _through_cmd(self) -> bool:
         return Path(self._maven[0]).suffix.lower() in {".cmd", ".bat"}
 
@@ -195,7 +259,8 @@ class JavaAdapter:
 
     def report(self, operation: Operation) -> ReportSpec | NotSupported:
         if operation is Operation.COVERAGE:
-            return ReportSpec(ReportFormat.JACOCO_XML, COVERAGE_REPORT, SOURCE_ROOTS)
+            path = gradle.COVERAGE_REPORT if self._uses_gradle else COVERAGE_REPORT
+            return ReportSpec(ReportFormat.JACOCO_XML, path, SOURCE_ROOTS)
         return NotSupported(operation.value, "the Java adapter writes no such report")
 
     @staticmethod

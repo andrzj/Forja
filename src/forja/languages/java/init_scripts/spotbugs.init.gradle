@@ -1,0 +1,5 @@
+allprojects {
+  pluginManager.withPlugin('com.github.spotbugs') {
+    tasks.matching { it.name.startsWith('spotbugs') }.configureEach { reports { xml { required = true } } }
+  }
+}
