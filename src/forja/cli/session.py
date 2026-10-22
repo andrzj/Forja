@@ -76,11 +76,13 @@ def git_base_environment(environ: Mapping[str, str]) -> dict[str, str]:
 def languages(repo: Path) -> AdapterRegistry:
     """The language adapters of a run."""
     registry = AdapterRegistry()
-    registry.register_language(PythonAdapter(python=repo_python(repo)))
-    registry.register_language(GoAdapter(golangci_lint=find_golangci_lint()))
-    registry.register_language(TypeScriptAdapter())
-    registry.register_language(CSharpAdapter())
-    registry.register_language(JavaAdapter())
+    python = repo_python(repo)
+    lint = find_golangci_lint()
+    registry.register_language(PythonAdapter(python=python), lambda: PythonAdapter(python=python))
+    registry.register_language(GoAdapter(golangci_lint=lint), lambda: GoAdapter(golangci_lint=lint))
+    registry.register_language(TypeScriptAdapter(), TypeScriptAdapter)
+    registry.register_language(CSharpAdapter(), CSharpAdapter)
+    registry.register_language(JavaAdapter(), JavaAdapter)
     return registry
 
 

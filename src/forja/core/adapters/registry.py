@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from forja.core.adapters.common import CONTRACT_VERSION
@@ -11,6 +11,7 @@ from forja.core.adapters.language import (
     valid_language,
 )
 from forja.core.adapters.projects import find_projects
+from forja.core.adapters.scoped import ScopedAdapter
 
 
 class AdapterRejected(ValueError):
@@ -22,9 +23,14 @@ class AdapterRegistry:
 
     def __init__(self) -> None:
         self._languages: dict[str, LanguageAdapter] = {}
+        self._factories: dict[str, Callable[[], LanguageAdapter]] = {}
         self._executors: dict[str, ExecutorAdapter] = {}
 
-    def register_language(self, adapter: LanguageAdapter) -> None:
+    def register_language(
+        self, adapter: LanguageAdapter, factory: Callable[[], LanguageAdapter] | None = None
+    ) -> None:
+        """``factory`` makes the instance of each project; without it the project shares
+        ``adapter``, which is only right for an adapter that keeps no state between calls."""
         if adapter.contract_version != CONTRACT_VERSION:
             raise AdapterRejected(
                 f"language adapter {adapter.language!r} speaks contract "
@@ -37,6 +43,7 @@ class AdapterRegistry:
         if not all(isinstance(c, LanguageCapability) for c in adapter.capabilities):
             raise AdapterRejected("capabilities must be LanguageCapability values")
         self._languages[adapter.language] = adapter
+        self._factories[adapter.language] = factory or (lambda: adapter)
 
     def register_executor(self, adapter: ExecutorAdapter) -> None:
         if adapter.contract_version != CONTRACT_VERSION:
@@ -65,6 +72,15 @@ class AdapterRegistry:
         directory."""
         return [
             (adapter, detection)
+            for adapter in self._languages.values()
+            for detection in find_projects(adapter, root)
+        ]
+
+    def projects(self, root: Path) -> list[ScopedAdapter]:
+        """The projects under ``root``, one adapter instance each, in registration order and
+        then by directory."""
+        return [
+            ScopedAdapter(self._factories[adapter.language](), detection.roots[0])
             for adapter in self._languages.values()
             for detection in find_projects(adapter, root)
         ]
