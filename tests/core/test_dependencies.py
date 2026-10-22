@@ -163,11 +163,19 @@ def test_a_copy_keeps_the_links_inside_the_packages(
         os.symlink("index.js", source / "node_modules" / "lib" / "alias.js")
     except OSError:
         pytest.skip("no right to make links")
-    monkeypatch.setattr(os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
+    real = os.symlink
+
+    def refuse_directories(src: object, dst: object, **kwargs: object) -> None:
+        if kwargs.get("target_is_directory"):
+            raise OSError("no links to directories")
+        real(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "symlink", refuse_directories)
     monkeypatch.setattr(sys, "platform", "linux")
 
     link_dependencies(source, target)
 
+    assert not (target / "node_modules").is_symlink()
     assert (target / "node_modules" / "lib" / "alias.js").is_symlink()
 
 
