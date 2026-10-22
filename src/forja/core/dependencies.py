@@ -58,7 +58,7 @@ def link_dependencies(source: Path, target: Path) -> None:
 
 def _link(packages: Path, link: Path) -> None:
     try:
-        os.symlink(packages, link, target_is_directory=True)  # pragma: no mutate
+        os.symlink(packages, link, target_is_directory=True)
         return
     except OSError:
         pass

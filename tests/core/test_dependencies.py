@@ -133,3 +133,66 @@ def test_without_a_link_the_dependencies_are_copied(
 
     assert (target / "node_modules" / "lib" / "index.js").read_text(encoding="utf-8") == "x\n"
     assert not (target / "node_modules").is_symlink()
+
+
+def test_the_link_is_made_as_a_link_to_a_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = installed(tmp_path / "repo"), tmp_path / "wt"
+    target.mkdir()
+    seen: list[dict[str, object]] = []
+    real = os.symlink
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        seen.append(kwargs)
+        real(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "symlink", spy)
+
+    link_dependencies(source, target)
+
+    assert seen == [{"target_is_directory": True}]
+
+
+def test_a_copy_keeps_the_links_inside_the_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = installed(tmp_path / "repo"), tmp_path / "wt"
+    target.mkdir()
+    try:
+        os.symlink("index.js", source / "node_modules" / "lib" / "alias.js")
+    except OSError:
+        pytest.skip("no right to make links")
+    monkeypatch.setattr(os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    link_dependencies(source, target)
+
+    assert (target / "node_modules" / "lib" / "alias.js").is_symlink()
+
+
+class _Done:
+    def __init__(self, code: int) -> None:
+        self.returncode = code
+
+
+@pytest.mark.parametrize(("code", "copied"), [(0, False), (1, True)])
+def test_on_windows_a_junction_is_tried_before_a_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int, copied: bool
+) -> None:
+    source, target = installed(tmp_path / "repo"), tmp_path / "wt"
+    target.mkdir()
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: object) -> _Done:
+        calls.append(command)
+        return _Done(code)
+
+    monkeypatch.setattr(os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr("forja.core.dependencies.subprocess.run", run)
+
+    link_dependencies(source, target)
+
+    assert [c[:3] for c in calls] == [["cmd", "/c", "mklink"]]
+    assert (target / "node_modules" / "lib" / "index.js").exists() is copied

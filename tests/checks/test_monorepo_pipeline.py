@@ -19,7 +19,7 @@ from tests.core.events.support import FakeClock
 
 WRITE_REPORT = (
     "import json;"
-    "json.dump({'files': {'src/a.py': {'executed_lines': [1, 2], 'missing_lines': [3]}}},"
+    "json.dump({'files': {'%s': {'executed_lines': [1, 2], 'missing_lines': [3]}}},"
     " open('cov.json', 'w'))"
 )
 
@@ -27,8 +27,10 @@ WRITE_REPORT = (
 class Covering(Stub):
     """Runs a process in the root it is given that writes a coverage report there."""
 
+    named = "src/a.py"  # the file as the tool names it
+
     def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
-        return CommandPlan((sys.executable, "-c", WRITE_REPORT), request.root)
+        return CommandPlan((sys.executable, "-c", WRITE_REPORT % self.named), request.root)
 
     def report(self, operation: Operation) -> ReportSpec:
         return ReportSpec(ReportFormat.COVERAGE_PY_JSON, "cov.json", ("src",))
@@ -151,3 +153,30 @@ def test_the_coverage_of_a_project_at_the_root_is_named_as_it_was_written(tmp_pa
     scoped = asyncio.run(run_coverage(tools, root, tmp_path, data))
 
     assert list(plain.files) == list(scoped.files) == ["src/a.py"]
+
+
+def test_a_file_the_report_names_from_the_project_directory_is_found_there(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "web" / "lib").mkdir(parents=True)
+    (tmp_path / "web" / "lib" / "a.py").write_text("x\n", encoding="utf-8")
+
+    class Elsewhere(Covering):
+        named = "lib/a.py"
+
+    project = registry_of(Elsewhere("python", ".py", tmp_path)).project("python", "web")
+    log = EventLog.open(tmp_path / "events.jsonl", RUN, clock=FakeClock())
+    log.append_transition(Level.EXECUTION, RUN, None, ExecutionState.PREPARING)
+    tools = Tools(
+        sinks=sinks,
+        log=log,
+        level=Level.ATTEMPT,
+        target="t1-a1",
+        logs=tmp_path / "logs",
+        host_env={},
+    )
+    data = GateInput(tmp_path, "c" * 40, "t1", "t1-s", "t1-a1")
+
+    report = asyncio.run(run_coverage(tools, project, tmp_path, data))
+
+    assert list(report.files) == ["web/lib/a.py"]
