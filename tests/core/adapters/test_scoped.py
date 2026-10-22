@@ -220,3 +220,29 @@ def test_the_registry_makes_one_instance_per_project(tmp_path: Path) -> None:
 
     assert [p.base for p in projects] == ["a", "b"]
     assert projects[0].inner is not projects[1].inner
+
+
+def test_a_project_below_the_root_hands_back_what_it_could_not_read_as_it_came(
+    tmp_path: Path,
+) -> None:
+    class Unreadable(Recording):
+        def parse(self, operation: Operation, output: ToolOutput) -> Unparseable:
+            return Unparseable("no")
+
+        def report(self, operation: Operation) -> NotSupported:
+            return NotSupported(operation.value, "none")
+
+    scoped = ScopedAdapter(Unreadable(), "web")
+
+    assert scoped.parse(Operation.LINT, ToolOutput(0, tmp_path / "log")) == Unparseable("no")
+    assert scoped.report(Operation.COVERAGE) == NotSupported(Operation.COVERAGE.value, "none")
+
+
+def test_a_language_whose_test_ids_have_no_path_is_asked_with_the_id_as_it_is() -> None:
+    class Owner(RecordingGo):
+        def owns_test(self, test_id: str, path: str, text: str) -> bool:
+            return (test_id, path) == ("example.com/calc/TestAdd", "calc_test.go")
+
+    scoped = ScopedAdapter(Owner(), "web")
+
+    assert scoped.owns_test("example.com/calc/TestAdd", "web/calc_test.go", "")

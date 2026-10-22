@@ -102,18 +102,16 @@ class ScopedAdapter:
             "test_files": request.test_files,
             "changed_files": request.changed_files,
         }
-        files, test_files, changed_files = (self._inside(paths) for paths in given.values())
-        for (name, paths), kept in zip(
-            given.items(), (files, test_files, changed_files), strict=True
-        ):
-            if paths and not kept:
+        kept = {name: self._inside(paths) for name, paths in given.items()}
+        for name, paths in given.items():
+            if paths and not kept[name]:
                 return NotSupported(operation.value, f"no {name} of the project {self.base!r}")
         local = dataclasses.replace(
             request,
             root=self.directory(request.root),
-            files=files,
-            test_files=test_files,
-            changed_files=changed_files,
+            files=kept["files"],
+            test_files=kept["test_files"],
+            changed_files=kept["changed_files"],
         )
         plan = self._adapter.plan(operation, local)
         if isinstance(plan, NotSupported):

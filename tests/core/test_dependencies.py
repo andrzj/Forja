@@ -1,7 +1,10 @@
 """Installed dependencies are linked into a worktree and are never part of a change."""
 
 import os
+import sys
 from pathlib import Path
+
+import pytest
 
 from forja.core.dependencies import is_dependency, link_dependencies, unlink_dependencies
 
@@ -77,3 +80,56 @@ def test_dependencies_of_a_directory_the_worktree_lacks_are_left_out(tmp_path: P
     link_dependencies(source, target)
 
     assert os.listdir(target) == []
+
+
+def _linked(source: Path, target: Path) -> None:
+    link_dependencies(source, target)
+
+
+def test_a_directory_of_the_worktree_that_is_a_link_gets_no_dependencies(tmp_path: Path) -> None:
+    source, target = tmp_path / "repo", tmp_path / "wt"
+    installed(source / "web")
+    (target / "real").mkdir(parents=True)
+    try:
+        os.symlink(target / "real", target / "web", target_is_directory=True)
+    except OSError:
+        pytest.skip("no right to make links")
+
+    _linked(source, target)
+
+    assert not (target / "real" / "node_modules").exists()
+
+
+def test_a_directory_below_a_link_that_leaves_the_worktree_gets_no_dependencies(
+    tmp_path: Path,
+) -> None:
+    source, target, outside = tmp_path / "repo", tmp_path / "wt", tmp_path / "outside"
+    installed(source / "x" / "y")
+    (outside / "y").mkdir(parents=True)
+    target.mkdir()
+    try:
+        os.symlink(outside, target / "x", target_is_directory=True)
+    except OSError:
+        pytest.skip("no right to make links")
+
+    _linked(source, target)
+
+    assert not (outside / "y" / "node_modules").exists()
+
+
+def test_without_a_link_the_dependencies_are_copied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = installed(tmp_path / "repo"), tmp_path / "wt"
+    target.mkdir()
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise OSError("no links")
+
+    monkeypatch.setattr(os, "symlink", refuse)
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    _linked(source, target)
+
+    assert (target / "node_modules" / "lib" / "index.js").read_text(encoding="utf-8") == "x\n"
+    assert not (target / "node_modules").is_symlink()

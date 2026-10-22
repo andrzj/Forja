@@ -129,3 +129,25 @@ def test_the_coverage_of_a_project_is_read_from_its_directory_and_named_by_the_r
     assert report.files["web/src/a.py"].covered == frozenset({1, 2})
     assert share.report is report
     assert not (tmp_path / "web" / "cov.json").exists()
+
+
+def test_the_coverage_of_a_project_at_the_root_is_named_as_it_was_written(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x\n", encoding="utf-8")
+    log = EventLog.open(tmp_path / "events.jsonl", RUN, clock=FakeClock())
+    log.append_transition(Level.EXECUTION, RUN, None, ExecutionState.PREPARING)
+    tools = Tools(
+        sinks=sinks,
+        log=log,
+        level=Level.ATTEMPT,
+        target="t1-a1",
+        logs=tmp_path / "logs",
+        host_env={},
+    )
+    data = GateInput(tmp_path, "c" * 40, "t1", "t1-s", "t1-a1")
+
+    plain = asyncio.run(run_coverage(tools, Covering("python", ".py", tmp_path), tmp_path, data))
+    root = registry_of(Covering("python", ".py", tmp_path)).project("python")
+    scoped = asyncio.run(run_coverage(tools, root, tmp_path, data))
+
+    assert list(plain.files) == list(scoped.files) == ["src/a.py"]
