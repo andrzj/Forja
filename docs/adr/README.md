@@ -28,3 +28,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0020](0020-a-mutacao-de-python-usa-motor-proprio.md) | A mutação de Python usa motor próprio | Substituído por 0021 |
 | [0021](0021-a-mutacao-segue-o-unclebob-mutator.md) | A mutação das seis linguagens segue o unclebob/mutator | Aceito |
 | [0022](0022-linha-nova-sem-teste-volta-ao-autor-e-o-adaptador-decide-o-teste.md) | Linha nova sem teste volta ao autor; o adaptador decide o que é teste; o lint antigo roda numa cópia | Aceito |
+| [0023](0023-a-forja-e-agnostica-de-cli-uma-por-papel-e-a-diversidade-de-autor-e-so-uma-sugestao.md) | A Forja é agnóstica de CLI, com uma CLI por papel; a diversidade de autor é só uma sugestão | Aceito |
