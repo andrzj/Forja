@@ -7,6 +7,7 @@ sees paths relative to the worktree. With ``base == "."`` nothing changes.
 
 import dataclasses
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 from forja.core.adapters.common import (
     CommandPlan,
@@ -27,7 +28,9 @@ from forja.core.adapters.language import (
     OperationRequest,
 )
 from forja.core.evidence.models import Target, TargetKind
-from forja.core.reports.formats import ReportSpec
+
+if TYPE_CHECKING:  # forja.core.reports imports the adapters' common types
+    from forja.core.reports.formats import ReportSpec
 
 # Where a test id starts with the test file's path, and what follows the path. The other
 # languages name a test without its file.
@@ -147,7 +150,7 @@ class ScopedAdapter:
     def _retarget(draft: EvidenceDraft, identifier: str) -> EvidenceDraft:
         return dataclasses.replace(draft, target=Target(kind=draft.target.kind, id=identifier))
 
-    def report(self, operation: Operation) -> ReportSpec | NotSupported:
+    def report(self, operation: Operation) -> "ReportSpec | NotSupported":
         """What the inner adapter writes, with the paths relative to the worktree. The paths
         inside the report stay relative to the project: read them with ``directory`` as root and
         put ``repository`` on each."""

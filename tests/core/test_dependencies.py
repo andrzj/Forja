@@ -191,9 +191,11 @@ def test_on_windows_a_junction_is_tried_before_a_copy(
     source, target = installed(tmp_path / "repo"), tmp_path / "wt"
     target.mkdir()
     calls: list[list[str]] = []
+    options: list[dict[str, object]] = []
 
     def run(command: list[str], **kwargs: object) -> _Done:
         calls.append(command)
+        options.append(kwargs)
         return _Done(code)
 
     monkeypatch.setattr(os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("no")))
@@ -203,4 +205,5 @@ def test_on_windows_a_junction_is_tried_before_a_copy(
     link_dependencies(source, target)
 
     assert [c[:3] for c in calls] == [["cmd", "/c", "mklink"]]
+    assert options == [{"capture_output": True, "check": False}]
     assert (target / "node_modules" / "lib" / "index.js").exists() is copied

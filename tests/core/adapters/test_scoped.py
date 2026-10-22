@@ -1,4 +1,6 @@
 import dataclasses
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -246,3 +248,12 @@ def test_a_language_whose_test_ids_have_no_path_is_asked_with_the_id_as_it_is() 
     scoped = ScopedAdapter(Owner(), "web")
 
     assert scoped.owns_test("example.com/calc/TestAdd", "web/calc_test.go", "")
+
+
+@pytest.mark.parametrize("first", ["forja.core.reports", "forja.core.adapters", "forja.mutation"])
+def test_each_package_can_be_imported_first(first: str) -> None:
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", f"import {first}"], capture_output=True, text=True, check=False
+    )
+
+    assert done.returncode == 0, done.stderr[-400:]
