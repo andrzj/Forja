@@ -611,7 +611,7 @@ A redação garante o que a Forja envia. O que a CLI consegue ler por conta pró
 ### O que o agente produz
 
 - Segredos no diff: gitleaks.
-- SAST: Semgrep, regras para as seis linguagens.
+- SAST: Semgrep, com as regras que o usuário fornece; sem elas o check não executa e o resumo diz isso (ADR 0024).
 - Dependências: OSV-Scanner (vulnerabilidades) e checagem de licença.
 - **Dependência nova:** precisa existir no registro oficial, com idade e uso verificados, para conter pacotes inventados pelo modelo com nomes plausíveis. Dispara ADR.
 - Dados reais em fixtures: scanner de padrões pessoais.

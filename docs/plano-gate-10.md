@@ -1,6 +1,6 @@
 # Plano: gate 10, segurança e dependências
 
-Estado: plano, nada implementado. Ordem decidida com o dono (22/10): gates grandes só com plano escrito antes; este vem primeiro por ser o de maior risco para quem entrega.
+Estado: plano, nada implementado; sem perguntas abertas. Ordem decidida com o dono (22/10): gates grandes só com plano escrito antes; este vem primeiro por ser o de maior risco para quem entrega.
 
 ## O que a Especificação diz
 
@@ -19,25 +19,27 @@ Estado: plano, nada implementado. Ordem decidida com o dono (22/10): gates grand
 1. **Três checks, um gate.** `sast`, `dependency_audit` (vulnerabilidades e licenças) e `new_dependency`, todos `gate = 10`, cada um com o seu modo (ADR 0003). Nascem em observação.
 2. **Semgrep e OSV-Scanner são transversais**, como o gitleaks e o lizard: não viram operação de adaptador. O comando entra no `PipelineMeasurer` como parâmetro (`semgrep=`, `osv_scanner=`), é achado pela sessão e listado no `doctor`.
 3. **Catraca no SAST.** Sem `--baseline-commit`: roda nos arquivos mudados no estado novo e no texto do commit pai, na cópia privada que o `LintCheck._before` já faz (`checks/layout.py`), e compara contagem por (arquivo, regra). Se roda no novo e não no antigo: `Inconclusive`.
-4. **Regras do Semgrep: só locais.** Regras do repositório (`.semgrep/` ou `.semgrep.yml`) prevalecem; sem elas, um diretório de regras que a Forja distribui. Nunca `auto` nem `p/...`, sempre `--metrics=off --disable-version-check`.
+4. **Regras do Semgrep: o usuário fornece, a Forja não tem padrão** (decisão do dono, 22/10; ADR 0024). A configuração é um arquivo ou diretório local, dado por `--semgrep-config` ou pelo `execucao.toml`; senão `.semgrep.yml` ou `.semgrep/` na raiz do commit base. **Sem configuração o check `sast` não executa**: devolve `NotApplicable`, nunca `Approved`, e o resumo da preparação e o da entrega dizem em destaque "SAST não executado: sem configuração". Referências de registro (`auto`, `p/...`, URL) são recusadas com erro de configuração (código 2); sempre `--metrics=off --disable-version-check`. O `--help` e a documentação dizem que o usuário deve fornecer a configuração.
+4b. **As regras não vêm da worktree da tentativa.** São lidas do commit base (ou de uma cópia feita na preparação, fora da worktree), para que o agente não as edite e silencie achados. Alterar o arquivo de regras numa tentativa é alteração protegida pelo gate de escopo.
 5. **Auditoria de dependências só quando algo mudou.** Se nenhum manifesto ou lockfile está entre os arquivos mudados, `Approved` sem rodar. Senão, `osv-scanner` no estado novo e no estado antigo (lockfiles do commit pai escritos numa cópia); reprova o par (pacote, versão, vulnerabilidade) que existe só no novo. Código 128 vale como "nada a auditar".
-6. **Licença proibida é lista da política.** O OSV-Scanner só tem lista permitida; a política da Forja guarda a lista de **proibidas** (a Especificação diz "licença proibida") e o check compara com as licenças que o JSON traz. Fica `Inconclusive` se o pacote não traz licença.
+6. **Licença proibida é lista da política, sem padrão.** O OSV-Scanner só tem lista permitida; a política da Forja guarda a lista de **proibidas** (a Especificação diz "licença proibida") e o check compara com as licenças que o JSON traz. Mesmo princípio do Semgrep: sem lista fornecida, a parte de licenças não executa (`NotApplicable`, dito no resumo); as vulnerabilidades do OSV não precisam de configuração e rodam sempre. Fica `Inconclusive` se o pacote não traz licença.
 7. **Dependência nova** (inexistente ou suspeita): cada adaptador declara quais arquivos são manifesto e como extrair os nomes adicionados (capacidade opcional, como `owns_test`); o check consulta o registro oficial do ecossistema (existência, idade, uso). Registro inacessível: `Inconclusive`. O "dispara ADR" é do papel documentador (incremento 4) e **não** entra aqui: este check só reprova ou registra o achado.
 8. **Rede.** Os checks 2 e 3 precisam de rede (OSV e registros). Modo offline do OSV só com bases já baixadas, e isso fica fora deste plano.
 
 ## Passos (um commit cada)
 
 0. **Ler o que falta:** páginas "License Scanning" e "Supported Artifacts and Manifests" do OSV-Scanner; esquema do JSON do Semgrep; linguagens suportadas pelo Semgrep. Corrigir este plano se algo divergir.
-1. **`sast`:** parser do JSON do Semgrep, check com a catraca da decisão 3, parâmetro `semgrep=` no measurer, `doctor`. Testes com ferramenta falsa (molde: `FAKE_GITLEAKS`).
-2. **Regras distribuídas:** o diretório padrão de regras e como a Forja o localiza. Depende da pergunta aberta abaixo.
-3. **`dependency_audit`:** parser do JSON do OSV (vulnerabilidades e licenças), comparação novo contra antigo, política de licenças proibidas, parâmetro `osv_scanner=`.
+1. **`sast`:** parser do JSON do Semgrep, check com a catraca da decisão 3, parâmetro `semgrep=` no measurer. Testes com ferramenta falsa (molde: `FAKE_GITLEAKS`).
+2. **Configuração do Semgrep (decisões 4 e 4b):** `--semgrep-config` e chave do `execucao.toml`, descoberta de `.semgrep.yml`/`.semgrep/` no commit base, recusa de referência de registro, `NotApplicable` sem configuração, linha no resumo da preparação e da entrega, texto do `--help`, `doctor` (pede o `semgrep` só quando há configuração), proteção do arquivo de regras no gate de escopo.
+3. **`dependency_audit`:** parser do JSON do OSV (vulnerabilidades e licenças), comparação novo contra antigo, lista de licenças proibidas da política (sem padrão), parâmetro `osv_scanner=`.
 4. **`new_dependency`:** capacidade opcional nos cinco adaptadores (extrair nomes adicionados dos manifestos), consulta aos registros (npm, PyPI, proxy do Go, Maven Central, NuGet), idade e uso.
 5. **Integração:** registro dos três no `PipelineMeasurer.judge` depois de `module_depth`, configuração em `execucao.toml`, resumo.
-6. **Ponta a ponta** com as ferramentas reais, no fecho (regra do dono: testes reais só no E2E final). Gate de mutação no WSL nos arquivos novos.
+6. **Documentação do usuário:** a documentação diz que o SAST e a checagem de licenças dependem de configuração fornecida, aponta para a documentação do Semgrep e traz um exemplo mínimo que a Forja nunca usa sozinha (fica para o incremento 4/7, junto com a documentação de uso).
+7. **Ponta a ponta** com as ferramentas reais, no fecho (regra do dono: testes reais só no E2E final). Gate de mutação no WSL nos arquivos novos.
 
-## Pergunta aberta (a Especificação não responde)
+## Decidido pelo dono (22/10)
 
-Quais regras do Semgrep a Forja distribui para as seis linguagens quando o repositório não tem as suas? Opções: escrever e manter um conjunto próprio e pequeno (controle total, trabalho nosso) ou fixar uma cópia versionada de regras públicas (menos trabalho, licença das regras a conferir). Precisa de decisão antes do passo 2.
+A Forja não distribui regras do Semgrep nem lista de licenças: o usuário fornece a configuração, e sem ela o check não executa. Registrado no ADR 0024, que também emenda a linha de SAST da Especificação.
 
 ## Limites já conhecidos
 
