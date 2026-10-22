@@ -41,8 +41,15 @@ def link_dependencies(source: Path, target: Path) -> None:
     that has them gets its own; one whose directory the worktree lacks is left out."""
     for directory in project_directories(source):
         where = directory.relative_to(source)
-        if not (target / where).is_dir():
+        here = target / where
+        if not here.is_dir():
             continue
+        if where.parts and (
+            here.is_symlink()
+            or here.is_junction()
+            or not here.resolve().is_relative_to(target.resolve())
+        ):
+            continue  # a directory of the worktree that is a link, possibly out of it
         for name in DEPENDENCY_DIRS:
             packages = directory / name
             if packages.is_dir():

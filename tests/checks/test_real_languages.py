@@ -72,6 +72,7 @@ class Project:
     scope: tuple[str, ...]
     env: frozenset[str]
     adapter: Callable[[Path], LanguageAdapter]
+    where: str = ""  # the directory of the project in the repository; empty for the root
 
 
 GO = Project(
@@ -241,6 +242,38 @@ TYPESCRIPT = Project(
 PROJECTS = [GO, CSHARP, JAVA, GRADLE, TYPESCRIPT]
 
 
+def under(project: Project, where: str) -> Project:
+    """The same project in a directory of a repository that has nothing at its root."""
+
+    def move(files: Mapping[str, str]) -> dict[str, str]:
+        return {f"{where}/{name}": text for name, text in files.items()}
+
+    declared = project.declared
+    # a TypeScript test id starts with the path of its file; the others name a test without one
+    test_id = (
+        f"{where}/{declared.test_id}" if project.language == "typescript" else declared.test_id
+    )
+    return replace(
+        project,
+        base=move(project.base),
+        tests=move(project.tests),
+        fix=move(project.fix),
+        scope=tuple(f"{where}/{path}" for path in project.scope),
+        declared=DeclaredTest(
+            criterion_id=declared.criterion_id, test_id=test_id, path=f"{where}/{declared.path}"
+        ),
+        where=where,
+    )
+
+
+IN_A_DIRECTORY = [under(p, "svc") for p in PROJECTS]
+EVERY_PROJECT = [*PROJECTS, *IN_A_DIRECTORY]
+
+
+def name_of(project: Project) -> str:
+    return f"{project.language}-in-{project.where}" if project.where else project.language
+
+
 @pytest.fixture(scope="session")
 def ts_packages(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """The TypeScript project's packages, installed once for the whole run."""
@@ -293,7 +326,7 @@ def world_of(project: Project, tmp_path: Path, packages: Path | None = None) -> 
     repo.mkdir()
     commit(repo, project.base, minimal_env(tmp_path / "home"))
     if packages is not None:
-        link(packages, repo)
+        link(packages, repo / project.where)
     found = World.at(tmp_path)
     found.config = found.config.model_copy(
         update={
@@ -368,7 +401,7 @@ def why(log: EventLog) -> str:
     )
 
 
-@pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.language)
+@pytest.mark.parametrize("project", EVERY_PROJECT, ids=name_of)
 def test_a_repair_goes_through_every_gate_and_is_delivered(
     project: Project, tmp_path: Path, request: pytest.FixtureRequest
 ) -> None:
@@ -384,7 +417,7 @@ def test_a_repair_goes_through_every_gate_and_is_delivered(
         assert world.repo.sh("show", f"{world.workspace.run_branch}:{relative}")
 
 
-@pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.language)
+@pytest.mark.parametrize("project", EVERY_PROJECT, ids=name_of)
 def test_an_implementer_that_touches_the_frozen_tests_is_sent_back(
     project: Project, tmp_path: Path, request: pytest.FixtureRequest
 ) -> None:
