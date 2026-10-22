@@ -22,8 +22,8 @@ A Especificação diz "Maven ou Gradle". Hoje `languages\java\adapter.py` só fa
 1. **Detecção:** `build.gradle` ou `build.gradle.kts` (raiz). Se há `pom.xml` e Gradle, vale o Maven (já existente); decisão do dono para empate: não há, escolho Maven por ser o que já existe.
 2. **Executável:** `gradlew`/`gradlew.bat` do repositório se existir (a worktree o contém), senão `gradle` no PATH. Nada é instalado ou baixado pelo adaptador além do que o projeto declara.
 3. **Plugins:** nada é aplicado ao projeto, exceto o JaCoCo (nomeado em init script, como o Maven nomeia o goal). Lint e formato só rodam se o `build.gradle[.kts]` os declara (`checkstyle`, `pmd`, `com.github.spotbugs`, `com.diffplug.spotless`); senão `NotSupported`, como no Maven.
-4. **Init scripts:** a Forja grava `.forja-agent`-style scripts fora da worktree? Não: o adaptador só descreve comandos. Os scripts entram como argumentos `-I` apontando para arquivos que o adaptador mantém em `languages\java\gradle\*.init.gradle` (pacote de dados), lidos pelo caminho do módulo.
-5. **Formato:** um arquivo → `-PspotlessIdeHook`; zero ou vários → `spotlessCheck` do projeto inteiro (o parser lista todos; o "antes" da Forja separa o que já estava sujo).
+4. **Init scripts:** o adaptador não grava nada na worktree; só descreve comandos. Os scripts entram como argumentos `-I` apontando para arquivos que o adaptador mantém em `languages\java\init_scripts\` (`coverage`, `lint`, `spotbugs`; pacote de dados), lidos pelo caminho do módulo.
+5. **Formato:** a checagem roda sempre no projeto inteiro (`spotlessCheck`; o parser lista todos os arquivos sujos e o "antes" da Forja separa o que já estava sujo). `-PspotlessIdeHook=<caminho>` só imprime `IS DIRTY` sem o nome do arquivo, por isso só vale em `spotlessApply`, para um arquivo.
 6. **Sem filtro de testes** (igual ao Maven): `NotSupported` se há `tests`/`test_files`.
 7. **Arquivos ignorados** no `classify`: `build` e `.gradle` já estão em `_SKIPPED_DIRECTORIES`.
 8. **`config_files`:** `build.gradle`, `build.gradle.kts`, `settings.gradle[.kts]`, `gradle.properties`, `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties`, `config/checkstyle/checkstyle.xml`, `config/pmd/ruleSet.xml`.
@@ -41,4 +41,9 @@ A Especificação diz "Maven ou Gradle". Hoje `languages\java\adapter.py` só fa
 - Sem `gradlew` e sem Gradle no PATH: `detect` não confirma a ferramenta (versão ausente).
 - O Gradle baixa plugins e dependências na primeira vez (rede); `--offline` não é usado.
 - Projetos com vários módulos: relatórios em `*/build/...`; o primeiro passo cobre a raiz e o padrão `**/build/...` onde o Maven já usa `**/target/...`.
-- Daemon: `--no-daemon` não é passado (sem ele o processo filho do Gradle sobrevive à Forja); a decisão de matar o daemon fica para o passo 4, onde se mede.
+- Daemon: `--no-daemon` não é passado. Medido no passo 4 (Windows): ao fim do ponta a ponta nenhum processo `java` sobrou e `gradle --status` mostrou todos os daemons STOPPED.
+- JUnit 5: o Gradle grava o método sem parâmetros como `adds()`; o parser tira o `()` final para o id bater com o do Maven.
+
+## Estado
+
+Passos 1 a 5 feitos. Ponta a ponta real em `tests\checks\test_real_languages.py` (projeto `GRADLE`).

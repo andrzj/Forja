@@ -268,3 +268,50 @@ def test_lint_that_failed_without_a_report_is_not_understood(tmp_path: Path) -> 
     log.write_text("FAILURE: Build failed", encoding="utf-8")
     result = gradle_adapter(tmp_path / "w").parse(Operation.LINT, ToolOutput(1, log, tmp_path))
     assert isinstance(result, Unparseable)
+
+
+def test_a_checkstyle_source_without_a_package_is_the_rule_itself(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    report = root / "build" / "reports" / "checkstyle" / "main.xml"
+    report.parent.mkdir(parents=True)
+    report.write_text(
+        '<checkstyle><file name="Calc.java">'
+        '<error line="1" severity="warning" message="m" source="Custom"/></file></checkstyle>',
+        encoding="utf-8",
+    )
+    log = tmp_path / "l.log"
+    log.write_text("", encoding="utf-8")
+
+    result = gradle_adapter(root).parse(Operation.LINT, ToolOutput(0, log, root))
+
+    assert ("lint.checkstyle.Custom", "Calc.java", 1) in facts(result)
+
+
+def test_before_any_detection_the_adapter_reports_maven(tmp_path: Path) -> None:
+    adapter = JavaAdapter(maven=("m",), gradle=GRADLE)
+
+    spec = adapter.report(Operation.COVERAGE)
+
+    assert not isinstance(spec, NotSupported)
+    assert spec.path != gradle.COVERAGE_REPORT
+
+
+def test_lint_adds_the_findings_of_pmd_to_the_others(tmp_path: Path) -> None:
+    root = tmp_path / "w"
+    put(root, "build/reports/checkstyle/main.xml", "checkstyle.xml")
+    put(root, "build/reports/spotbugs/main.xml", "spotbugs.xml")
+    pmd = root / "build" / "reports" / "pmd" / "main.xml"
+    pmd.parent.mkdir(parents=True)
+    pmd.write_text(
+        '<pmd xmlns="http://pmd.sourceforge.net/report/2.0.0"><file name="Bad.java">'
+        '<violation beginline="1" rule="UnusedPrivateField"/></file></pmd>',
+        encoding="utf-8",
+    )
+    log = tmp_path / "l.log"
+    log.write_text("", encoding="utf-8")
+
+    result = facts(gradle_adapter(root).parse(Operation.LINT, ToolOutput(0, log, root)))
+
+    assert ("lint.pmd.UnusedPrivateField", "Bad.java", 1) in result
+    assert any(measurement.startswith("lint.spotbugs") for measurement, _, _ in result)
+    assert any(measurement.startswith("lint.checkstyle") for measurement, _, _ in result)

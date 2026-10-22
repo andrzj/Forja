@@ -76,7 +76,7 @@ def _reports(output: ToolOutput, pattern: str) -> list[Path]:
     )
 
 
-def parse_format(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+def parse_format(output: ToolOutput, *, gradle: bool) -> ParseResult:
     """The files Spotless says are not in the form google-java-format writes."""
     if output.exit_code not in _OK:
         return Unparseable(f"spotless ended with {output.exit_code}")
@@ -146,7 +146,7 @@ def _source_path(output: ToolOutput, sourcepath: str) -> str:
     return sourcepath
 
 
-def parse_lint(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+def parse_lint(output: ToolOutput, *, gradle: bool) -> ParseResult:
     """Findings per file and rule of Checkstyle (Maven's log, Gradle's report), PMD and SpotBugs
     (their reports)."""
     tool = "gradle" if gradle else "maven"
@@ -177,7 +177,7 @@ def parse_lint(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
     )
 
 
-def parse_build(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+def parse_build(output: ToolOutput, *, gradle: bool) -> ParseResult:
     """The files ``javac`` could not compile."""
     if output.exit_code is None:
         return Unparseable(f"{'gradle' if gradle else 'maven'} did not finish")
@@ -192,7 +192,7 @@ def parse_build(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
     )
 
 
-def parse_tests(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
+def parse_tests(output: ToolOutput, *, gradle: bool) -> ParseResult:
     """Outcome of every test case in the Surefire (Maven) or Gradle test reports."""
     code = output.exit_code
     tool = "gradle" if gradle else "maven"
