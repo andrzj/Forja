@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.layout import FormatCheck, LintCheck, _skip_git_and_links
+from forja.checks.layout import FormatCheck, LintCheck, skip_git_and_links
 from forja.checks.tooling import Tools
 from forja.core.events import EventLog
 from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
@@ -162,6 +162,6 @@ def test_the_private_copy_leaves_out_git_and_each_link_on_its_own(tmp_path: Path
     except OSError:
         pytest.skip("symbolic links are not allowed here")
 
-    assert _skip_git_and_links(str(tmp_path), [".git"]) == {".git"}
-    assert _skip_git_and_links(str(tmp_path), ["link"]) == {"link"}
-    assert _skip_git_and_links(str(tmp_path), ["real"]) == set()
+    assert skip_git_and_links(str(tmp_path), [".git"]) == {".git"}
+    assert skip_git_and_links(str(tmp_path), ["link"]) == {"link"}
+    assert skip_git_and_links(str(tmp_path), ["real"]) == set()

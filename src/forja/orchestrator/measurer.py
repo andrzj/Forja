@@ -79,6 +79,7 @@ class PipelineMeasurer:
         values: Mapping[str, Mapping[str, JsonValue]] | None = None,
         lizard: tuple[str, ...],
         gitleaks: tuple[str, ...] = ("gitleaks",),
+        semgrep: tuple[str, ...] = ("semgrep",),
         timeouts: Mapping[str, float] | None = None,
     ) -> None:
         self._adapters = adapters
@@ -90,6 +91,7 @@ class PipelineMeasurer:
         self._values = values or {}
         self._lizard = lizard
         self._gitleaks = gitleaks
+        self._semgrep = semgrep
         self._timeouts = timeouts or {}
 
     # -- helpers -------------------------------------------------------------------------------

@@ -106,7 +106,7 @@ class FormatCheck:
         return rejected(findings) if findings else Approved()
 
 
-def _skip_git_and_links(directory: str, names: list[str]) -> set[str]:
+def skip_git_and_links(directory: str, names: list[str]) -> set[str]:
     """What the private copy leaves out: git's own directory and any link, which could lead out of
     the copy when the old texts are written into it."""
     base = Path(directory)
@@ -203,7 +203,7 @@ class LintCheck:
                 root,
                 symlinks=True,
                 dirs_exist_ok=True,
-                ignore=_skip_git_and_links,
+                ignore=skip_git_and_links,
             )
             for change in self.changes.files:
                 if change.kind in (ChangeKind.ADDED, ChangeKind.RENAMED):
