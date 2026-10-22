@@ -117,7 +117,7 @@ async def run_mutants(
     The baseline run (the whole test command on the unchanged copy) must pass; its duration sets
     the timeout of each mutant at ten times that, but never below two seconds.
     """
-    count = max(1, workers if workers is not None else min(4, os.cpu_count() or 1))
+    count = max(1, workers) if workers is not None else min(4, os.cpu_count() or 1)
     roots = [scratch / f"worker-{n}" for n in range(count)]
     for root in roots:
         await asyncio.to_thread(_fresh_copy, worktree, root)

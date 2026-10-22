@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -174,3 +175,54 @@ def test_a_copy_sees_the_installed_packages_and_leaves_them_in_place(
 
     assert seen and all(seen)
     assert (packages / "index.js").read_text(encoding="utf-8") == "x"  # the cleanup only unlinks
+
+
+def _roots_used(project: Path, tmp_path: Path, **kwargs: object) -> set[Path]:
+    seen: set[Path] = set()
+
+    async def runner(root: Path, timeout: float | None) -> TestVerdict:
+        seen.add(root)
+        await asyncio.sleep(0.05)
+        return TestVerdict.PASSED
+
+    mutants = [mutant(b"x > 0", b"x < 0") for _ in range(8)]
+    run(project, tmp_path, mutants, runner, **kwargs)
+    return seen
+
+
+def test_a_worker_count_of_zero_still_runs_one_worker(project: Path, tmp_path: Path) -> None:
+    assert len(_roots_used(project, tmp_path, workers=0)) == 1
+
+
+def test_without_a_count_there_is_a_worker_per_processor_up_to_four(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: 3)
+
+    assert len(_roots_used(project, tmp_path)) == 3
+
+
+def test_when_the_processors_cannot_be_counted_one_worker_runs(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+
+    assert len(_roots_used(project, tmp_path)) == 1
+
+
+def test_bytecode_caches_that_cannot_be_removed_do_not_stop_the_run(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = shutil.rmtree
+    asked: list[object] = []
+
+    def spy(path: object, ignore_errors: bool = False, **kwargs: object) -> None:
+        asked.append(ignore_errors)
+        real(path, ignore_errors=ignore_errors, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(shutil, "rmtree", spy)
+    (project / "__pycache__").mkdir()
+
+    run(project, tmp_path, [mutant(b"x > 0", b"x < 0")], workers=1)
+
+    assert asked and all(asked)
