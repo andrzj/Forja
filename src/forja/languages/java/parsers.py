@@ -207,7 +207,10 @@ def parse_tests(output: ToolOutput, *, gradle: bool = False) -> ParseResult:
     try:
         for report in _reports(output, pattern):
             for case in load_xml(report.read_text(encoding="utf-8")).iter("testcase"):
-                name = f"{case.get('classname', '')}.{case.get('name', '')}".strip(".")
+                method = case.get("name", "")
+                if gradle:  # Gradle writes the JUnit 5 method of no parameters as `adds()`
+                    method = method.removesuffix("()")
+                name = f"{case.get('classname', '')}.{method}".strip(".")
                 if case.find("failure") is not None or case.find("error") is not None:
                     outcomes[name] = "failed"
                 elif case.find("skipped") is not None:

@@ -48,8 +48,8 @@ JACOCO = "org.jacoco:jacoco-maven-plugin:0.8.13"
 COVERAGE_REPORT = "target/site/jacoco/jacoco.xml"
 SOURCE_ROOTS = ("src/main/java",)
 _MAVEN_VERSION = r"Apache Maven (\d+\.\d+\.\d+\S*)"
-# What Maven and the JDK read from the environment beyond the generic list: where Java is, the
-# user's repository of downloaded plugins and the settings of the user's installation.
+# What Maven, Gradle and the JDK read from the environment beyond the generic list: where Java is,
+# the user's repository of downloaded plugins and the settings of the user's installation.
 JAVA_ENVIRONMENT = frozenset(
     {
         "JAVA_HOME",
@@ -57,6 +57,9 @@ JAVA_ENVIRONMENT = frozenset(
         "M2_HOME",
         "MAVEN_OPTS",
         "MAVEN_ARGS",
+        "GRADLE_HOME",
+        "GRADLE_USER_HOME",
+        "GRADLE_OPTS",
         "USERPROFILE",
         "HOME",
         "APPDATA",

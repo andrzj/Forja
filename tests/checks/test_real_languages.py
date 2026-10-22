@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -170,6 +170,39 @@ JAVA = Project(
     env=frozenset({n.upper() for n in JAVA_ENVIRONMENT} | {"TEMP", "TMP", "SYSTEMROOT", "PATHEXT"}),
     adapter=lambda root: JavaAdapter(),
 )
+BUILD_GRADLE = """plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+test {
+    useJUnitPlatform()
+}
+"""
+GRADLE = replace(
+    JAVA,
+    language="gradle",
+    tools=("gradle", "java"),
+    base={
+        **{k: v for k, v in JAVA.base.items() if k not in ("pom.xml", ".gitignore")},
+        "build.gradle": BUILD_GRADLE,
+        "settings.gradle": "rootProject.name = 'calc'\n",
+        ".gitignore": "build/\n.gradle/\n",
+    },
+)
 TS_PACKAGES = {"vitest": "5.0.5", "@vitest/coverage-v8": "5.0.5", "typescript": "5.9.3"}
 TS_CALC = "export function add(a: number, b: number): number {\n  return a - b;\n}\n"
 TS_TEST = (
@@ -205,7 +238,7 @@ TYPESCRIPT = Project(
     env=frozenset(NODE_ENVIRONMENT | {"TEMP", "TMP", "USERPROFILE", "SYSTEMROOT", "PATHEXT"}),
     adapter=lambda root: TypeScriptAdapter(),
 )
-PROJECTS = [GO, CSHARP, JAVA, TYPESCRIPT]
+PROJECTS = [GO, CSHARP, JAVA, GRADLE, TYPESCRIPT]
 
 
 @pytest.fixture(scope="session")

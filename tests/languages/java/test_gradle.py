@@ -216,8 +216,8 @@ def test_the_test_outcomes_are_read_from_the_build_directory(tmp_path: Path) -> 
     log.write_text("", encoding="utf-8")
     result = gradle_adapter(root).parse(Operation.TEST, ToolOutput(1, log, root))
     assert facts(result) == [
-        ("test.outcome", "com.acme.CalcTest.adds()", "passed"),
-        ("test.outcome", "com.acme.CalcTest.fails()", "failed"),
+        ("test.outcome", "com.acme.CalcTest.adds", "passed"),
+        ("test.outcome", "com.acme.CalcTest.fails", "failed"),
     ]
 
 
