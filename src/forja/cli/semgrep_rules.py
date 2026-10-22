@@ -14,6 +14,7 @@ from forja.checks.changes import unquote, write_files
 
 RULE_FILE = ".semgrep.yml"
 RULE_DIR = ".semgrep"
+BAD_CHARACTERS = ("\\", ":", "\x00")
 REGISTRY = ("p/", "r/", "s/", "semgrep.dev/")
 
 
@@ -41,7 +42,19 @@ def explicit_rules(value: str) -> Path:
 async def rules_in_commit(git: GitLines, commit: str) -> tuple[str, ...]:
     """The files of ``.semgrep.yml`` and ``.semgrep/`` in ``commit``."""
     listed = await git.lines("ls-tree", "-r", "--name-only", commit, "--", RULE_FILE, RULE_DIR)
-    return tuple(unquote(name) for name in listed)
+    names = tuple(unquote(name) for name in listed)
+    for name in names:
+        if not _inside(name):
+            raise RulesError(f"O nome `{name}` no commit base não serve como arquivo de regras.")
+    return names
+
+
+def _inside(name: str) -> bool:
+    """Whether a name from the commit stays under its own directory when written to disk."""
+    parts = name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        return False
+    return not any(char in name for char in BAD_CHARACTERS)
 
 
 def _renamed(name: str) -> str:

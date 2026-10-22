@@ -223,3 +223,21 @@ def test_changing_the_rules_file_in_an_attempt_is_a_scope_violation() -> None:
             result = asyncio.run(ScopeCheck(changes, task, classify).evaluate(data))
 
             assert isinstance(result, Rejected), (role, path)
+
+
+@pytest.mark.parametrize(
+    ("name", "allowed"),
+    [
+        (".semgrep.yml", True),
+        (".semgrep/a/b.yml", True),
+        (".semgrep/..\\..\\x.yml", False),
+        (".semgrep/../x.yml", False),
+        (".semgrep//x.yml", False),
+        (".semgrep/c:x.yml", False),
+        ("/abs.yml", False),
+    ],
+)
+def test_a_name_that_could_leave_the_copy_is_refused(name: str, allowed: bool) -> None:
+    from forja.cli.semgrep_rules import _inside  # noqa: PLC0415
+
+    assert _inside(name) is allowed
