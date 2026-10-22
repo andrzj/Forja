@@ -32,10 +32,11 @@ from forja.core.adapters import (
     AdapterRegistry,
     CommandPlan,
     FileClass,
-    LanguageAdapter,
     Operation,
     OperationRequest,
 )
+from forja.core.adapters.projects import owner_of
+from forja.core.adapters.scoped import ScopedAdapter
 from forja.core.artifacts.models import Producer
 from forja.core.atomic import atomic_write_bytes
 from forja.core.events import EventLog, LogEventSink, OpenOperation
@@ -111,14 +112,17 @@ class PipelineMeasurer:
     def _classify(self, path: str) -> FileClass:
         return self._adapters.classify(path)
 
-    def _active(self, worktree: Path, changed: tuple[str, ...] = ()) -> tuple[LanguageAdapter, ...]:
-        """The languages the project has, and any that claims a file that changed: code is never
-        left out of a check because its manifest is not at the root. A project none of them
-        claims is run as the first."""
-        named = {adapter.language for adapter, _ in self._adapters.detect_all(worktree)}
-        named |= {a.language for p in changed if (a := self._adapters.for_file(p)) is not None}
-        found = tuple(a for a in self._adapters.languages() if a.language in named)
-        return found or (next(self._adapters.languages()),)
+    def _active(self, worktree: Path, changed: tuple[str, ...] = ()) -> tuple[ScopedAdapter, ...]:
+        """The projects the repository has, and a project at the root for any language that claims
+        a file that changed and has none holding it: code is never left out of a check because
+        its manifest is not where the file is. A repository none of them claims is run as the
+        first language, at the root."""
+        found = self._adapters.projects(worktree)
+        for path in changed:
+            language = self._adapters.for_file(path)
+            if language is not None and owner_of(found, path) is None:
+                found.append(self._adapters.project(language.language))
+        return tuple(found) or (self._adapters.project(next(self._adapters.languages()).language),)
 
     def _run_sink(self, level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(self._log, level, target, operation)
@@ -175,7 +179,7 @@ class PipelineMeasurer:
         return Baseline(not problems, tuple(problems), metrics)
 
     def _overrides(
-        self, adapter: LanguageAdapter, check_id: str
+        self, adapter: ScopedAdapter, check_id: str
     ) -> dict[str, dict[str, tuple[str, ...]]]:
         """The repository's own command for this check, if its ``forja.toml`` names one."""
         return overrides_from(adapter, self._values.get(check_id, {}))
@@ -186,7 +190,7 @@ class PipelineMeasurer:
         atomic_write_bytes(self._base_file, document.encode("utf-8"))
 
     async def _build_problems(
-        self, tools: Tools, worktree: Path, active: tuple[LanguageAdapter, ...]
+        self, tools: Tools, worktree: Path, active: tuple[ScopedAdapter, ...]
     ) -> list[str]:
         problems = []
         for adapter in active:
@@ -202,7 +206,7 @@ class PipelineMeasurer:
         return problems
 
     async def _outcomes(
-        self, tools: Tools, worktree: Path, active: tuple[LanguageAdapter, ...]
+        self, tools: Tools, worktree: Path, active: tuple[ScopedAdapter, ...]
     ) -> dict[str, str]:
         return await outcomes_of(tools, active, worktree, self._values.get("tests", {}))
 
@@ -210,7 +214,7 @@ class PipelineMeasurer:
         self,
         tools: Tools,
         worktree: Path,
-        active: tuple[LanguageAdapter, ...],
+        active: tuple[ScopedAdapter, ...],
         tests: int,
         unstable: int,
     ) -> dict[str, float]:
@@ -290,8 +294,8 @@ class PipelineMeasurer:
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
         worktree = ctx.worktree
-        active = self._active(worktree, production)
-        share = CoverageShare()
+        active = self._active(worktree, (*production, *changes.current(own)))
+        shares = {id(a): CoverageShare() for a in active}
         mutation = self._each(
             active,
             lambda a: MutationCheck(
@@ -299,10 +303,10 @@ class PipelineMeasurer:
                 a,
                 worktree,
                 code,
-                self._files_of(a, production),
+                self._files_of(active, a, production),
                 self._env,
                 a.language,
-                share=share,
+                share=shares[id(a)],
             ),
         )
         complexity = self._each(
@@ -311,8 +315,8 @@ class PipelineMeasurer:
                 tools,
                 worktree,
                 code,
-                self._files_of(a, production),
-                self._texts_of(a, code_before),
+                self._files_of(active, a, production),
+                self._texts_of(active, a, code_before),
                 self._lizard,
                 a.language,
             ),
@@ -324,11 +328,11 @@ class PipelineMeasurer:
                 a,
                 worktree,
                 code,
-                self._files_of(a, production),
-                self._texts_of(a, code_before),
+                self._files_of(active, a, production),
+                self._texts_of(active, a, code_before),
                 self._lizard,
                 a.language,
-                share=share,
+                share=shares[id(a)],
             ),
         )
         checks: list[Check] = [
@@ -337,8 +341,8 @@ class PipelineMeasurer:
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks
             ),
-            FormatCheck(tools, self._adapters, worktree, changes),
-            LintCheck(tools, self._adapters, worktree, changes, before),
+            FormatCheck(tools, active, worktree, changes),
+            LintCheck(tools, active, worktree, changes, before),
             BuildCheck(tools, active, worktree),
             self._tests_check(ctx, tools, active, expectations, unstable, passing),
             mutation,
@@ -377,7 +381,7 @@ class PipelineMeasurer:
         self,
         ctx: AttemptContext,
         tools: Tools,
-        active: tuple[LanguageAdapter, ...],
+        active: tuple[ScopedAdapter, ...],
         expectations: Expectations | None,
         unstable: frozenset[str],
         passing: frozenset[str],
@@ -411,16 +415,20 @@ class PipelineMeasurer:
         data = GateInput(worktree, head, "integration", "integration", "integration")
         return await self._pipeline(checks).run(data, _capabilities(active))
 
-    def _files_of(self, adapter: LanguageAdapter, files: tuple[str, ...]) -> tuple[str, ...]:
-        return tuple(p for p in files if self._adapters.for_file(p) is adapter)
-
-    def _texts_of(self, adapter: LanguageAdapter, texts: dict[str, str]) -> dict[str, str]:
-        return {p: t for p, t in texts.items() if self._adapters.for_file(p) is adapter}
+    @staticmethod
+    def _files_of(
+        projects: tuple[ScopedAdapter, ...], project: ScopedAdapter, files: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        return tuple(p for p in files if owner_of(projects, p) is project)
 
     @staticmethod
-    def _each(
-        active: tuple[LanguageAdapter, ...], make: Callable[[LanguageAdapter], Check]
-    ) -> Check:
+    def _texts_of(
+        projects: tuple[ScopedAdapter, ...], project: ScopedAdapter, texts: dict[str, str]
+    ) -> dict[str, str]:
+        return {p: t for p, t in texts.items() if owner_of(projects, p) is project}
+
+    @staticmethod
+    def _each(active: tuple[ScopedAdapter, ...], make: Callable[[ScopedAdapter], Check]) -> Check:
         """The check made for every language of the project, answering as one."""
         parts = [Part(make(adapter), frozenset(_capabilities([adapter]))) for adapter in active]
         return EachLanguage(parts, parts[0].check.id, parts[0].check.gate)
@@ -433,7 +441,7 @@ class PipelineMeasurer:
         return Reconciliation(Decision.REDO)
 
 
-def _capabilities(adapters: Iterable[LanguageAdapter]) -> set[str]:
+def _capabilities(adapters: Iterable[ScopedAdapter]) -> set[str]:
     return {capability.value for adapter in adapters for capability in adapter.capabilities}
 
 

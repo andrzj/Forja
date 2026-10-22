@@ -11,7 +11,7 @@ from forja.checks.tooling import Tools
 from forja.core.events import EventLog
 from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
 from forja.core.states import ExecutionState, Level
-from tests.checks.support import RUN, Stub, draft, registry_of, sinks
+from tests.checks.support import RUN, Stub, draft, projects_of, sinks
 from tests.core.events.support import FakeClock
 
 
@@ -42,7 +42,7 @@ def test_every_adapter_formats_its_own_files_and_the_findings_add_up(
 ) -> None:
     py = Stub("python", ".py", tmp_path, after=(draft("format.diff", "a.py"),))
     go = Stub("go", ".go", tmp_path, after=(draft("format.diff", "b.go"),))
-    check = FormatCheck(tools, registry_of(py, go), tmp_path, changes_of("a.py", "b.go", "c.md"))
+    check = FormatCheck(tools, projects_of(py, go), tmp_path, changes_of("a.py", "b.go", "c.md"))
 
     result = asyncio.run(check.evaluate(data()))
 
@@ -59,7 +59,7 @@ def test_an_adapter_without_a_formatter_leaves_its_files_and_the_others_still_co
     go = Stub("go", ".go", tmp_path, offers=False)
 
     result = asyncio.run(
-        FormatCheck(tools, registry_of(py, go), tmp_path, changes_of("a.py", "b.go")).evaluate(
+        FormatCheck(tools, projects_of(py, go), tmp_path, changes_of("a.py", "b.go")).evaluate(
             data()
         )
     )
@@ -68,7 +68,7 @@ def test_an_adapter_without_a_formatter_leaves_its_files_and_the_others_still_co
     nobody = asyncio.run(
         FormatCheck(
             tools,
-            registry_of(Stub("go", ".go", tmp_path, offers=False)),
+            projects_of(Stub("go", ".go", tmp_path, offers=False)),
             tmp_path,
             changes_of("b.go"),
         ).evaluate(data())
@@ -95,7 +95,7 @@ def test_a_lint_violation_is_new_only_against_the_same_adapters_old_text(
     )
     check = LintCheck(
         tools,
-        registry_of(py, go),
+        projects_of(py, go),
         tmp_path,
         changes_of("a.py", "b.go"),
         {"a.py": "x\n", "b.go": "y\n"},
@@ -113,7 +113,7 @@ def test_the_old_text_is_linted_with_the_config_its_adapter_names(
 ) -> None:
     (tmp_path / "linter.toml").write_text("x\n", encoding="utf-8")
     py = Stub("python", ".py", tmp_path, config=("linter.toml",))
-    check = LintCheck(tools, registry_of(py), tmp_path, changes_of("a.py"), {"a.py": "x\n"})
+    check = LintCheck(tools, projects_of(py), tmp_path, changes_of("a.py"), {"a.py": "x\n"})
 
     assert asyncio.run(check.evaluate(data())) == Approved()
     assert py.config_seen == [True]
@@ -125,7 +125,7 @@ def test_a_linter_that_cannot_run_on_the_old_text_is_inconclusive_not_a_pass(
     java = Stub(
         "java", ".java", tmp_path, after=(draft("lint.pmd", "A.java"),), offers_before=False
     )
-    check = LintCheck(tools, registry_of(java), tmp_path, changes_of("A.java"), {"A.java": "x\n"})
+    check = LintCheck(tools, projects_of(java), tmp_path, changes_of("A.java"), {"A.java": "x\n"})
 
     result = asyncio.run(check.evaluate(data()))
 
@@ -135,7 +135,7 @@ def test_a_linter_that_cannot_run_on_the_old_text_is_inconclusive_not_a_pass(
 
 def test_a_linter_nobody_offers_makes_the_lint_not_applicable(tools: Tools, tmp_path: Path) -> None:
     go = Stub("go", ".go", tmp_path, offers=False)
-    check = LintCheck(tools, registry_of(go), tmp_path, changes_of("b.go"), {"b.go": "y\n"})
+    check = LintCheck(tools, projects_of(go), tmp_path, changes_of("b.go"), {"b.go": "y\n"})
 
     assert asyncio.run(check.evaluate(data())) == NotApplicable(missing_capability="lint")
 
@@ -147,7 +147,7 @@ def test_an_added_file_missing_from_the_copy_does_not_stop_the_old_side_lint(
     added = Changes(
         (Change(ChangeKind.ADDED, "new.py"), Change(ChangeKind.MODIFIED, "a.py")), 1, ()
     )
-    check = LintCheck(tools, registry_of(py), tmp_path, added, {"a.py": "x\n"})
+    check = LintCheck(tools, projects_of(py), tmp_path, added, {"a.py": "x\n"})
 
     result = asyncio.run(check.evaluate(data()))
 

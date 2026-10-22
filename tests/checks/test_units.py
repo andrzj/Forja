@@ -46,7 +46,7 @@ from forja.core.process import Outcome, ProcessResult
 from forja.core.states import ExecutionState, Level
 from forja.languages.python import PythonAdapter
 from forja.orchestrator.ports import TaskInfo
-from tests.checks.support import RUN, registry_of, sinks
+from tests.checks.support import RUN, projects_of, sinks
 from tests.core.events.support import FakeClock
 
 
@@ -201,8 +201,8 @@ def test_format_and_lint_leave_files_that_are_not_python_alone() -> None:
     changes = Changes((Change(ChangeKind.MODIFIED, "README.md"),), 1, ())
     root = Path(".")
     for check in (
-        FormatCheck(None, registry_of(PythonAdapter()), root, changes),  # type: ignore[arg-type]
-        LintCheck(None, registry_of(PythonAdapter()), root, changes, {}),  # type: ignore[arg-type]
+        FormatCheck(None, projects_of(PythonAdapter()), root, changes),  # type: ignore[arg-type]
+        LintCheck(None, projects_of(PythonAdapter()), root, changes, {}),  # type: ignore[arg-type]
     ):
         assert asyncio.run(check.evaluate(data())) == Approved()
 
@@ -291,8 +291,8 @@ def test_a_command_of_the_repository_replaces_the_adapters_in_every_check(
     values = {"commands": {operation: [sys.executable, "-c", "raise SystemExit(3)"]}}
     arguments: tuple[object, ...] = {
         TestsCheck: (tools(log, tmp_path), (adapter,), tmp_path),
-        FormatCheck: (tools(log, tmp_path), registry_of(adapter), tmp_path, changes),
-        LintCheck: (tools(log, tmp_path), registry_of(adapter), tmp_path, changes, {}),
+        FormatCheck: (tools(log, tmp_path), projects_of(adapter), tmp_path, changes),
+        LintCheck: (tools(log, tmp_path), projects_of(adapter), tmp_path, changes, {}),
     }[check]
 
     result = asyncio.run(check(*cast(Any, arguments)).evaluate(data(values)))

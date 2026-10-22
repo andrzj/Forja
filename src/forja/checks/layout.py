@@ -7,7 +7,7 @@ the project does not use) leaves its files alone; the check is not applicable on
 import shutil
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +22,8 @@ from forja.core.adapters import (
     OperationRequest,
     Parsed,
 )
+from forja.core.adapters.projects import owner_of
+from forja.core.adapters.scoped import ScopedAdapter
 from forja.core.gates import (
     Approved,
     Finding,
@@ -34,19 +36,23 @@ from forja.core.gates import (
 
 
 def by_adapter(
-    adapters: AdapterRegistry, files: tuple[str, ...]
-) -> list[tuple[LanguageAdapter, tuple[str, ...]]]:
-    """The files of each adapter, adapters in registration order, files in the order given."""
-    groups: dict[str, list[str]] = {}
+    projects: Sequence[ScopedAdapter], files: tuple[str, ...]
+) -> list[tuple[ScopedAdapter, tuple[str, ...]]]:
+    """The files of each project (the one that owns them), in the order the files are given."""
+    groups: dict[int, list[str]] = {}
     for path in files:
-        adapter = adapters.for_file(path)
-        if adapter is not None:
-            groups.setdefault(adapter.language, []).append(path)
-    return [(adapters.language(name), tuple(paths)) for name, paths in groups.items()]
+        owner = owner_of(projects, path)
+        if owner is not None:
+            groups.setdefault(projects.index(owner), []).append(path)
+    return [(projects[index], tuple(paths)) for index, paths in groups.items()]
 
 
 def own_files(adapters: AdapterRegistry) -> Callable[[str], bool]:
     return lambda path: adapters.for_file(path) is not None
+
+
+def owned_by(projects: Sequence[ScopedAdapter]) -> Callable[[str], bool]:
+    return lambda path: owner_of(projects, path) is not None
 
 
 async def measured(probe: Awaitable[Parsed]) -> Parsed | None:
@@ -64,7 +70,7 @@ class FormatCheck:
     """Whatever the attempt wrote must already be what the formatter would write."""
 
     tools: Tools
-    adapters: AdapterRegistry
+    projects: Sequence[ScopedAdapter]
     worktree: Path
     changes: Changes
     id: str = "format"
@@ -75,12 +81,12 @@ class FormatCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        files = self.changes.current(own_files(self.adapters))
+        files = self.changes.current(owned_by(self.projects))
         if not files:
             return Approved()
         findings: list[Finding] = []
         offered = False
-        for adapter, own in by_adapter(self.adapters, files):
+        for adapter, own in by_adapter(self.projects, files):
             request = OperationRequest(root=self.worktree, files=own, check_only=True)
             overrides = overrides_from(adapter, data.values)
             parsed = await measured(
@@ -125,7 +131,7 @@ class LintCheck:
     """
 
     tools: Tools
-    adapters: AdapterRegistry
+    projects: Sequence[ScopedAdapter]
     worktree: Path
     changes: Changes
     before: dict[str, str]  # the parent commit's text of the changed files, by old path
@@ -137,12 +143,12 @@ class LintCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        files = self.changes.current(own_files(self.adapters))
+        files = self.changes.current(owned_by(self.projects))
         if not files:
             return Approved()
         findings: list[Finding] = []
         offered = False
-        for adapter, own in by_adapter(self.adapters, files):
+        for adapter, own in by_adapter(self.projects, files):
             overrides = overrides_from(adapter, data.values)
             request = OperationRequest(root=self.worktree, files=own)
             parsed = await measured(
@@ -186,7 +192,7 @@ class LintCheck:
         texts = {
             path: text
             for path, text in self.before.items()
-            if self.adapters.for_file(path) is adapter
+            if owner_of(self.projects, path) is adapter
         }
         if not texts:
             return Counter()

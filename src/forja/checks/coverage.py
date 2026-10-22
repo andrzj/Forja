@@ -12,6 +12,7 @@ from forja.core.adapters import (
     OperationRequest,
     plan_with_override,
 )
+from forja.core.adapters.scoped import ScopedAdapter
 from forja.core.gates import GateInput, Inconclusive, NotApplicable
 from forja.core.gates.models import InconclusiveReason
 from forja.core.reports.formats import ReportSpec
@@ -66,21 +67,28 @@ async def _measure(
     if not execution.finished:
         raise Undecided(execution.inconclusive("coverage"))
     paths = report_paths(worktree, spec.path)
+    # what a tool writes is relative to the project's directory: read it from there, then name
+    # the files as the repository does
+    project = adapter if isinstance(adapter, ScopedAdapter) and adapter.base != "." else None
+    root = project.directory(worktree) if project else worktree
+    source_roots = (
+        tuple(project.local(r) for r in spec.source_roots) if project else spec.source_roots
+    )
     try:
         if execution.result.exit_code != 0:
             raise _failed(f"coverage: the tool ended with {execution.result.exit_code}")
         if not paths:
             raise OSError(f"{spec.path} was not written")
-        return merge_coverage(
+        merged = merge_coverage(
             [
-                read_coverage(
-                    spec.format,
-                    path.read_text(encoding="utf-8"),
-                    worktree,
-                    spec.source_roots,
-                )
+                read_coverage(spec.format, path.read_text(encoding="utf-8"), root, source_roots)
                 for path in paths
             ]
+        )
+        if project is None:
+            return merged
+        return CoverageReport(
+            {project.repository(name): file for name, file in merged.files.items()}
         )
     except (OSError, ReportError) as error:
         raise _failed(f"coverage: the report cannot be read ({error})") from None

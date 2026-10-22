@@ -87,12 +87,13 @@ def languages(repo: Path) -> AdapterRegistry:
 
 
 def _test_root(configured: str | None, registry: AdapterRegistry, repo: Path) -> str:
-    """Where the test author writes: the policy's, else Python's ``tests`` for a Python-only
-    repository. The other languages keep tests beside the code, so no directory holds them."""
+    """Where the test author writes: the policy's, else Python's ``tests`` for a repository
+    that is one Python project. The other languages keep tests beside the code, so no directory
+    holds them."""
     if configured is not None:
         return configured
-    found = {adapter.language for adapter, _ in registry.detect_all(repo)}
-    return PythonAdapter.test_root if found == {PythonAdapter.language} else ""
+    found = [adapter.language for adapter, _ in registry.detect_all(repo)]
+    return PythonAdapter.test_root if found == [PythonAdapter.language] else ""
 
 
 def repo_python(repo: Path) -> tuple[str, ...]:

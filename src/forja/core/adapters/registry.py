@@ -80,10 +80,14 @@ class AdapterRegistry:
         """The projects under ``root``, one adapter instance each, in registration order and
         then by directory."""
         return [
-            ScopedAdapter(self._factories[adapter.language](), detection.roots[0])
+            self.project(adapter.language, detection.roots[0])
             for adapter in self._languages.values()
             for detection in find_projects(adapter, root)
         ]
+
+    def project(self, language: str, base: str = ".") -> ScopedAdapter:
+        """A project of ``language`` at ``base``, with an instance of its own."""
+        return ScopedAdapter(self._factories[language](), base)
 
     def for_file(self, path: str) -> LanguageAdapter | None:
         """The first adapter that claims the file, or ``None`` when nobody does."""

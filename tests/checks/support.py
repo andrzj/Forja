@@ -19,6 +19,7 @@ from forja.core.adapters import (
     ParseResult,
     ToolOutput,
 )
+from forja.core.adapters.scoped import ScopedAdapter
 from forja.core.events import EventLog
 from forja.core.evidence import Target, TargetKind
 from forja.core.gates import CheckSettings, InconclusivePolicy, Mode
@@ -65,6 +66,12 @@ def registry_of(*adapters: LanguageAdapter) -> AdapterRegistry:
     for adapter in adapters:
         registry.register_language(adapter)
     return registry
+
+
+def projects_of(*adapters: LanguageAdapter) -> tuple[ScopedAdapter, ...]:
+    """One project at the root for each adapter."""
+    registry = registry_of(*adapters)
+    return tuple(registry.project(a.language) for a in registry.languages())
 
 
 class Run:
