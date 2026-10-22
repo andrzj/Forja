@@ -73,6 +73,9 @@ class Project:
     env: frozenset[str]
     adapter: Callable[[Path], LanguageAdapter]
     where: str = ""  # the directory of the project in the repository; empty for the root
+    also: tuple[Callable[[Path], LanguageAdapter], ...] = ()  # the other projects of the repository
+    packages_at: str | None = None  # where the installed TypeScript packages are linked
+    label: str = ""
 
 
 GO = Project(
@@ -267,10 +270,34 @@ def under(project: Project, where: str) -> Project:
 
 
 IN_A_DIRECTORY = [under(p, "svc") for p in PROJECTS]
-EVERY_PROJECT = [*PROJECTS, *IN_A_DIRECTORY]
+WEB = under(TYPESCRIPT, "web")
+BOTH = {**GO.base, **WEB.base}  # Go at the root of the repository, TypeScript in ``web``
+MIXED = [
+    replace(
+        WEB,
+        base=BOTH,
+        tools=(*GO.tools, *WEB.tools),
+        env=GO.env | WEB.env,
+        also=(GO.adapter,),
+        packages_at="web",
+        label="go-and-typescript-fixing-typescript",
+    ),
+    replace(
+        GO,
+        base=BOTH,
+        tools=(*GO.tools, *WEB.tools),
+        env=GO.env | WEB.env,
+        also=(WEB.adapter,),
+        packages_at="web",
+        label="go-and-typescript-fixing-go",
+    ),
+]
+EVERY_PROJECT = [*PROJECTS, *IN_A_DIRECTORY, *MIXED]
 
 
 def name_of(project: Project) -> str:
+    if project.label:
+        return project.label
     return f"{project.language}-in-{project.where}" if project.where else project.language
 
 
@@ -326,7 +353,9 @@ def world_of(project: Project, tmp_path: Path, packages: Path | None = None) -> 
     repo.mkdir()
     commit(repo, project.base, minimal_env(tmp_path / "home"))
     if packages is not None:
-        link(packages, repo / project.where)
+        link(
+            packages, repo / (project.where if project.packages_at is None else project.packages_at)
+        )
     found = World.at(tmp_path)
     found.config = found.config.model_copy(
         update={
@@ -348,7 +377,7 @@ def repair(  # type: ignore[no-untyped-def]
         for n in ("scope", "secrets", "format", "lint", "build", "tests", "red_green", "freeze")
     }
     measurer = PipelineMeasurer(
-        adapters=registry_of(project.adapter(tmp_path)),
+        adapters=registry_of(project.adapter(tmp_path), *(a(tmp_path) for a in project.also)),
         git=world.repo.git,
         log=log,
         workdir=world.run_dir / "measure",
@@ -385,7 +414,7 @@ def repair(  # type: ignore[no-untyped-def]
 
 
 def packages_of(project: Project, request: pytest.FixtureRequest) -> Path | None:
-    if project.language != "typescript":
+    if project.language != "typescript" and project.packages_at is None:
         return None
     found: Path = request.getfixturevalue("ts_packages")
     return found
