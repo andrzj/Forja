@@ -112,6 +112,9 @@ class GoAdapter:
         name, directories = parts[-1], parts[:-1]
         if not name.endswith(".go") or "vendor" in directories:
             return None
+        # the Go tool chain skips files and directories that start with "_" or "."
+        if any(part[:1] in ("_", ".") and part not in (".", "..") for part in parts):
+            return None
         if "testdata" in directories:  # the Go tool chain ignores it; it holds sample inputs
             return FileClass.FIXTURE
         return FileClass.TEST if name.endswith("_test.go") else FileClass.PRODUCTION
