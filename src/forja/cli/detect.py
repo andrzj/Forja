@@ -14,6 +14,7 @@ from forja.cli.session import git_base_environment, git_executable
 from forja.core.adapters.executor import ExecutorChoice, find_executors, locate_in_path
 from forja.core.idempotency.git import Git
 from forja.executors import KNOWN_CLIS
+from forja.languages.java.gradle import MANIFESTS as GRADLE_MANIFESTS
 
 LOW_DISK_GIB = 2.0
 
@@ -72,7 +73,7 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
     changed = await git.lines("-c", "core.fsmonitor=false", "status", "--porcelain")
     base["python"] = (root / "pyproject.toml").is_file()
     base["go"] = (root / "go.mod").is_file()
-    base["java"] = (root / "pom.xml").is_file()
+    base["java"] = any((root / name).is_file() for name in ("pom.xml", *GRADLE_MANIFESTS))
     base["csharp"] = any(root.glob("*.sln")) or any(root.glob("*.csproj"))
     base["typescript"] = (root / "package.json").is_file() and (root / "tsconfig.json").is_file()
     return Detection(

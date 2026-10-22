@@ -12,6 +12,7 @@ from forja.cli import doctor as doctor_module
 from forja.cli import main as door
 from forja.cli import prepare as preparation
 from forja.cli.args import parse
+from forja.cli.detect import detect
 from forja.cli.settings import Execucao, Perfil, load_perfil, save_perfil
 from forja.core.states import ExecutionState
 from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
@@ -440,3 +441,48 @@ def test_the_doctor_requires_java_and_maven_for_a_java_project(tmp_path: Path) -
     assert not maven.ok
     assert maven.required
     assert "maven.apache.org" in maven.fix
+
+
+def test_the_doctor_asks_for_gradle_when_only_a_gradle_build_file_is_there(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "build.gradle").write_text("", encoding="utf-8")
+
+    java, gradle = doctor_module._java_checks({"PATH": str(tmp_path)}, repo)  # noqa: SLF001
+
+    assert not java.ok
+    assert (gradle.name, gradle.ok, gradle.required) == ("gradle", False, True)
+    assert "gradle.org" in gradle.fix
+
+
+def test_the_doctor_accepts_the_wrapper_of_the_repository_as_gradle(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "build.gradle.kts").write_text("", encoding="utf-8")
+    wrapper = "gradlew.bat" if sys.platform == "win32" else "gradlew"
+    (repo / wrapper).write_text("x", encoding="utf-8")
+
+    _, gradle = doctor_module._java_checks({"PATH": str(tmp_path)}, repo)  # noqa: SLF001
+
+    assert gradle.ok
+
+
+@pytest.mark.parametrize("manifest", ["pom.xml", "build.gradle", "build.gradle.kts"])
+def test_a_java_manifest_at_the_root_is_a_java_project(repo: Path, manifest: str) -> None:
+    assert not asyncio.run(detect(repo, os.environ)).java
+    (repo / manifest).write_text("", encoding="utf-8")
+
+    assert asyncio.run(detect(repo, os.environ)).java
+
+
+def test_the_pom_wins_over_a_gradle_build_file_in_the_doctor(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pom.xml").write_text("", encoding="utf-8")
+    (repo / "build.gradle").write_text("", encoding="utf-8")
+
+    _, tool = doctor_module._java_checks({"PATH": str(tmp_path)}, repo)  # noqa: SLF001
+
+    assert tool.name == "maven"

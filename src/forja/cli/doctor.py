@@ -29,6 +29,7 @@ NODE_HELP = "https://nodejs.org/en/download"
 DOTNET_HELP = "https://dotnet.microsoft.com/download"
 JAVA_HELP = "https://adoptium.net/installation/"
 MAVEN_HELP = "https://maven.apache.org/install.html"
+GRADLE_HELP = "https://gradle.org/install/"
 
 
 @dataclass(frozen=True)
@@ -116,18 +117,38 @@ def _dotnet_checks(environ: Mapping[str, str]) -> list[Check]:
     ]
 
 
-def _java_checks(environ: Mapping[str, str]) -> list[Check]:
+def _java_checks(environ: Mapping[str, str], root: Path | None = None) -> list[Check]:
+    """Java, and the build tool the root's manifest picks: Maven, unless only a Gradle build
+    file is there (the adapter's own choice, ``pom.xml`` winning)."""
     java = locate_in_path("java", environ.get("PATH")) is not None
+    checks = [
+        Check("java", java, "java no PATH" if java else "java ausente", "" if java else JAVA_HELP)
+    ]
+    if root is not None and not (root / "pom.xml").is_file():
+        return [*checks, _gradle_check(environ, root)]
     maven = locate_in_path("mvn", environ.get("PATH")) is not None
-    return [
-        Check("java", java, "java no PATH" if java else "java ausente", "" if java else JAVA_HELP),
+    checks.append(
         Check(
             "maven",
             maven,
             "mvn no PATH" if maven else "mvn ausente",
             "" if maven else MAVEN_HELP,
-        ),
-    ]
+        )
+    )
+    return checks
+
+
+def _gradle_check(environ: Mapping[str, str], root: Path) -> Check:
+    wrapper = root / ("gradlew.bat" if sys.platform == "win32" else "gradlew")
+    if wrapper.is_file():
+        return Check("gradle", True, f"{wrapper.name} do repositório")
+    found = locate_in_path("gradle", environ.get("PATH")) is not None
+    return Check(
+        "gradle",
+        found,
+        "gradle no PATH" if found else "gradle ausente e o repositório não tem gradlew",
+        "" if found else GRADLE_HELP,
+    )
 
 
 async def run_checks(
@@ -177,7 +198,7 @@ async def run_checks(
         if detection.csharp:
             checks += _dotnet_checks(environ)
         if detection.java:
-            checks += _java_checks(environ)
+            checks += _java_checks(environ, detection.repo)
     checks.append(await _agent_check(name, profile, environ, console, cache))
     checks += await _other_clis(name, profile, environ)
     return checks
