@@ -14,6 +14,19 @@ Estado: plano, nada implementado; sem perguntas abertas. Ordem decidida com o do
 - **Semgrep** (`docs.semgrep.dev/cli-reference`): `--config` aceita arquivo ou diretório local de regras; `p/...` e `auto` vão ao registro (e `--metrics=off`, `--disable-version-check` evitam chamadas). `--json --json-output=<arquivo>`. Códigos: 0 ok (com `--error`, 1 se há achado), 2 erro fatal, 3, 4, 5, 7, 8, 13 para erros específicos. `--baseline-commit` aborta fora de git, com mudanças não commitadas ou commit inexistente: **não serve**, porque o diff da tentativa está no working tree. A documentação não garante execução totalmente offline.
 - **OSV-Scanner** (`google.github.io/osv-scanner`): `osv-scanner scan -r <dir>` ou `-L <lockfile>`; `--format json --output-file`; `--licenses` resume licenças e `--licenses="MIT,Apache-2.0"` (lista **permitida**) reporta violações; `--offline-vulnerabilities` usa bases baixadas. Saída JSON: `results[].source.path`, `results[].packages[].package{name,version,ecosystem}`, `.vulnerabilities[].id`, `.groups[]`. Códigos: 0 sem achado, 1 com achado, 127 erro geral, 128 nenhum pacote encontrado, 129 a 255 erros. **Não lido ainda:** os nomes dos campos de licença no JSON e a lista de manifestos/lockfiles suportados (páginas "License Scanning" e "Supported Artifacts").
 
+### Leitura do passo 0 (22/10, feito)
+
+- **OSV, licenças:** `--licenses` resume; `--licenses="A,B"` é lista permitida (SPDX); dados vêm da API deps.dev (rede). JSON (código-fonte `pkg/models/results.go`, a página de saída não documenta): `results[].packages[].licenses[]` e `.license_violations[]` (strings SPDX), `license_summary[]` com `{name,count}` no nível raiz. Como pacote sem licença aparece: **não documentado**, verificar no E2E; até lá, `licenses` vazio = `Inconclusive` para aquele pacote.
+- **OSV, artefatos suportados:** Python `requirements.txt`, `Pipfile.lock`, `poetry.lock`, `pdm.lock`, `uv.lock`; JS/TS **só lockfiles** (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`), **`package.json` não é lido**; Go `go.mod`; Java `pom.xml`, `gradle.lockfile`; C# `packages.lock.json`, `packages.config`, `deps.json`. Versões vindas de manifesto sem trava são aproximadas.
+- **Semgrep, linguagens:** as seis são GA.
+- **Semgrep, JSON** (`semgrep_output_v1.atd`): raiz `results[]` e `errors[]`; cada resultado `check_id`, `path`, `start{line,col,offset}`, `end`, `extra{message,severity,fingerprint,lines,metadata}`; `severity` em `ERROR|WARNING|INFO|...`; erro com `code`, `level`, `type`, `path`, `message`.
+- **Semgrep, não documentado:** comportamento com `--config` apontando para diretório sem regras; código 7 aparece como "regra inválida" e como "configuração ausente". Tratar qualquer código fora de 0/1 como `Inconclusive` e checar no E2E.
+
+### Correções às decisões abaixo
+
+- Decisão 5: a lista de "manifestos e lockfiles" que dispara a auditoria é a lista de artefatos acima. `package.json` mudado sem lockfile mudado **não** dispara o OSV (ele não o lê); isso é coberto por `new_dependency`.
+- Decisão 7: `package.json` entra como manifesto de `new_dependency` mesmo o OSV não lendo.
+
 ## Decisões
 
 1. **Três checks, um gate.** `sast`, `dependency_audit` (vulnerabilidades e licenças) e `new_dependency`, todos `gate = 10`, cada um com o seu modo (ADR 0003). Nascem em observação.
@@ -28,7 +41,7 @@ Estado: plano, nada implementado; sem perguntas abertas. Ordem decidida com o do
 
 ## Passos (um commit cada)
 
-0. **Ler o que falta:** páginas "License Scanning" e "Supported Artifacts and Manifests" do OSV-Scanner; esquema do JSON do Semgrep; linguagens suportadas pelo Semgrep. Corrigir este plano se algo divergir.
+0. **Feito (22/10):** **Ler o que falta:** páginas "License Scanning" e "Supported Artifacts and Manifests" do OSV-Scanner; esquema do JSON do Semgrep; linguagens suportadas pelo Semgrep. Corrigir este plano se algo divergir.
 1. **`sast`:** parser do JSON do Semgrep, check com a catraca da decisão 3, parâmetro `semgrep=` no measurer. Testes com ferramenta falsa (molde: `FAKE_GITLEAKS`).
 2. **Configuração do Semgrep (decisões 4 e 4b):** `--semgrep-config` e chave do `execucao.toml`, descoberta de `.semgrep.yml`/`.semgrep/` no commit base, recusa de referência de registro, `NotApplicable` sem configuração, linha no resumo da preparação e da entrega, texto do `--help`, `doctor` (pede o `semgrep` só quando há configuração), proteção do arquivo de regras no gate de escopo.
 3. **`dependency_audit`:** parser do JSON do OSV (vulnerabilidades e licenças), comparação novo contra antigo, lista de licenças proibidas da política (sem padrão), parâmetro `osv_scanner=`.
