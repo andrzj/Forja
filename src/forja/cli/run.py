@@ -159,6 +159,8 @@ def closing_lines(session: Session, ended: Ended) -> list[str]:
         ]
     elif view.state == "paused":
         lines.append("Rode `forja` de novo neste repositório para retomar.")
+    if view.state == "delivered":
+        lines += session.context.notices
     return lines
 
 

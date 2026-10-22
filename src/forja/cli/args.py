@@ -2,8 +2,9 @@
 
 ``forja`` alone guides. The verbs are shortcuts for people who know what they want, and a few
 options cover the rest: where to look (``--escopo``), which agent (``--cli``, and ``--cli-testes``
-for the one that writes the tests of a fix), what would be done (``--plano``) and a ready-made
-answer file for CI (``--config``). Everything else is in ``execucao.toml`` or in the profile, so
+for the one that writes the tests of a fix), the Semgrep rules the user supplies
+(``--semgrep-config``), what would be done (``--plano``) and a ready-made answer file for CI
+(``--config``). Everything else is in ``execucao.toml`` or in the profile, so
 ``--help`` stays short. ``forja agente`` is for the agents and does not appear in the help.
 """
 
@@ -36,6 +37,7 @@ class Arguments:
     model_tests: str = ""
     plan_only: bool = False
     config: Path | None = None
+    semgrep_config: str = ""  # text, so a registry reference is seen as typed
     agent: tuple[str, ...] = field(default=())
 
 
@@ -64,6 +66,12 @@ def parser() -> argparse.ArgumentParser:
     )
     main.add_argument("--plano", action="store_true", help="mostrar o plano, sem executar")
     main.add_argument(
+        "--semgrep-config",
+        metavar="CAMINHO",
+        help="regras do Semgrep (arquivo ou diretório) que você fornece; a Forja não traz regras. "
+        "Sem elas, e sem .semgrep.yml ou .semgrep/ no repositório, a análise SAST não executa",
+    )
+    main.add_argument(
         "--config", type=Path, metavar="ARQUIVO", help="rodar com execucao.toml, sem perguntas"
     )
     sub = main.add_subparsers(dest="command", metavar="COMANDO")
@@ -81,6 +89,7 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--modelo", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--modelo-testes", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--plano", action="store_true", default=argparse.SUPPRESS)
+        item.add_argument("--semgrep-config", metavar="CAMINHO", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
     agent = sub.add_parser("agente")  # for the agents: left out of the help
     agent.add_argument("what", choices=AGENT_COMMANDS)
@@ -104,5 +113,6 @@ def parse(argv: list[str] | None = None) -> Arguments:
         model_tests=found.modelo_testes or "",
         plan_only=bool(found.plano),
         config=found.config,
+        semgrep_config=found.semgrep_config or "",
         agent=(found.what, *found.rest) if command == "agente" else (),
     )

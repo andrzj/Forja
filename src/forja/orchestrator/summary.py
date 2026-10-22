@@ -108,7 +108,12 @@ def summary_body(state: RunState) -> ExecutionSummaryBody:
 
 
 def render_summary(
-    state: RunState, facts: Facts, config: RunConfig, run_branch: str, summary_path: Path
+    state: RunState,
+    facts: Facts,
+    config: RunConfig,
+    run_branch: str,
+    summary_path: Path,
+    notices: tuple[str, ...] = (),
 ) -> str:
     lines = [
         f"# Resumo da execução {state.run_id}",
@@ -143,6 +148,7 @@ def render_summary(
         "",
         *_environment(state, config),
         *_agents(config),
+        *(f"- **{notice}**" for notice in notices),
         "",
         "## Para publicar",
         "",

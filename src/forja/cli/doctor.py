@@ -15,12 +15,14 @@ from pathlib import Path
 from forja.cli.console import Console
 from forja.cli.detect import Detection, installed_clis
 from forja.cli.prepare import LOW_DISK_GIB, Refused, prove
+from forja.cli.semgrep_rules import RULE_DIR, RULE_FILE
 from forja.cli.session import repo_python
 from forja.cli.settings import Perfil
 from forja.core.adapters.executor import locate_in_path
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, version_problem
 
+SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
@@ -159,6 +161,7 @@ async def run_checks(
     cache: Path,
     *,
     cli: str = "",
+    semgrep_config: str = "",
 ) -> list[Check]:
     name = cli or profile.cli or DEFAULT_CLI
     checks = [
@@ -199,6 +202,16 @@ async def run_checks(
             checks += _dotnet_checks(environ)
         if detection.java:
             checks += _java_checks(environ, detection.repo)
+    if semgrep_config or (detection.repo and _has_rules(detection.repo)):
+        found = locate_in_path("semgrep", environ.get("PATH")) is not None
+        checks.append(
+            Check(
+                "semgrep",
+                found,
+                "semgrep no PATH" if found else "semgrep ausente",
+                "" if found else f"instale seguindo {SEMGREP_HELP}",
+            )
+        )
     checks.append(await _agent_check(name, profile, environ, console, cache))
     checks += await _other_clis(name, profile, environ)
     return checks
@@ -274,8 +287,16 @@ async def doctor(
     cache: Path,
     *,
     cli: str = "",
+    semgrep_config: str = "",
 ) -> int:
-    checks = await run_checks(detection, profile, environ, console, cache, cli=cli)
+    checks = await run_checks(
+        detection, profile, environ, console, cache, cli=cli, semgrep_config=semgrep_config
+    )
     for line in render(checks, terminal_note(sys.platform, environ)):
         console.say(line)
     return 0 if all(check.ok or not check.required for check in checks) else 1
+
+
+def _has_rules(repo: Path) -> bool:
+    """Whether the repository carries Semgrep rules, which is when the run needs ``semgrep``."""
+    return (repo / RULE_FILE).is_file() or (repo / RULE_DIR).is_dir()

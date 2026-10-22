@@ -70,6 +70,7 @@ class RunConfig(BaseModel):
     policy_version: NonEmpty
     agent_runs_tests: bool = True  # the agent may call `forja agente testar` in its copy
     scope: tuple[str, ...] = ()  # only code under these paths is planned; empty is all of it
+    semgrep_config: str = ""  # the rules the person named; empty: the ones in the base commit
 
     @model_validator(mode="after")
     def _fix_goes_with_the_fix_objective(self) -> Self:

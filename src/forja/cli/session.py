@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
+from forja.cli.semgrep_rules import export_rules
 from forja.core.adapters import AdapterRegistry
 from forja.core.adapters.executor import RolePermissions, locate_in_path
 from forja.core.artifacts.models import Producer
@@ -63,6 +64,7 @@ GIT_ENVIRONMENT = (
 NETWORK_PROBES_WITHOUT_A_PERSON = 60
 FORJA_VERSION = "0.0.0"
 POLICY_VERSION = "0.0.0+default"
+NO_SAST = "SAST não executado: sem configuração de regras do Semgrep."
 IN_USER_ENVIRONMENT = Confirmation(
     IsolationRecord(agent=IsolationLevel.ENVIRONMENT, repo_code=IsolationLevel.ENVIRONMENT)
 )
@@ -188,6 +190,7 @@ def new_config(
     policy_version: str = POLICY_VERSION,
     fix: FixRequest | None = None,
     test_author: ExecutorRef | None = None,
+    semgrep_config: str = "",
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, Objective  # noqa: PLC0415
 
@@ -203,6 +206,7 @@ def new_config(
         policy_version=policy_version,
         scope=scope,
         agent_runs_tests=agent_runs_tests,
+        semgrep_config=semgrep_config,
     )
 
 
@@ -303,6 +307,9 @@ async def _context(
         return LogEventSink(log, level, target, operation)
 
     registry = languages(repo)
+    rules = await export_rules(
+        plain, config.base_commit, config.semgrep_config, directory / "semgrep-rules"
+    )
     measurer = PipelineMeasurer(
         adapters=registry,
         git=git,
@@ -313,6 +320,8 @@ async def _context(
         values=policy.values(),
         lizard=(sys.executable, "-m", "lizard"),
         gitleaks=(missing_tool("gitleaks"),),
+        semgrep=(missing_tool("semgrep"),),
+        semgrep_config=rules,
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
@@ -360,4 +369,5 @@ async def _context(
         test_files=measurer.test_files,
         test_root=test_root,
         max_network_probes=None if interactive else NETWORK_PROBES_WITHOUT_A_PERSON,
+        notices=() if rules else (NO_SAST,),
     )

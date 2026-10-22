@@ -224,6 +224,7 @@ class RunContext:
     # only what lies under the task's ``test_root`` is frozen
     test_files: Callable[[Path], Awaitable[Sequence[str]]] = _no_test_files
     test_root: str = TEST_ROOT  # where a test author with no root of its own writes
+    notices: tuple[str, ...] = ()  # what the person must be told about this run's checks
 
     def runner(self, role: Producer) -> AgentRunner:
         return self.agents.get(role, self.agent)

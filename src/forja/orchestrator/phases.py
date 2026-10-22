@@ -277,6 +277,8 @@ class Orchestrator:
     def _write_summary(self, path: Path) -> Path:
         ctx = self._ctx
         facts = read_facts(self._log.path)
-        text = render_summary(self._log.state, facts, ctx.config, ctx.workspace.run_branch, path)
+        text = render_summary(
+            self._log.state, facts, ctx.config, ctx.workspace.run_branch, path, ctx.notices
+        )
         atomic_write_bytes(path, text.encode("utf-8"))
         return path

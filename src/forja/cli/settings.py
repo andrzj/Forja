@@ -51,6 +51,7 @@ class Execucao(BaseModel):
     agente_roda_testes: bool = True
     tarefas: int = Field(default=5, ge=1)  # how many of the worst functions one run takes on
     base: str = ""
+    semgrep_config: str = ""  # the user's Semgrep rules (a file or directory); empty: none named
     interface: Interface = Field(default_factory=Interface)
 
 

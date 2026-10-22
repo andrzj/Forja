@@ -5,6 +5,7 @@ After the confirmation there are no more questions. Everything that is asked her
 """
 
 import json
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,8 +15,11 @@ from pydantic import ValidationError
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
+from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
     executor_ref,
+    git_base_environment,
+    git_executable,
     new_config,
     policy_digest,
     repo_policy,
@@ -24,6 +28,7 @@ from forja.cli.session import (
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import ExecutorChoice
 from forja.core.artifacts.schemas import CriteriaBody
+from forja.core.idempotency.git import Git
 from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS
@@ -256,12 +261,45 @@ def _redaction_changes(policy: EffectivePolicy) -> list[str]:
     return notes
 
 
+NO_RULES = (
+    "SAST NÃO EXECUTADO: sem configuração. A Forja não traz regras do Semgrep; forneça as suas "
+    "com --semgrep-config ou deixe .semgrep.yml ou .semgrep/ no repositório"
+)
+
+
+async def semgrep_rules(
+    args: Arguments, saved: Execucao | None, repo: Path, commit: str, environ: Mapping[str, str]
+) -> tuple[str, str]:
+    """The rules the person named (as an absolute path, else empty) and the summary line about
+    the SAST. Rules a repository carries are read from the base commit."""
+    named = args.semgrep_config or (saved.semgrep_config if saved else "")
+    try:
+        if named:
+            path = explicit_rules(named)
+            return str(path), f"SAST: Semgrep com as regras em {path}"
+        with tempfile.TemporaryDirectory(prefix="forja-rules-") as scratch:
+            git = Git(
+                repo,
+                executable=git_executable(),
+                env=git_base_environment(environ),
+                timeout=30,
+                log_dir=Path(scratch),
+            )
+            found = await rules_in_commit(git, commit)
+    except RulesError as error:
+        raise Refused(str(error)) from None
+    if found:
+        return "", f"SAST: Semgrep com as regras do repositório ({', '.join(found)})"
+    return "", NO_RULES
+
+
 def summary_of(
     detection: Detection,
     config: RunConfig,
     scope: tuple[str, ...],
     tokens: int,
     policy_notes: tuple[str, ...] = (),
+    sast: str = "",
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
     limit = format(tokens, ",").replace(",", ".")
@@ -296,6 +334,7 @@ def summary_of(
         "  a Forja impõe: ambiente filtrado para a CLI, cópia sem .git e sem arquivos sensíveis, "
         "ferramentas de arquivo do agente confinadas à cópia, git conferido a cada chamada",
         f"  testes: {tests}",
+        *((f"  {sast}",) if sast else ()),
         "  entrega: uma branch nova `forja-run/…`; sua branch não é alterada e nada é enviado",
         *(("  forja.toml do repositório muda o padrão:", *(f"    {note}" for note in policy_notes))
           if policy_notes else ()),
@@ -344,19 +383,20 @@ async def prepare(
     elif fixing and model_tests:  # the same CLI, another model
         author = (name, choice, version)
     scope = args.scope or tuple(saved.escopo if saved else ())
+    rules, sast = await semgrep_rules(args, saved, repo, detection.head, environ)
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
     tasks = saved.tarefas if saved else 5
     config = new_config(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
         executor_version=version, executor_model=model, tokens=tokens, scope=scope,
-        agent_runs_tests=runs_tests, tasks=tasks,
+        agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
         policy_version=policy_digest(policy),
         fix=fixing[0] if fixing else None,
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
-    lines = summary_of(detection, config, scope, tokens, notes)
+    lines = summary_of(detection, config, scope, tokens, notes, sast)
     execucao = Execucao(
         objetivo="corrigir" if fixing else "refatorar",
         descricao=fixing[1] if fixing else "",
@@ -371,6 +411,7 @@ async def prepare(
         tokens=tokens,
         agente_roda_testes=runs_tests,
         tarefas=tasks,
+        semgrep_config=rules,
         interface=saved.interface if saved else profile.interface,
     )
     return Prepared(config, execucao, lines, (name, str(choice.path)) if offer else None)

@@ -164,7 +164,15 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
         if args.command == "doctor":
             profile = load_perfil(profile_dir(environ))
             cache = probe_cache(profile_dir(environ))
-            return await doctor(detection, profile, environ, console, cache, cli=args.cli)
+            return await doctor(
+                detection,
+                profile,
+                environ,
+                console,
+                cache,
+                cli=args.cli,
+                semgrep_config=args.semgrep_config,
+            )
         if args.command == "agente":
             return run_facade(args.agent, Path.cwd(), environ)
         return await start(args, console, environ, detection)
