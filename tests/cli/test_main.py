@@ -187,6 +187,21 @@ def test_a_test_author_cli_that_is_not_known_is_refused(
     assert "Não conheço a CLI `nenhuma`" in talk.text
 
 
+def test_a_manifest_in_a_subfolder_counts_as_a_language(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    git(repo, "rm", "-q", "pyproject.toml")
+    (repo / "svc").mkdir()
+    (repo / "svc" / "go.mod").write_text("module svc\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "go in a subfolder")
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    go(["corrigir", "x", "--criterios", str(criteria), "--plano"], talk, environ)
+    assert "Não encontrei nenhuma linguagem" not in talk.text
+
+
 def test_a_repository_with_no_language_is_refused(
     repo: Path, tmp_path: Path, environ: dict[str, str]
 ) -> None:

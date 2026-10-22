@@ -12,6 +12,7 @@ from pathlib import Path
 
 from forja.cli.session import git_base_environment, git_executable
 from forja.core.adapters.executor import ExecutorChoice, find_executors, locate_in_path
+from forja.core.adapters.projects import project_directories
 from forja.core.idempotency.git import Git
 from forja.executors import KNOWN_CLIS
 from forja.languages.java.gradle import MANIFESTS as GRADLE_MANIFESTS
@@ -71,11 +72,9 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
     has_commits = head.exit_code == 0
     branch = await git.run("rev-parse", "--abbrev-ref", "HEAD")
     changed = await git.lines("-c", "core.fsmonitor=false", "status", "--porcelain")
-    base["python"] = (root / "pyproject.toml").is_file()
-    base["go"] = (root / "go.mod").is_file()
-    base["java"] = any((root / name).is_file() for name in ("pom.xml", *GRADLE_MANIFESTS))
-    base["csharp"] = any(root.glob("*.sln")) or any(root.glob("*.csproj"))
-    base["typescript"] = (root / "package.json").is_file() and (root / "tsconfig.json").is_file()
+    for directory in project_directories(root):
+        for language, found in _languages_in(directory).items():
+            base[language] = base.get(language, False) or found
     return Detection(
         repo=root,
         has_commits=has_commits,
@@ -84,6 +83,17 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
         changed=tuple(line[3:] for line in changed),
         **base,  # type: ignore[arg-type]
     )
+
+
+def _languages_in(directory: Path) -> dict[str, bool]:
+    return {
+        "python": (directory / "pyproject.toml").is_file(),
+        "go": (directory / "go.mod").is_file(),
+        "java": any((directory / name).is_file() for name in ("pom.xml", *GRADLE_MANIFESTS)),
+        "csharp": any(directory.glob("*.sln")) or any(directory.glob("*.csproj")),
+        "typescript": (directory / "package.json").is_file()
+        and (directory / "tsconfig.json").is_file(),
+    }
 
 
 def installed_clis(

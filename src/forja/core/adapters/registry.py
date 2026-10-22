@@ -10,6 +10,7 @@ from forja.core.adapters.language import (
     LanguageCapability,
     valid_language,
 )
+from forja.core.adapters.projects import find_projects
 
 
 class AdapterRejected(ValueError):
@@ -60,13 +61,13 @@ class AdapterRegistry:
         return iter(self._executors.values())
 
     def detect_all(self, root: Path) -> list[tuple[LanguageAdapter, Detection]]:
-        """Every language found under ``root``, in registration order."""
-        found = []
-        for adapter in self._languages.values():
-            detection = adapter.detect(root)
-            if detection is not None:
-                found.append((adapter, detection))
-        return found
+        """Every project found under ``root``, in registration order, one entry per manifest
+        directory."""
+        return [
+            (adapter, detection)
+            for adapter in self._languages.values()
+            for detection in find_projects(adapter, root)
+        ]
 
     def for_file(self, path: str) -> LanguageAdapter | None:
         """The first adapter that claims the file, or ``None`` when nobody does."""
