@@ -47,4 +47,33 @@ def test_a_path_is_a_dependency_when_it_is_or_lies_under_a_dependency_directory(
     assert is_dependency("node_modules/lib/index.js")
     assert is_dependency("node_modules\\lib")
     assert not is_dependency("src/node_modules.js")
-    assert not is_dependency("pkg/node_modules/lib.js")
+    assert is_dependency("web/node_modules/lib.js")
+    assert is_dependency("a/b/node_modules")
+    assert not is_dependency("web/src/node_modules.js")
+
+
+def test_every_project_directory_with_dependencies_gets_its_own_link(tmp_path: Path) -> None:
+    source, target = tmp_path / "repo", tmp_path / "wt"
+    installed(source / "web")
+    installed(source / "tools" / "ui")
+    for where in ("web", "tools/ui"):
+        (target / where).mkdir(parents=True)
+
+    link_dependencies(source, target)
+
+    assert (target / "web" / "node_modules" / "lib" / "index.js").is_file()
+    assert (target / "tools" / "ui" / "node_modules" / "lib" / "index.js").is_file()
+    unlink_dependencies(target)
+    assert not (target / "web" / "node_modules").exists()
+    assert not (target / "tools" / "ui" / "node_modules").exists()
+    assert (source / "web" / "node_modules" / "lib" / "index.js").is_file()
+
+
+def test_dependencies_of_a_directory_the_worktree_lacks_are_left_out(tmp_path: Path) -> None:
+    source, target = tmp_path / "repo", tmp_path / "wt"
+    installed(source / "web")
+    target.mkdir()
+
+    link_dependencies(source, target)
+
+    assert os.listdir(target) == []

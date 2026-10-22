@@ -295,3 +295,26 @@ def test_the_linked_dependencies_are_not_a_change(repo: Repo, tmp_path: Path, ig
 
     assert [c.path for c in changes.files] == ["fresh.py"]
     assert changes.ignored == ()
+
+
+@pytest.mark.parametrize("ignore", ["", "node_modules\n"])
+def test_the_dependencies_of_a_subproject_are_not_a_change(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+    ignore: str,
+) -> None:
+    installed = tmp_path / "installed"
+    (installed / "web" / "node_modules" / "lib").mkdir(parents=True)
+    (installed / "web" / "node_modules" / "lib" / "index.js").write_text("x\n", encoding="utf-8")
+    (repo.path / "web").mkdir()
+    (repo.path / "web" / "package.json").write_text("{}\n", encoding="utf-8")
+    (repo.path / ".gitignore").write_text(ignore, encoding="utf-8")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "start")
+    link_dependencies(installed, repo.path)
+    (repo.path / "web" / "fresh.ts").write_text("x\n", encoding="utf-8")
+
+    changes = asyncio.run(read_changes(repo.git))
+
+    assert [c.path for c in changes.files] == ["web/fresh.ts"]
+    assert changes.ignored == ()
