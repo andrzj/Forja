@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
+from forja.cli.security_notes import security_notices
 from forja.cli.semgrep_rules import export_rules
 from forja.core.adapters import AdapterRegistry
 from forja.core.adapters.executor import RolePermissions, locate_in_path
@@ -64,7 +65,6 @@ GIT_ENVIRONMENT = (
 NETWORK_PROBES_WITHOUT_A_PERSON = 60
 FORJA_VERSION = "0.0.0"
 POLICY_VERSION = "0.0.0+default"
-NO_SAST = "SAST não executado: sem configuração de regras do Semgrep."
 IN_USER_ENVIRONMENT = Confirmation(
     IsolationRecord(agent=IsolationLevel.ENVIRONMENT, repo_code=IsolationLevel.ENVIRONMENT)
 )
@@ -322,6 +322,8 @@ async def _context(
         gitleaks=(missing_tool("gitleaks"),),
         semgrep=(missing_tool("semgrep"),),
         semgrep_config=rules,
+        osv_scanner=(missing_tool("osv-scanner"),),
+        forbidden_licenses=policy.forbidden_licenses,
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
@@ -369,5 +371,5 @@ async def _context(
         test_files=measurer.test_files,
         test_root=test_root,
         max_network_probes=None if interactive else NETWORK_PROBES_WITHOUT_A_PERSON,
-        notices=() if rules else (NO_SAST,),
+        notices=security_notices(rules=rules is not None, licenses=bool(policy.forbidden_licenses)),
     )

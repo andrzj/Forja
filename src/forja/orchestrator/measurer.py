@@ -17,13 +17,17 @@ from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
+from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
+from forja.checks.new_dependency import NewDependencyCheck, is_manifest, manifests_of
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.red_green import RedGreenCheck
+from forja.checks.registries import HttpGet, urllib_get
+from forja.checks.sast import SastCheck
 from forja.checks.scope import TEST_AUTHOR_CLASSES, ScopeCheck
 from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
@@ -82,6 +86,8 @@ class PipelineMeasurer:
         semgrep: tuple[str, ...] = ("semgrep",),
         semgrep_config: Path | None = None,
         osv_scanner: tuple[str, ...] = ("osv-scanner",),
+        forbidden_licenses: Iterable[str] = (),
+        registry_get: HttpGet = urllib_get,
         timeouts: Mapping[str, float] | None = None,
     ) -> None:
         self._adapters = adapters
@@ -96,6 +102,8 @@ class PipelineMeasurer:
         self._semgrep = semgrep
         self._semgrep_config = semgrep_config
         self._osv_scanner = osv_scanner
+        self._forbidden = frozenset(name.lower() for name in forbidden_licenses)
+        self._registry_get = registry_get
         self._timeouts = timeouts or {}
 
     # -- helpers -------------------------------------------------------------------------------
@@ -296,6 +304,10 @@ class PipelineMeasurer:
         code = changes if base == HEAD else await read_changes(git, base)
         code_before = before if base == HEAD else await read_before(git, code, own, base)
         before_shapes = await read_before(git, code, SHAPE_SUFFIXES, base)
+        manifests = manifests_of(self._adapters.languages())
+        everything = await read_before(git, changes, ())
+        artifacts = await read_before(git, changes, is_artifact)
+        declared = await read_before(git, changes, lambda path: is_manifest(manifests, path))
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
@@ -356,6 +368,25 @@ class PipelineMeasurer:
             crap,
             PassThroughCheck(worktree, code, production, before_shapes),
             ModuleDepthCheck(worktree, code, production, before_shapes),
+            SastCheck(
+                tools,
+                worktree,
+                changes,
+                everything,
+                self._workdir / "sast" / ctx.attempt_id,
+                self._semgrep_config,
+                self._semgrep,
+            ),
+            DependencyAuditCheck(
+                tools,
+                worktree,
+                changes,
+                artifacts,
+                self._workdir / "audit" / ctx.attempt_id,
+                self._forbidden,
+                self._osv_scanner,
+            ),
+            NewDependencyCheck(worktree, changes, declared, manifests, self._registry_get),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)

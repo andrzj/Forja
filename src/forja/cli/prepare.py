@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
+from forja.cli.security_notes import NO_LICENSES, UNMEASURED
 from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
     executor_ref,
@@ -300,6 +301,7 @@ def summary_of(
     tokens: int,
     policy_notes: tuple[str, ...] = (),
     sast: str = "",
+    security: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
     limit = format(tokens, ",").replace(",", ".")
@@ -335,6 +337,7 @@ def summary_of(
         "ferramentas de arquivo do agente confinadas à cópia, git conferido a cada chamada",
         f"  testes: {tests}",
         *((f"  {sast}",) if sast else ()),
+        *(f"  {line}" for line in security),
         "  entrega: uma branch nova `forja-run/…`; sua branch não é alterada e nada é enviado",
         *(("  forja.toml do repositório muda o padrão:", *(f"    {note}" for note in policy_notes))
           if policy_notes else ()),
@@ -396,7 +399,8 @@ async def prepare(
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
-    lines = summary_of(detection, config, scope, tokens, notes, sast)
+    security = (*(() if policy.forbidden_licenses else (NO_LICENSES,)), UNMEASURED)
+    lines = summary_of(detection, config, scope, tokens, notes, sast, security)
     execucao = Execucao(
         objetivo="corrigir" if fixing else "refatorar",
         descricao=fixing[1] if fixing else "",

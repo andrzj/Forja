@@ -167,6 +167,7 @@ class Scene:
         values: Mapping[str, Mapping[str, Any]] | None = None,
         timeouts: Mapping[str, float] | None = None,
         workdir: Path | None = None,
+        gate_10: Mapping[str, Any] | None = None,
     ) -> PipelineMeasurer:
         standard = {
             name: BLOCKING for name in ("scope", "secrets", "format", "lint", "build", "tests")
@@ -176,6 +177,9 @@ class Scene:
             "crap": OBSERVATION,
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
+            "sast": OBSERVATION,
+            "dependency_audit": OBSERVATION,
+            "new_dependency": OBSERVATION,
         }
         return PipelineMeasurer(
             adapters=registry_of(self.adapter),
@@ -188,6 +192,7 @@ class Scene:
             lizard=self.lizard,
             gitleaks=gitleaks or (sys.executable, str(FAKE_GITLEAKS)),
             timeouts=timeouts,
+            **(gate_10 or {}),
         )
 
     def write(self, relative: str, text: str) -> None:

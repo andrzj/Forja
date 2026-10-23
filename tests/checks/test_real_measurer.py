@@ -77,6 +77,9 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "crap",
         "pass_through",
         "module_depth",
+        "sast",
+        "dependency_audit",
+        "new_dependency",
     ]
 
 
@@ -230,7 +233,17 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
         name: BLOCKING for name in ("scope", "secrets", "build", "tests", "complexity")
     } | {
         name: CheckSettings(Mode.OBSERVATION)
-        for name in ("format", "lint", "mutation", "crap", "pass_through", "module_depth")
+        for name in (
+            "format",
+            "lint",
+            "mutation",
+            "crap",
+            "pass_through",
+            "module_depth",
+            "sast",
+            "dependency_audit",
+            "new_dependency",
+        )
     }
     scene = Scene(repo, tmp_path / "scene", real=True, settings=observing)
     scene.write("src/sample/mod.py", "def (:\n")

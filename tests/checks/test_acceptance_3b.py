@@ -20,7 +20,18 @@ def blocking(scene: Scene, *checks: str) -> Scene:
     standard = {
         name: BLOCKING for name in ("scope", "secrets", "format", "lint", "build", "tests")
     } | {"complexity": PREMISE}
-    standard |= {c: OBSERVATION for c in ("mutation", "crap", "pass_through", "module_depth")}
+    standard |= {
+        c: OBSERVATION
+        for c in (
+            "mutation",
+            "crap",
+            "pass_through",
+            "module_depth",
+            "sast",
+            "dependency_audit",
+            "new_dependency",
+        )
+    }
     scene.measurer = scene.make_measurer(settings=standard | {c: BLOCKING for c in checks})
     return scene
 

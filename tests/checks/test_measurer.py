@@ -37,6 +37,9 @@ EVERY_GATE = [
     "crap",
     "pass_through",
     "module_depth",
+    "sast",
+    "dependency_audit",
+    "new_dependency",
 ]
 
 
@@ -307,7 +310,16 @@ def test_each_rule_is_counted_on_its_own(scene: Scene) -> None:
 def observing(*names: str) -> dict[str, CheckSettings]:
     watched = {
         name: CheckSettings(Mode.OBSERVATION)
-        for name in (*names, "mutation", "crap", "pass_through", "module_depth")
+        for name in (
+            *names,
+            "mutation",
+            "crap",
+            "pass_through",
+            "module_depth",
+            "sast",
+            "dependency_audit",
+            "new_dependency",
+        )
     }
     return {n: BLOCKING for n in ("scope", "secrets", "build", "tests", "complexity")} | watched
 
@@ -388,7 +400,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == EVERY_GATE[:-3]  # the gates after the one that stopped it do not run
+    assert ran(outcome) == EVERY_GATE[:-6]  # the gates after the one that stopped it do not run
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]
