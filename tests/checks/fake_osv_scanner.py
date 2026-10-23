@@ -1,5 +1,6 @@
 """A stand-in for osv-scanner: every ``-L`` file lists packages, one per line, as
-``name version [vulns=ID,ID] [licenses=MIT,GPL-3.0]``; a file that says ``fail:N`` ends with N.
+``name version [vulns=ID,ID] [licenses=MIT,GPL-3.0]`` (`_` in a license is a space);
+a file that says ``fail:N`` ends with N.
 
 It follows the documented interface: ``scan``, ``--format json``, ``--output-file``, ``--licenses``
 (licenses are reported only with it), ``-L``, and the exit codes 0 (nothing found), 1 (something
@@ -38,7 +39,9 @@ def main() -> int:
                 "vulnerabilities": vulns,
             }
             if licenses:
-                entry["licenses"] = [x for x in options.get("licenses", "").split(",") if x]
+                entry["licenses"] = [
+                    x.replace("_", " ") for x in options.get("licenses", "").split(",") if x
+                ]
             found = found or bool(vulns)
             packages.append(entry)
         results.append({"source": {"path": str(Path(name).resolve()), "type": "lockfile"},

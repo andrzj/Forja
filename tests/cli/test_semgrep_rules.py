@@ -216,7 +216,7 @@ def test_changing_the_rules_file_in_an_attempt_is_a_scope_violation() -> None:
 
     for role in (Producer.IMPLEMENTER, Producer.TEST_AUTHOR):
         task = TaskInfo("t1", "t1-s", "intent", ("",), 8, 400, role=role)
-        for path in (".semgrep.yml", ".semgrep/r.yml"):
+        for path in (".semgrep.yml", ".semgrep/r.yml", "osv-scanner.toml", "web/osv-scanner.toml"):
             changes = Changes((Change(ChangeKind.MODIFIED, path),), 1, ())
             data = GateInput(Path("."), "c" * 40, "t1", "t1-s", "t1-a1")
 

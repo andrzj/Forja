@@ -42,6 +42,23 @@ FOUND = 1  # OSV-Scanner: something was found; the report says what
 Package = tuple[str, str, str]  # (ecosystem, name, version)
 
 
+UNKNOWN_LICENSES = frozenset({"unknown", "non-standard", "noassertion", "none"})
+EXPRESSION_WORDS = frozenset({"and", "or", "with"})
+
+
+def _identifiers(license_id: str) -> set[str]:
+    """The license ids an SPDX expression names, lowercase: ``(MIT OR GPL-3.0-only)`` names both.
+    A forbidden id anywhere in the expression counts, even where an ``OR`` leaves a choice: the
+    audit errs on the side of reproving."""
+    words = license_id.replace("(", " ").replace(")", " ").lower().split()
+    return {word for word in words if word not in EXPRESSION_WORDS}
+
+
+def _known(found: frozenset[str]) -> bool:
+    """Whether the report names a license: something other than nothing or a placeholder."""
+    return any(_identifiers(item) - UNKNOWN_LICENSES for item in found)
+
+
 def is_artifact(path: str) -> bool:
     return PurePosixPath(path.replace("\\", "/")).name in ARTIFACTS
 
@@ -84,7 +101,7 @@ class DependencyAuditCheck:
         unknown = sorted(
             f"{package[1]} {package[2]}"
             for package, found in now.licenses.items()
-            if self.forbidden and not found and package not in was.licenses
+            if self.forbidden and not _known(found) and package not in was.licenses
         )
         if unknown:
             raise Undecided(
@@ -110,7 +127,7 @@ class DependencyAuditCheck:
         for package, found in sorted(now.licenses.items()):
             old = was.licenses.get(package, frozenset())
             for license_id in sorted(found - old):
-                if license_id.lower() in self.forbidden:
+                if _identifiers(license_id) & self.forbidden:
                     _, name, version = package
                     message = f"forbidden license {license_id} in {name} {version}"
                     findings.append(Finding(message=message, target=name))

@@ -166,6 +166,29 @@ def test_a_forbidden_license_rejects_only_when_the_list_is_given(
     assert [f.message for f in result.findings] == ["forbidden license GPL-3.0 in a 1"]
 
 
+@pytest.mark.parametrize(
+    "expression", ["(MIT OR GPL-3.0)", "MIT AND GPL-3.0", "GPL-3.0 WITH Classpath-exception-2.0"]
+)
+def test_a_forbidden_id_inside_an_expression_counts(
+    log: EventLog, tmp_path: Path, expression: str
+) -> None:
+    write(tmp_path, LOCK, f"a 1 licenses={expression.replace(' ', '_')}\n")
+    result = judge(log, tmp_path, modified(), {LOCK: "b 1\n"}, forbidden=frozenset({"gpl-3.0"}))
+
+    assert isinstance(result, Rejected)
+
+
+@pytest.mark.parametrize("placeholder", ["UNKNOWN", "non-standard", "NOASSERTION"])
+def test_a_placeholder_is_not_a_known_license(
+    log: EventLog, tmp_path: Path, placeholder: str
+) -> None:
+    write(tmp_path, LOCK, f"a 1 licenses={placeholder}\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "b 1\n"}, forbidden=frozenset({"gpl-3.0"}))
+
+    assert isinstance(result, Inconclusive)
+
+
 def test_an_old_forbidden_license_does_not_reprove(log: EventLog, tmp_path: Path) -> None:
     write(tmp_path, LOCK, "a 1 licenses=GPL-3.0\nb 1 licenses=MIT\n")
     old = {LOCK: "a 1 licenses=GPL-3.0\n"}
