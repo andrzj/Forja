@@ -329,3 +329,16 @@ def test_a_forbidden_license_that_the_scan_does_not_count_is_not_hidden_anywhere
     result = judge(log, tmp_path, modified(), {LOCK: "b 1\n"}, forbidden=frozenset({"gpl-3.0"}))
 
     assert result == Approved()
+
+
+def test_a_forbidden_license_the_scan_counts_but_no_listed_package_has_is_inconclusive(
+    log: EventLog, tmp_path: Path
+) -> None:
+    write(tmp_path, LOCK, "a 1 licenses=MIT\nb 1 licenses=GPL-3.0 unlisted=1\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "a 1\n"}, forbidden=frozenset({"gpl-3.0"}))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == (
+        "dependency_audit: gpl-3.0 is in the scan but in no package the report lists"
+    )
