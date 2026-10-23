@@ -6,6 +6,7 @@ complexity totals), and judges each attempt and each integration with the checks
 
 import json
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -18,6 +19,7 @@ from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_function
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
+from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
@@ -25,6 +27,7 @@ from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.new_dependency import NewDependencyCheck, is_manifest, manifests_of
 from forja.checks.pass_through import PassThroughCheck
+from forja.checks.personal_data import PersonalDataCheck
 from forja.checks.red_green import RedGreenCheck
 from forja.checks.registries import HttpGet, urllib_get
 from forja.checks.sast import SastCheck
@@ -60,6 +63,8 @@ BASE_FILE = "base.json"
 HEAD = "HEAD"
 UNSTABLE = "unstable"
 PASSING = "passing"
+E2E_UNSTABLE = "e2e_unstable"
+E2E_PASSING = "e2e_passing"
 
 
 class GitAt(Protocol):
@@ -68,6 +73,17 @@ class GitAt(Protocol):
     async def lines(self, *args: str) -> list[str]: ...
 
     def at(self, repo: Path) -> "GitAt": ...
+
+
+@dataclass(frozen=True)
+class BaseE2E:
+    """What two end-to-end runs of the base showed; ``ran`` is false when none was declared."""
+
+    unstable: tuple[str, ...] = ()
+    passing: tuple[str, ...] = ()
+    failing: tuple[str, ...] = ()
+    destinations: tuple[str, ...] = ()
+    ran: bool = False
 
 
 class PipelineMeasurer:
@@ -89,6 +105,7 @@ class PipelineMeasurer:
         forbidden_licenses: Iterable[str] = (),
         registry_get: HttpGet = urllib_get,
         timeouts: Mapping[str, float] | None = None,
+        e2e_commands: Mapping[str, tuple[str, ...]] | None = None,
     ) -> None:
         self._adapters = adapters
         self._git = git
@@ -105,6 +122,7 @@ class PipelineMeasurer:
         self._forbidden = frozenset(name.lower() for name in forbidden_licenses)
         self._registry_get = registry_get
         self._timeouts = timeouts or {}
+        self._e2e = e2e_commands or {}
 
     # -- helpers -------------------------------------------------------------------------------
 
@@ -153,6 +171,14 @@ class PipelineMeasurer:
         except (OSError, ValueError, KeyError, TypeError):
             return frozenset(), frozenset()
 
+    def _read_e2e_base(self) -> tuple[frozenset[str], frozenset[str]]:
+        """The end-to-end tests that were unstable and that passed, as the base showed them."""
+        try:
+            data = json.loads(self._base_file.read_text(encoding="utf-8"))
+            return frozenset(map(str, data[E2E_UNSTABLE])), frozenset(map(str, data[E2E_PASSING]))
+        except (OSError, ValueError, KeyError, TypeError):
+            return frozenset(), frozenset()
+
     # -- normalization -------------------------------------------------------------------------
 
     async def format_worktree(self, worktree: Path) -> None:
@@ -177,6 +203,7 @@ class PipelineMeasurer:
             problems += await self._build_problems(tools, worktree, active)
             first = await self._outcomes(tools, worktree, active)
             second = await self._outcomes(tools, worktree, active)
+            e2e = await self._base_e2e(tools, worktree, active)
         except Undecided as stop:
             return Baseline(False, (_describe(stop),))
         failing = {t for t, o in first.items() if o in FAILED} & {
@@ -184,11 +211,13 @@ class PipelineMeasurer:
         }
         unstable = sorted(t for t in first.keys() | second.keys() if first.get(t) != second.get(t))
         problems += [f"tests: {t} fails on the base" for t in sorted(failing)]
+        problems += [f"e2e: {t} fails on the base" for t in sorted(e2e.failing)]
+        problems += [f"e2e: the base tried to reach {d}" for d in e2e.destinations]
         if not self._base_file.exists():
             stable = sorted(
                 t for t, o in first.items() if o == "passed" and second.get(t) == "passed"
             )
-            self._save_base(unstable, stable)
+            self._save_base(unstable, stable, e2e)
         metrics = await self._metrics(tools, worktree, active, len(first), len(unstable))
         return Baseline(not problems, tuple(problems), metrics)
 
@@ -198,9 +227,48 @@ class PipelineMeasurer:
         """The repository's own command for this check, if its ``forja.toml`` names one."""
         return overrides_from(adapter, self._values.get(check_id, {}))
 
-    def _save_base(self, unstable: list[str], passing: list[str]) -> None:
+    async def _base_e2e(
+        self, tools: Tools, worktree: Path, active: tuple[ScopedAdapter, ...]
+    ) -> BaseE2E:
+        """The end-to-end tests run twice on the base, like the tests, to find the unstable ones."""
+        if not self._e2e:
+            return BaseE2E()
+        runs = [await run_e2e(tools, active, worktree, self._e2e, self._env) for _ in range(2)]
+        first, second = (run or E2ERun({}, ()) for run in runs)
+        return BaseE2E(
+            unstable=tuple(
+                sorted(
+                    t
+                    for t in first.outcomes.keys() | second.outcomes.keys()
+                    if first.outcomes.get(t) != second.outcomes.get(t)
+                )
+            ),
+            passing=tuple(
+                sorted(
+                    t
+                    for t, o in first.outcomes.items()
+                    if o == "passed" and second.outcomes.get(t) == "passed"
+                )
+            ),
+            failing=tuple(
+                sorted(
+                    t
+                    for t, o in first.outcomes.items()
+                    if o in FAILED and second.outcomes.get(t) in FAILED
+                )
+            ),
+            destinations=tuple(dict.fromkeys((*first.destinations, *second.destinations))),
+            ran=True,
+        )
+
+    def _save_base(
+        self, unstable: list[str], passing: list[str], e2e: BaseE2E | None = None
+    ) -> None:
         self._workdir.mkdir(parents=True, exist_ok=True)
-        document = json.dumps({UNSTABLE: unstable, PASSING: passing}, sort_keys=True)
+        saved: dict[str, list[str]] = {UNSTABLE: unstable, PASSING: passing}
+        if e2e is not None and e2e.ran:
+            saved |= {E2E_UNSTABLE: list(e2e.unstable), E2E_PASSING: list(e2e.passing)}
+        document = json.dumps(saved, sort_keys=True)
         atomic_write_bytes(self._base_file, document.encode("utf-8"))
 
     async def _build_problems(
@@ -306,11 +374,13 @@ class PipelineMeasurer:
         before_shapes = await read_before(git, code, SHAPE_SUFFIXES, base)
         manifests = manifests_of(self._adapters.languages())
         everything = await read_before(git, changes, ())
+        test_texts = await read_before(git, changes, self.is_test)
         artifacts = await read_before(git, changes, is_artifact)
         declared = await read_before(git, changes, lambda path: is_manifest(manifests, path))
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
+        e2e_unstable, e2e_passing = self._read_e2e_base()
         worktree = ctx.worktree
         active = self._active(worktree, (*production, *changes.current(own)))
         shares = {id(a): CoverageShare() for a in active}
@@ -387,6 +457,16 @@ class PipelineMeasurer:
                 self._osv_scanner,
             ),
             NewDependencyCheck(worktree, changes, declared, manifests, self._registry_get),
+            E2ECheck(
+                tools,
+                active,
+                worktree,
+                self._e2e,
+                self._env,
+                quarantine=e2e_unstable,
+                passing=e2e_passing,
+            ),
+            PersonalDataCheck(worktree, changes, test_texts, self.is_test),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)

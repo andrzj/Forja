@@ -15,9 +15,10 @@ from pydantic import ValidationError
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
-from forja.cli.security_notes import NO_LICENSES, UNMEASURED
+from forja.cli.security_notes import NO_LICENSES, UNMEASURED, e2e_notices
 from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
+    e2e_commands,
     executor_ref,
     git_base_environment,
     git_executable,
@@ -399,7 +400,11 @@ async def prepare(
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
-    security = (*(() if policy.forbidden_licenses else (NO_LICENSES,)), UNMEASURED)
+    security = (
+        *(() if policy.forbidden_licenses else (NO_LICENSES,)),
+        UNMEASURED,
+        *e2e_notices(declared=bool(e2e_commands(policy))),
+    )
     lines = summary_of(detection, config, scope, tokens, notes, sast, security)
     execucao = Execucao(
         objetivo="corrigir" if fixing else "refatorar",

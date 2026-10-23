@@ -32,6 +32,8 @@ EVERY_GATE = [
     "lint",
     "build",
     "tests",
+    "e2e",
+    "test_data",
     "mutation",
     "complexity",
     "crap",
@@ -319,6 +321,8 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "sast",
             "dependency_audit",
             "new_dependency",
+            "e2e",
+            "test_data",
         )
     }
     return {n: BLOCKING for n in ("scope", "secrets", "build", "tests", "complexity")} | watched

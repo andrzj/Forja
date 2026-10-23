@@ -180,6 +180,8 @@ class Scene:
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
+            "e2e": OBSERVATION,
+            "test_data": OBSERVATION,
         }
         return PipelineMeasurer(
             adapters=registry_of(self.adapter),

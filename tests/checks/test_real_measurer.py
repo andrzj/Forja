@@ -72,6 +72,8 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "lint",
         "build",
         "tests",
+        "e2e",
+        "test_data",
         "mutation",
         "complexity",
         "crap",
@@ -243,6 +245,8 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
             "sast",
             "dependency_audit",
             "new_dependency",
+            "e2e",
+            "test_data",
         )
     }
     scene = Scene(repo, tmp_path / "scene", real=True, settings=observing)
@@ -310,6 +314,8 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
         "lint",
         "build",
         "tests",
+        "e2e",
+        "test_data",
         "mutation",
         "complexity",
     ]

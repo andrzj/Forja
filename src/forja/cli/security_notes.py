@@ -12,6 +12,19 @@ UNMEASURED = (
 )
 
 
+NO_E2E = "E2E não executado: sem comando (seção [adapters.<linguagem>.commands] e2e)."
+FAKES = "E2E: fakes não validados por contrato; podem divergir do serviço real."
+PROXY_LIMIT = (
+    "E2E: rede desligada por armadilha de proxy; não impede cliente que ignora o proxy "
+    "(soquete cru, Python http.client). Contenção forte é do ambiente."
+)
+
+
+def e2e_notices(*, declared: bool) -> tuple[str, ...]:
+    """What the person is told of the E2E gate: that it did not run, or what its run cannot say."""
+    return (FAKES, PROXY_LIMIT) if declared else (NO_E2E,)
+
+
 def security_notices(*, rules: bool, licenses: bool) -> tuple[str, ...]:
     """The notices of a run: the SAST without rules, the licenses without a list, and what the
     registries cannot measure."""

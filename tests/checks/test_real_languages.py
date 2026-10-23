@@ -392,6 +392,8 @@ def repair(  # type: ignore[no-untyped-def]
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
+            "e2e": OBSERVATION,
+            "test_data": OBSERVATION,
         },
         lizard=LIZARD,
         gitleaks=(sys.executable, str(FAKE_GITLEAKS)),
