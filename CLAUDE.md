@@ -7,3 +7,4 @@ Mandam sobre qualquer plano ou nota anterior.
 3. **Não inventar escopo.** Sem calibração extra, validação extra, leitores, formatos ou linguagens que ninguém pediu. Fazer só o que a Especificação e o dono pediram.
 4. **Não inventar perguntas.** Perguntar só quando a Especificação e as referências não respondem. Caso contrário, decidir e seguir.
 5. **Sem rodeios.** Sem retomar o que já foi decidido, sem listar alternativas que não serão feitas. Menos sessões, menos custo.
+6. **Plano de execução manda no que fazer.** Antes de qualquer demanda, ler `docs\Plano de execução.md` inteiro (regras, Fila obrigatória, Registro de andamento). Fazer o primeiro item da fila não concluído, na ordem do plano dele; não escolher, não antecipar, não acrescentar. Todo andamento (passo feito, decisão, mudança de ordem) é registrado nesse documento no mesmo commit.

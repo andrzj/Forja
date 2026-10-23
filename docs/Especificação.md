@@ -740,6 +740,10 @@ Cada evidência registra a versão das políticas que a julgaram. Mudança de li
 
 Conjunto fixo de repositórios de exemplo com problemas conhecidos, nas linguagens suportadas. Toda mudança em gates, políticas, adaptadores ou versão de CLI roda contra ela antes do uso real.
 
+## Construção da Forja
+
+A ordem de construção está em `docs/Plano de execução.md`, o documento de governança do desenvolvimento: define a fila obrigatória de itens, registra todo andamento do projeto e manda que o LLM o releia antes de qualquer demanda e faça o próximo item da fila, sem escolher o que fazer. Toda atualização do projeto é registrada nele. Em caso de divergência entre os dois documentos, vale esta especificação, e o Plano é corrigido.
+
 ## Glossário e fora de escopo
 
 | Termo | Definição |

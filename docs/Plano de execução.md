@@ -1,5 +1,52 @@
 # Forja — plano de execução
 
+## Como este documento governa o trabalho
+
+Este é o documento que mantém a construção da Forja nos trilhos. As regras abaixo valem para qualquer pessoa ou LLM que trabalhe no projeto e mandam sobre notas de sessão e preferências de momento.
+
+1. **Reler antes de toda demanda.** Antes de começar qualquer trabalho, o LLM lê este documento inteiro, em especial a **Fila obrigatória** e o **Registro de andamento**. Nenhuma demanda começa sem essa leitura, mesmo as que pareçam pequenas.
+2. **O LLM não escolhe o que fazer.** O trabalho é o do primeiro item da Fila obrigatória que não está concluído, feito por inteiro e na ordem dos passos do plano daquele item. Pular item, antecipar item posterior, acrescentar escopo ou trocar a ordem só com ordem expressa do dono, e a ordem é registrada aqui antes de seguir. Gate ou componente que ninguém alimenta ainda não se constrói à frente do que o alimenta.
+3. **Demanda fora da fila.** Se o dono pede algo que não é o próximo item, o LLM diz qual é o próximo item da fila, executa o que foi pedido apenas se for ordem expressa e registra no Registro de andamento que a fila foi alterada e por quê.
+4. **Toda atualização do projeto é registrada aqui, no mesmo commit que a causou:** passo concluído, plano escrito, decisão do dono, mudança de ordem, pendência nova. O registro diz data, o que mudou e os commits. O estado da fila (concluído, em andamento, a fazer) é atualizado junto.
+5. **Plano antes de código** quando o item toca vários módulos: o plano vai em `docs\plano-<item>.md`, referenciado na fila, e só então se constrói, um passo por commit.
+6. **O que fica de fora de todos os itens:** testes E2E reais (são do dono) e qualquer coisa que a Especificação põe em "Fora de escopo".
+7. **Divergência.** Se a Especificação e este documento divergem, vale a Especificação; o LLM aponta a divergência e corrige este documento.
+
+## Fila obrigatória
+
+Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada item cita o plano que o detalha.
+
+| # | Item | Plano | Estado |
+| --- | --- | --- | --- |
+| 1 | Gate 6, fecho: documentação do usuário e ADR (passo 6) e gate de mutação nos arquivos novos. O E2E real é do dono. | `docs\plano-gate-6.md` | passos 0 a 5 concluídos; passo 6 e mutação a fazer |
+| 2 | Incremento 4: documentador (registro de mudança, README, ADR por regra, deriva, voz, citações do documentador, resumo) | `docs\plano-documentador.md` | a fazer (o passo 0 é o primeiro) |
+| 3 | Incremento 6: especificador (critérios, rastreabilidade, `manifesto-testes.json`), arqueólogo, andaime, modo de diretório vazio, premissas e fatos completos, coleta da revisão, gate 13 completo | plano a escrever (`docs\plano-especificador-arqueologo.md`) | a fazer |
+| 4 | Incremento 5, restante: gate 9 (arquitetura) | `docs\plano-gate-9.md` | plano escrito; a fazer |
+| 5 | Incremento 5, restante: gate 11 (teste diferencial); depende do item 3 | `docs\plano-gate-11.md` | plano escrito; a fazer |
+| 6 | Incremento 3, restante: 3e (cache de medições pela chave completa), os 4 sobreviventes de `mutation\executor.py`, calibração dos limiares com dados de revisão | plano a escrever | a fazer |
+| 7 | Incremento 7: endurecimento (paralelismo, mutação incremental, modo CI, adaptador genérico, promoção de gates, documentação de uso, inclusive a sugestão de CLIs diferentes entre papéis) | plano a escrever | a fazer |
+| 8 | Fecho: 3f (aceitação e repetição do experimento com duas CLIs reais), execução viva com o Claude Code, E2E real, fixtures e testes `live` | | do dono, por último |
+
+## Registro de andamento
+
+Mais recente primeiro. Cada linha: data, o que mudou, commits.
+
+- **23/10/2026:** o dono apontou desvio da Especificação (infraestrutura de gates construída antes dos papéis que a alimentam). Decididos: este documento passa a governar o trabalho (regras acima); fila fixada; E2E real fora de todos os itens; `docs\plano-documentador.md` escrito. Gate 6, passos 0 a 5 concluídos (`354bf1a`, `f809ab5`, `a2170ad`, `0bd0147`, `76f8c24`, `fd5fe26`, `f325c45`: armadilha de proxy, plano de E2E, `E2ECheck`, `PersonalDataCheck`, integração no medidor e na base).
+- **22/10 e 23/10/2026:** gate 10 concluído (passos 0 a 7; ADR 0024). Plano do gate 11 escrito e adiado; planos dos gates 6 e 9 escritos.
+- **21/10 e 22/10/2026:** pipeline em todas as linguagens, Gradle, monorepo (passos 1 a 6), CLI por papel (Claude Code, Codex, Cursor, Grok; Gemini suspenso), ADR 0022 e 0023.
+- **Antes de 21/10:** incrementos 0, 1, 2 (decisão: seguir, com ressalvas; ADR 0019), 3a e 3b aceitos; mutação completa nas seis linguagens.
+
+## Estado dos incrementos
+
+| Inc. | Estado |
+| --- | --- |
+| 0, 1, 2 | concluídos |
+| 3 | 3a, 3b, 3c e 3d concluídos; 3e e 3f pendentes (fila 6 e 8) |
+| 4 | não iniciado (fila 2) |
+| 5 | adaptadores, E2E (gate 6) e segurança (gate 10) feitos ou em andamento; gates 9 e 11 pendentes (fila 4 e 5) |
+| 6 | não iniciado (fila 3) |
+| 7 | não iniciado (fila 7) |
+
 ## Estratégia
 
 A Forja será construída em incrementos, cada um entregando algo que funciona de ponta a ponta, e a expansão só acontece depois que a tese for medida contra uma linha de base. O risco principal do projeto não é faltar algo no desenho, é tentar construí-lo inteiro de uma vez (efeito segundo sistema, Brooks; lei de Gall: um sistema complexo que funciona evoluiu de um sistema simples que funcionava).
