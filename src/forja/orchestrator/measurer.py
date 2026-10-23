@@ -304,7 +304,7 @@ class PipelineMeasurer:
         return counts | await self._static_metrics(tools, worktree, active)
 
     async def metrics(self, worktree: Path, sinks: SinkFactory) -> dict[str, float]:
-        """The numbers that need no test run (lint violations, complexity), for the change record."""
+        """The numbers that need no test run (lint, complexity), for the change record."""
         tools = self._tools(sinks, Level.EXECUTION, self._run_id)
         return await self._static_metrics(tools, worktree, self._active(worktree))
 
