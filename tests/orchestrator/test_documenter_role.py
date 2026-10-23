@@ -21,14 +21,29 @@ from forja.orchestrator.ports import AttemptContext, Baseline, TaskInfo
 
 @pytest.mark.parametrize(
     "path",
-    ["README.md", "readme", "README.rst", "docs/adr/0001-x.md", "sub/CHANGELOG.md", "Docs/a.txt"],
+    ["README.md", "README.rst", "docs/adr/0001-x.md", "sub/CHANGELOG.md", "Docs/guide.rst"],
 )
 def test_these_are_documents(path: str) -> None:
     assert is_documentation(path)
 
 
 @pytest.mark.parametrize(
-    "path", ["src/a.py", "docsrc/a.py", "src/docs.py", "notes.txt", "a/b.json"]
+    "path",
+    [
+        "src/a.py",
+        "docsrc/a.py",
+        "notes.txt",
+        "README",
+        "docs/run.sh",
+        "docs/data.json",
+        "CLAUDE.md",
+        "sub/AGENTS.md",
+        "gemini.md",
+        ".claude/commands/x.md",
+        ".github/copilot-instructions.md",
+        ".cursor/rules/x.md",
+        "docs/.hidden/x.md",
+    ],
 )
 def test_these_are_not(path: str) -> None:
     assert not is_documentation(path)
@@ -74,6 +89,22 @@ def judge(*paths: str, lines: int = 3000) -> object:
 
 def test_the_documenter_may_change_documents_whatever_their_size_and_place() -> None:
     assert isinstance(judge("README.md", "docs/mudancas/t1.md", "docs/adr/0026-x.md"), Approved)
+
+
+def test_the_documenter_may_write_the_record_of_its_own_task_and_no_other() -> None:
+    assert isinstance(judge("docs/mudancas/t1.md"), Approved)
+    result = judge("docs/mudancas/t0.md", "docs/mudancas/sub/t1.md")
+    assert isinstance(result, Rejected)
+    assert {f.message for f in result.findings} == {
+        "a change record is the Forja's, not the documenter's"
+    }
+    assert [f.target for f in result.findings] == ["docs/mudancas/t0.md", "docs/mudancas/sub/t1.md"]
+
+
+def test_the_documenter_may_not_change_the_instructions_of_the_agents() -> None:
+    result = judge("CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md")
+    assert isinstance(result, Rejected)
+    assert len(result.findings) == 3
 
 
 def test_the_documenter_may_not_change_code_tests_or_configuration() -> None:

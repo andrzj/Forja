@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from forja.checks.base import rejected
+from forja.checks.change_record import CHANGES_DIR, record_path
 from forja.checks.changes import Changes, added_lines
 from forja.core.adapters import FileClass
 from forja.core.artifacts.models import Producer
@@ -114,6 +115,10 @@ class ScopeCheck:
         if kind is not FileClass.DOCUMENTATION:
             message = f"the documenter may change only documentation (this is {kind.value})"
             return Finding(message=message, target=path)
+        if in_scope(path, (CHANGES_DIR,)) and path != record_path(self.task.task_id):
+            return Finding(
+                message="a change record is the Forja's, not the documenter's", target=path
+            )
         return None
 
     def _implementer(self, path: str) -> Finding | None:

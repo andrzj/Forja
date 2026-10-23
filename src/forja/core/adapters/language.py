@@ -63,16 +63,22 @@ class FileClass(StrEnum):
 
 
 DOCUMENT_SUFFIXES = (".md", ".rst")
+# Files that tell an agent what to do are not documentation: a role that could write them would
+# be giving orders to the roles that come after it.
+AGENT_INSTRUCTIONS = frozenset(
+    {"claude.md", "agents.md", "gemini.md", "grok.md", ".cursorrules", ".windsurfrules"}
+)
 
 
 def is_documentation(path: str) -> bool:
-    """A README, a Markdown or reStructuredText file, or anything under ``docs/``: no language
-    owns these, so the core does."""
+    """A Markdown or reStructuredText file (a README, anything under ``docs/``...): no language
+    owns these, so the core does. Never a file for agents, nor anything in a hidden directory."""
     parts = path.replace("\\", "/").split("/")
+    name = parts[-1].lower()
     return (
-        parts[0].lower() == "docs"
-        or parts[-1].lower().startswith("readme")
-        or parts[-1].lower().endswith(DOCUMENT_SUFFIXES)
+        name.endswith(DOCUMENT_SUFFIXES)
+        and name not in AGENT_INSTRUCTIONS
+        and not any(part.startswith(".") for part in parts)
     )
 
 
