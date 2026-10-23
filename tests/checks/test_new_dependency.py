@@ -216,3 +216,23 @@ def test_a_registry_that_cannot_date_the_package_is_inconclusive(tmp_path: Path)
 
     assert isinstance(result, Inconclusive)
     assert result.detail == "new_dependency: could not verify example.com/m"
+
+
+def test_a_manifest_that_is_not_text_is_unreadable_but_another_binary_file_is_not(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / MANIFEST).write_bytes(b"\xff\xfe{\x00}\x00")
+    (tmp_path / "logo.png").write_bytes(b"\x89PNG\xff")
+    changes = Changes(
+        (Change(ChangeKind.ADDED, "logo.png"), Change(ChangeKind.ADDED, MANIFEST)), 0, ()
+    )
+    check = NewDependencyCheck(tmp_path, changes, {}, manifests)
+
+    result = asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a")))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "new_dependency: could not verify package.json (unreadable)"
+    only_image = NewDependencyCheck(tmp_path, Changes(changes.files[:1], 0, ()), {}, manifests)
+    assert (
+        asyncio.run(only_image.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a"))) == Approved()
+    )

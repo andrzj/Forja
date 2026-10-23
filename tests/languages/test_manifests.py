@@ -171,3 +171,25 @@ def test_the_registry_may_hold_adapters_that_cannot_read_manifests() -> None:
         language = "bare"
 
     assert manifests_of([Bare()])("go.mod", "") is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "require(\n\texample.com/a v1.0.0\n)\n",
+        "require\t(\n\texample.com/a v1.0.0\n)\n",
+        "require\texample.com/a v1.0.0\n",
+        "require (example.com/a v1.0.0)\n",
+        'require (\n\t"example.com/a" v1.0.0\n)\n',
+        "require (\n\texample.com/a v1.0.0 )\n",
+        "require example.com/a v1.0.0 // indirect\n",
+    ],
+)
+def test_go_reads_requirements_the_way_go_tokenizes_them(text: str) -> None:
+    assert go("go.mod", text) == frozenset({"example.com/a"})
+
+
+def test_go_keeps_reading_after_a_block_and_ignores_an_empty_one() -> None:
+    text = "require ()\nrequire (\n)\nrequire example.com/b v1.0.0\n"
+
+    assert go("go.mod", text) == frozenset({"example.com/b"})

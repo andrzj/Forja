@@ -138,6 +138,8 @@ class NewDependencyCheck:
             try:
                 text = (self.worktree / change.path).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
+                if self._is_manifest(change.path):  # one that cannot be read is not an empty one
+                    unreadable.append(change.path)
                 continue
             try:
                 declared = self.manifests(change.path, text)
@@ -152,6 +154,13 @@ class NewDependencyCheck:
             if new:
                 found[(change.path, declared)] = new
         return found, unreadable
+
+    def _is_manifest(self, path: str) -> bool:
+        """Whether the name alone says a manifest (one that does not parse empty says it too)."""
+        try:
+            return self.manifests(path, "") is not None
+        except ValueError:
+            return True
 
     def _doubts(
         self, data: GateInput, path: str, declared: Declared, name: str, standing: Standing
