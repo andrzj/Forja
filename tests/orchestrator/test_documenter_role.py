@@ -43,6 +43,11 @@ def test_these_are_documents(path: str) -> None:
         ".github/copilot-instructions.md",
         ".cursor/rules/x.md",
         "docs/.hidden/x.md",
+        "CLAUDE.local.md",
+        "docs/AGENTS.override.md",
+        "docs/copilot-instructions.md",
+        "src/notes.md",
+        "pkg/GUIDE.md",
     ],
 )
 def test_these_are_not(path: str) -> None:
@@ -101,10 +106,22 @@ def test_the_documenter_may_write_the_record_of_its_own_task_and_no_other() -> N
     assert [f.target for f in result.findings] == ["docs/mudancas/t0.md", "docs/mudancas/sub/t1.md"]
 
 
-def test_the_documenter_may_not_change_the_instructions_of_the_agents() -> None:
-    result = judge("CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md")
+def test_the_record_guard_reads_the_path_the_way_a_file_system_without_case_does() -> None:
+    result = judge(
+        "docs/Mudancas/t0.md",
+        "DOCS/MUDANCAS/t1x.md",
+        r"docs\mudancas\t0.md",
+        "docs/mudancas./t0.md",
+    )
     assert isinstance(result, Rejected)
-    assert len(result.findings) == 3
+    assert len(result.findings) == 4
+    assert isinstance(judge("Docs/Mudancas/T1.md"), Approved)
+
+
+def test_the_documenter_may_not_change_the_instructions_of_the_agents() -> None:
+    result = judge("CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md", "docs/CLAUDE.md")
+    assert isinstance(result, Rejected)
+    assert len(result.findings) == 4
 
 
 def test_the_documenter_may_not_change_code_tests_or_configuration() -> None:

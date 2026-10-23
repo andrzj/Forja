@@ -45,6 +45,13 @@ def disposable(path: str) -> bool:
     return any(directory in TOOL_CACHES for directory in directories)
 
 
+def _same_file(path: str) -> str:
+    """The path as a file system that ignores case, dots and spaces at the end of a name reads it,
+    so two spellings of one file compare equal."""
+    parts = (part.rstrip(" .").casefold() for part in path.replace("\\", "/").split("/"))
+    return "/".join(part for part in parts if part)
+
+
 def in_scope(path: str, scope: tuple[str, ...]) -> bool:
     """Whether ``path`` is one of the scope entries or lies under one that is a directory."""
     normal = path.replace("\\", "/")
@@ -115,7 +122,10 @@ class ScopeCheck:
         if kind is not FileClass.DOCUMENTATION:
             message = f"the documenter may change only documentation (this is {kind.value})"
             return Finding(message=message, target=path)
-        if in_scope(path, (CHANGES_DIR,)) and path != record_path(self.task.task_id):
+        key = _same_file(path)
+        if key.startswith(f"{_same_file(CHANGES_DIR)}/") and key != _same_file(
+            record_path(self.task.task_id)
+        ):
             return Finding(
                 message="a change record is the Forja's, not the documenter's", target=path
             )

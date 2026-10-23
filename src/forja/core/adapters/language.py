@@ -1,6 +1,7 @@
 """The language adapter interface: what the core needs to know about a language ecosystem."""
 
 import dataclasses
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -63,23 +64,28 @@ class FileClass(StrEnum):
 
 
 DOCUMENT_SUFFIXES = (".md", ".rst")
-# Files that tell an agent what to do are not documentation: a role that could write them would
-# be giving orders to the roles that come after it.
-AGENT_INSTRUCTIONS = frozenset(
-    {"claude.md", "agents.md", "gemini.md", "grok.md", ".cursorrules", ".windsurfrules"}
+# Outside ``docs/`` only these stems are documentation: any other Markdown file may be read by a
+# tool as instructions for the agent, and the role that could write it would be giving orders to
+# the roles that come after it.
+TOP_LEVEL_DOCUMENTS = ("readme", "changelog", "contributing")
+# The families of files that tell an agent what to do, wherever they are (``CLAUDE.local.md``,
+# ``AGENTS.override.md``, ``copilot-instructions.md``...).
+AGENT_INSTRUCTIONS = re.compile(
+    r"^(claude|agents?|gemini|grok|copilot|conventions|windsurf)([._-].*)?\.(md|rst)$"
 )
 
 
 def is_documentation(path: str) -> bool:
-    """A Markdown or reStructuredText file (a README, anything under ``docs/``...): no language
-    owns these, so the core does. Never a file for agents, nor anything in a hidden directory."""
+    """A Markdown or reStructuredText file under ``docs/`` or a README, a changelog or a guide to
+    contributing: no language owns these, so the core does. Never a file for agents, nor anything
+    in a hidden directory."""
     parts = path.replace("\\", "/").split("/")
     name = parts[-1].lower()
-    return (
-        name.endswith(DOCUMENT_SUFFIXES)
-        and name not in AGENT_INSTRUCTIONS
-        and not any(part.startswith(".") for part in parts)
-    )
+    if not name.endswith(DOCUMENT_SUFFIXES):
+        return False
+    if AGENT_INSTRUCTIONS.match(name) or any(part.startswith(".") for part in parts):
+        return False
+    return parts[0].lower() == "docs" or name.startswith(TOP_LEVEL_DOCUMENTS)
 
 
 @dataclass(frozen=True)
