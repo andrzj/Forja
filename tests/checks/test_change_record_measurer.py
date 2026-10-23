@@ -1,10 +1,12 @@
 """The measurer builds the record of a task from its commits, not from the documenter's work."""
 
 import asyncio
+from pathlib import Path
 
 from forja.core.artifacts.llm_output import Claim, FileCitation
-from forja.core.artifacts.models import Executor
-from forja.orchestrator.ports import RecordFile
+from forja.core.artifacts.models import Executor, Producer
+from forja.core.gates import Approved, Rejected
+from forja.orchestrator.ports import AttemptContext, RecordFile, TaskInfo
 from tests.checks.support import SAMPLE, Scene, sinks
 from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-exported as a fixture
 
@@ -72,3 +74,43 @@ def test_a_removed_symbol_is_proved_unused_by_the_files_that_remain(
 
     assert "`add` (function) em `src/sample/mod.py`: removed; **símbolo público removido.**" in text
     assert "ainda mencionado em `tests/test_mod.py`" in text
+
+
+def documenter_context(scene: Scene) -> AttemptContext:
+    task = TaskInfo("t1", "t1-d", "reduce", ("src/sample/mod.py",), 8, 400, Producer.DOCUMENTER)
+    return AttemptContext(task, "t1-da1", scene.repo.path, None)
+
+
+def judged_record(scene: Scene) -> object:
+    outcome = asyncio.run(scene.measurer.judge(documenter_context(scene), sinks))
+    return next(run.result for run in outcome.runs if run.check_id == "change_record")
+
+
+def test_the_record_is_judged_only_in_the_documenters_stage(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    commit_the_code(scene, repo, MOD + "\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n")
+
+    outcome = asyncio.run(scene.measurer.judge(scene.context(), sinks))
+
+    assert "change_record" not in [run.check_id for run in outcome.runs]
+
+
+def test_the_record_the_forja_wrote_passes_gate_14_and_a_missing_one_does_not(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    commit_the_code(scene, repo, MOD + "\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n")
+    scene.write("README.md", "# sample\n")
+
+    assert isinstance(judged_record(scene), Rejected)
+
+    record = asyncio.run(
+        scene.measurer.change_record(documenter_context(scene), sinks, [CLAIM], ["build"], [])
+    )
+    scene.write(record.path, record.text)
+
+    assert isinstance(judged_record(scene), Approved)

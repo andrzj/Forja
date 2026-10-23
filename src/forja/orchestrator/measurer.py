@@ -16,11 +16,14 @@ from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
 from forja.checks.change_record import (
     RecordFacts,
+    SymbolChange,
     file_changes,
     record_path,
+    render_changed,
     render_record,
     symbol_changes,
 )
+from forja.checks.change_record_gate import ChangeRecordCheck
 from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
@@ -56,7 +59,7 @@ from forja.core.adapters.projects import owner_of
 from forja.core.adapters.scoped import ScopedAdapter
 from forja.core.artifacts.llm_output import Claim
 from forja.core.artifacts.models import Executor, Producer
-from forja.core.artifacts.schemas import ToolVersion
+from forja.core.artifacts.schemas import RecordedFile, ToolVersion
 from forja.core.atomic import atomic_write_bytes
 from forja.core.events import EventLog, LogEventSink, OpenOperation
 from forja.core.gates import (
@@ -338,6 +341,31 @@ class PipelineMeasurer:
         """The record of the task whose work this worktree holds, read against the commit the task
         branch started from. Documentation changes are the documenter's own and are left out."""
         git = self._git.at(ctx.worktree)
+        files, found, unreadable = await self._task_changes(ctx)
+        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
+        facts = RecordFacts(
+            task_id=ctx.task.task_id,
+            intent=ctx.task.intent,
+            files=files,
+            symbols=found,
+            metrics_before=self._read_base_metrics(),
+            metrics_after=await self._static_metrics(
+                tools, ctx.worktree, self._active(ctx.worktree)
+            ),
+            gates_passed=tuple(gates_passed),
+            toolchains=await self._toolchains(tools, ctx.worktree),
+            executors=tuple(executors),
+            revert_commit=(await git.lines("rev-parse", "HEAD"))[0],
+            unreadable=unreadable,
+        )
+        return RecordFile(record_path(ctx.task.task_id), render_record(facts, claims))
+
+    async def _task_changes(
+        self, ctx: AttemptContext
+    ) -> tuple[tuple[RecordedFile, ...], tuple[SymbolChange, ...], tuple[str, ...]]:
+        """What the task changed in files and symbols, against the commit its branch started from.
+        The documents are left out: they are the documenter's own."""
+        git = self._git.at(ctx.worktree)
         base = await self._task_base(git, ctx.task.task_id)
         read = await read_changes(git, base)
         changes = replace(
@@ -356,23 +384,7 @@ class PipelineMeasurer:
             if (text := _text_of(ctx.worktree / path)) is not None
         }
         found, unreadable = symbol_changes(changes, before, ctx.worktree, others)
-        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
-        facts = RecordFacts(
-            task_id=ctx.task.task_id,
-            intent=ctx.task.intent,
-            files=file_changes(changes),
-            symbols=found,
-            metrics_before=self._read_base_metrics(),
-            metrics_after=await self._static_metrics(
-                tools, ctx.worktree, self._active(ctx.worktree)
-            ),
-            gates_passed=tuple(gates_passed),
-            toolchains=await self._toolchains(tools, ctx.worktree),
-            executors=tuple(executors),
-            revert_commit=(await git.lines("rev-parse", "HEAD"))[0],
-            unreadable=unreadable,
-        )
-        return RecordFile(record_path(ctx.task.task_id), render_record(facts, claims))
+        return file_changes(changes), found, unreadable
 
     async def _task_base(self, git: GitAt, task_id: str) -> str:
         """The commit the task branch started from: the parent of the task's first commit."""
@@ -573,6 +585,13 @@ class PipelineMeasurer:
             PersonalDataCheck(worktree, changes, test_texts, self.is_test),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
+        if ctx.task.role is Producer.DOCUMENTER:
+            files, found, unreadable = await self._task_changes(ctx)
+            checks.append(
+                ChangeRecordCheck(
+                    worktree, ctx.task.task_id, render_changed(files, found, unreadable)
+                )
+            )
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(active))
 

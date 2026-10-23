@@ -32,6 +32,16 @@ from forja.core.artifacts.schemas import (
 
 MAX_REFERENCES = 5
 REASONS = "## Porquê e impacto"
+SECTIONS = (
+    "## Arquivos",
+    "## Símbolos",
+    "## Métricas",
+    "## Gates aprovados",
+    "## Ferramentas",
+    "## Premissas",
+    "## Para reverter",
+    REASONS,
+)
 CHANGES_DIR = "docs/mudancas"
 NONE = "Nenhum."
 
@@ -180,22 +190,31 @@ def _metrics(values: Mapping[str, float]) -> tuple[str, ...]:
     return tuple(f"{name}={values[name]:g}" for name in sorted(values))
 
 
-def render_facts(facts: RecordFacts) -> str:
-    """The part of the record that only the Forja writes; the gate renders it again to compare."""
-    lines = [f"# Registro de mudança: {facts.task_id}", "", facts.intent, ""]
-    lines += [
+def render_changed(
+    files: Sequence[RecordedFile], symbols: Sequence[SymbolChange], unreadable: Sequence[str]
+) -> str:
+    """The two sections that follow from the task's diff alone: files and symbols. The gate
+    renders them again from the diff and looks for them in the record."""
+    lines = [
         "## Arquivos",
         "",
-        *_list(f"`{f.path}`: {f.change.value}" for f in sorted(facts.files, key=_path)),
+        *_list(f"`{f.path}`: {f.change.value}" for f in sorted(files, key=_path)),
         "",
     ]
-    lines += ["## Símbolos", "", *_list(_symbol_line(s) for s in sorted(facts.symbols, key=_place))]
-    if facts.unreadable:
+    lines += ["## Símbolos", "", *_list(_symbol_line(s) for s in sorted(symbols, key=_place))]
+    if unreadable:
         lines += [
             "",
             "Símbolos não listados (arquivo ilegível):",
-            *_list(f"`{p}`" for p in facts.unreadable),
+            *_list(f"`{p}`" for p in unreadable),
         ]
+    return "\n".join(lines)
+
+
+def render_facts(facts: RecordFacts) -> str:
+    """The part of the record that only the Forja writes; the gate renders it again to compare."""
+    lines = [f"# Registro de mudança: {facts.task_id}", "", facts.intent, ""]
+    lines += [render_changed(facts.files, facts.symbols, facts.unreadable)]
     lines += ["", "## Métricas", "", *_metric_table(facts), ""]
     lines += ["## Gates aprovados", "", *_list(sorted(facts.gates_passed)), ""]
     lines += ["## Ferramentas", "", *_list(f"{t.name} {t.version}" for t in facts.toolchains)]
