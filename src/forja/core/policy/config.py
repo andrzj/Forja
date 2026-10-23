@@ -107,6 +107,7 @@ class EffectivePolicy:
     adapter_commands: Mapping[str, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
     redaction: RedactionSettings = field(default_factory=RedactionSettings)
     test_root: str | None = None  # where the test author may write; None: the adapter's own
+    forbidden_licenses: tuple[str, ...] = ()  # SPDX ids the repository forbids; no default list
 
     def settings(self) -> dict[str, CheckSettings]:
         return {check_id: check.settings for check_id, check in self.checks.items()}
@@ -118,6 +119,8 @@ class EffectivePolicy:
         data = self._to_dict()
         if self.test_root is not None:  # absent when unset, so older policies keep their digest
             data["tests"] = {"root": self.test_root}
+        if self.forbidden_licenses:  # absent when unset, for the same reason
+            data["licenses"] = {"forbidden": list(self.forbidden_licenses)}
         return data
 
     def _to_dict(self) -> dict[str, Any]:
@@ -197,6 +200,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         _merge_adapter_commands(layers),
         _merge_redaction(layers),
         _merge_test_root(layers),
+        _collect(layers, "licenses", "forbidden"),
     )
 
 
@@ -214,9 +218,11 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         "adapters",
         "redaction",
         "tests",
+        "licenses",
     }
     for key in sorted(unknown_top):
         bad(key, "unknown section")
+    _validate_string_list(layer.data.get("licenses"), "licenses", "forbidden", bad, _check_license)
     _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
     _validate_string_list(layer.data.get("branches"), "branches", "protected", bad, _check_branch)
     _validate_adapters(layer.data.get("adapters"), bad)
@@ -407,6 +413,12 @@ def _collect(layers: Sequence[Layer], section: str, key: str) -> tuple[str, ...]
 def _check_pattern(value: str) -> None:
     # Only validity matters here, and case folding never changes whether a pattern compiles.
     compile_pattern(value, case_insensitive=False)
+
+
+def _check_license(value: str) -> None:
+    name = value.strip()
+    if not name or any(c.isspace() for c in name):
+        raise ValueError(f"invalid license identifier {value!r}")
 
 
 def _check_branch(value: str) -> None:

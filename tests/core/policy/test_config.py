@@ -548,3 +548,38 @@ def test_a_policy_without_a_test_root_keeps_its_digest_and_one_with_it_changes()
     assert "tests" not in plain.to_dict()
     assert with_root.to_dict()["tests"] == {"root": "spec"}
     assert with_root.digest() != plain.digest()
+
+
+# -- forbidden licenses ------------------------------------------------------------------------
+
+
+def test_the_forbidden_licenses_are_the_repositorys_and_add_up_across_layers() -> None:
+    user = '[licenses]\nforbidden = ["GPL-3.0-only"]\n'
+    repo = '[licenses]\nforbidden = ["AGPL-3.0-only", "GPL-3.0-only"]\n'
+
+    assert policy(user, repo).forbidden_licenses == ("GPL-3.0-only", "AGPL-3.0-only")
+    assert policy().forbidden_licenses == ()  # the Forja has no list of its own
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '[licenses]\nforbidden = "GPL"\n',
+        "[licenses]\nforbidden = [1]\n",
+        '[licenses]\nforbidden = ["a b"]\n',
+        '[licenses]\nforbidden = [" "]\n',
+        '[licenses]\nallowed = ["MIT"]\n',
+        "licenses = 1\n",
+    ],
+)
+def test_a_license_list_that_is_not_one_is_refused(text: str) -> None:
+    with pytest.raises(PolicyConfigError):
+        policy(text)
+
+
+def test_the_license_list_is_part_of_the_digest_only_when_it_is_set() -> None:
+    assert "licenses" not in policy().to_dict()
+    assert policy('[licenses]\nforbidden = ["GPL-3.0-only"]\n').to_dict()["licenses"] == {
+        "forbidden": ["GPL-3.0-only"]
+    }
+    assert policy().digest() != policy('[licenses]\nforbidden = ["GPL-3.0-only"]\n').digest()

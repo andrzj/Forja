@@ -81,6 +81,7 @@ class PipelineMeasurer:
         gitleaks: tuple[str, ...] = ("gitleaks",),
         semgrep: tuple[str, ...] = ("semgrep",),
         semgrep_config: Path | None = None,
+        osv_scanner: tuple[str, ...] = ("osv-scanner",),
         timeouts: Mapping[str, float] | None = None,
     ) -> None:
         self._adapters = adapters
@@ -94,6 +95,7 @@ class PipelineMeasurer:
         self._gitleaks = gitleaks
         self._semgrep = semgrep
         self._semgrep_config = semgrep_config
+        self._osv_scanner = osv_scanner
         self._timeouts = timeouts or {}
 
     # -- helpers -------------------------------------------------------------------------------

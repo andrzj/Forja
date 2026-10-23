@@ -162,3 +162,13 @@ def test_weakening_the_frozen_redaction_by_hand_is_noticed(tmp_path: Path) -> No
 
     with pytest.raises(PolicyConfigError, match="does not match its version"):
         load_frozen_policy(make_registry(), tmp_path)
+
+
+def test_the_forbidden_licenses_are_frozen_with_the_rest(tmp_path: Path) -> None:
+    original = effective('[licenses]\nforbidden = ["GPL-3.0-only"]\n')
+    freeze_policy(original, tmp_path, "1.2.3")
+
+    frozen = load_frozen_policy(make_registry(), tmp_path)
+
+    assert frozen.policy == original
+    assert frozen.policy.forbidden_licenses == ("GPL-3.0-only",)

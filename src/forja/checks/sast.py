@@ -8,15 +8,13 @@ them (ADR 0024), and "not applicable" is never a pass.
 """
 
 import json
-import shutil
-import tempfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.base import Undecided, decided, rejected
-from forja.checks.changes import ChangeKind, Changes, write_files
-from forja.checks.layout import skip_git_and_links
+from forja.checks.changes import Changes
+from forja.checks.oldtree import old_tree
 from forja.checks.tooling import Tools
 from forja.core.adapters import CommandPlan
 from forja.core.gates import (
@@ -78,15 +76,7 @@ class SastCheck:
         worktree turned back into that commit so the rules see the files next to them."""
         if not self.before:
             return Counter()
-        with tempfile.TemporaryDirectory(prefix="forja-sast-before-") as directory:
-            root = Path(directory)
-            shutil.copytree(
-                self.worktree, root, symlinks=True, dirs_exist_ok=True, ignore=skip_git_and_links
-            )
-            for change in self.changes.files:
-                if change.kind in (ChangeKind.ADDED, ChangeKind.RENAMED):
-                    (root / change.path).unlink(missing_ok=True)
-            write_files(self.before, root)
+        with old_tree(self.worktree, self.changes, self.before, "forja-sast-before-") as root:
             return await self._scan(config, root, tuple(sorted(self.before)), "sast_before")
 
     async def _scan(self, config: Path, root: Path, files: tuple[str, ...], name: str) -> Counts:

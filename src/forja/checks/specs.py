@@ -39,6 +39,7 @@ def default_registry() -> CheckRegistry:
             thresholds=frozenset({"max_interface_ratio", "min_statements"}),
         ),
         CheckSpec("sast", 10, Mode.OBSERVATION, BLOCK),
+        CheckSpec("dependency_audit", 10, Mode.OBSERVATION, BLOCK),
     ):
         registry.register(spec)
     return registry
