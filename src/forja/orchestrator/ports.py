@@ -79,10 +79,12 @@ class AttemptContext:
 
 @dataclass(frozen=True)
 class Expectations:
-    """What the test author owes: a test for each criterion, declared in its answer."""
+    """What a role owes: the test author, a test for each criterion; the documenter, claims whose
+    citations exist. Both are declared in its answer."""
 
     criteria: frozenset[int]
     declared: tuple[DeclaredTest, ...]
+    claims: tuple[Claim, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -49,6 +49,7 @@ def default_registry() -> CheckRegistry:
             PREMISE,
             thresholds=frozenset({"min_age_days", "min_downloads"}),
         ),
+        CheckSpec("citations", 13, Mode.OBSERVATION, BLOCK),
         CheckSpec("change_record", 14, Mode.OBSERVATION, BLOCK),
     ):
         registry.register(spec)

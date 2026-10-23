@@ -429,6 +429,9 @@ class TaskCycle:
         return list(dict.fromkeys(Executor(cli=ref.name, version=ref.version) for ref in refs))
 
     def _expectations(self, ctx: AttemptContext) -> Expectations | None:
+        if ctx.task.role is Producer.DOCUMENTER:
+            claims = self._ctx.runner(ctx.task.role).declared_claims(ctx)
+            return Expectations(frozenset(), (), claims)
         fix = self._ctx.config.fix
         if ctx.task.role is not Producer.TEST_AUTHOR or fix is None or ctx.task.reviews:
             return None

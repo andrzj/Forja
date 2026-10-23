@@ -19,7 +19,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 | # | Item | Plano | Estado |
 | --- | --- | --- | --- |
 | 1 | Gate 6, fecho: documentação do usuário e ADR (passo 6) e gate de mutação nos arquivos novos. O E2E real é do dono. | `docs\plano-gate-6.md` | **concluído** (23/10); falta só o E2E real, que é do dono |
-| 2 | Incremento 4: documentador (registro de mudança, README, ADR por regra, deriva, voz, citações do documentador, resumo) | `docs\plano-documentador.md` | em andamento: passos 0 a 3 concluídos; próximo, passo 4 |
+| 2 | Incremento 4: documentador (registro de mudança, README, ADR por regra, deriva, voz, citações do documentador, resumo) | `docs\plano-documentador.md` | em andamento: passos 0 a 4 concluídos; próximo, passo 5 |
 | 3 | Incremento 6: especificador (critérios, rastreabilidade, `manifesto-testes.json`), arqueólogo, andaime, modo de diretório vazio, premissas e fatos completos, coleta da revisão, gate 13 completo | plano a escrever (`docs\plano-especificador-arqueologo.md`) | a fazer |
 | 4 | Incremento 5, restante: gate 9 (arquitetura) | `docs\plano-gate-9.md` | plano escrito; a fazer |
 | 5 | Incremento 5, restante: gate 11 (teste diferencial); depende do item 3 | `docs\plano-gate-11.md` | plano escrito; a fazer |
@@ -31,6 +31,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 
 Mais recente primeiro. Cada linha: data, o que mudou, commits.
 
+- **23/10/2026 (fila 2, passo 4):** gate 13 do documentador: `checks\citations.py::CitationCheck` (arquivo e linhas, evidência, fato), `CheckSpec("citations", 13, OBSERVATION, BLOCK)`, `Expectations.claims`, ligado ao `judge` só para o documentador. Suítes `tests/orchestrator tests/core tests/cli tests/checks` (sem slow e sem `test_real_*`) verdes. Testes: `test_citations.py`, `test_change_record_measurer.py`.
 - **23/10/2026 (fila 2, passo 3):** gate 14 do registro: `checks\change_record_gate.py::ChangeRecordCheck` (seções, arquivos e símbolos recalculados do diff, claim citado), `CheckSpec("change_record", 14, OBSERVATION, BLOCK)`, ligado ao `judge` só para o documentador; `PipelineMeasurer._task_changes` compartilhado com `change_record`. Suítes `tests/orchestrator tests/core tests/cli tests/checks` (sem slow e sem `test_real_*`): 3211 passaram. Testes: `test_change_record_gate.py`, `test_change_record_measurer.py`.
 - **23/10/2026 (fila 2, passo 2):** documentador no ciclo: etapa final `-d` com commit `docs:`, a Forja escreve `docs/mudancas/<tarefa>.md` (`PipelineMeasurer.change_record`, portas `change_record` e `declared_claims`), `.md`/README/`docs/` classificados como documentação no núcleo, escopo e pacote do papel, planejadores com `DOCUMENTER`, `base-metrics.json`. Suítes `tests/orchestrator tests/core tests/cli tests/checks` (sem slow e sem os `test_real_*`): 3188 passaram. Testes novos: `test_documenter.py`, `test_documenter_role.py`, `test_change_record_measurer.py`.
 - **23/10/2026 (fila 2, passo 2, revisão de segurança, duas rodadas):** documentação é `.md`/`.rst` sob `docs/` ou README/CHANGELOG/CONTRIBUTING, exclui famílias de arquivo de instrução de agente e diretórios ocultos; o documentador não escreve registro de outra tarefa, com comparação sem distinção de caixa. Testes em `test_documenter_role.py`.

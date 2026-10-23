@@ -25,6 +25,7 @@ from forja.checks.change_record import (
 )
 from forja.checks.change_record_gate import ChangeRecordCheck
 from forja.checks.changes import Changes, read_before, read_changes
+from forja.checks.citations import CitationCheck
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
@@ -76,6 +77,11 @@ from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, Rec
 
 BASE_FILE = "base.json"
 BASE_METRICS_FILE = "base-metrics.json"
+STATIC_METRICS = (
+    "lint_violations",
+    "max_ccn",
+    "functions",
+)  # what a task is measured on afterwards
 HEAD = "HEAD"
 UNSTABLE = "unstable"
 PASSING = "passing"
@@ -587,6 +593,9 @@ class PipelineMeasurer:
         head = (await git.lines("rev-parse", "HEAD"))[0]
         if ctx.task.role is Producer.DOCUMENTER:
             files, found, unreadable = await self._task_changes(ctx)
+            claims = expectations.claims if expectations is not None else ()
+            evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
+            checks.append(CitationCheck(worktree, claims, evidence))
             checks.append(
                 ChangeRecordCheck(
                     worktree, ctx.task.task_id, render_changed(files, found, unreadable)

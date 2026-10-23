@@ -180,6 +180,7 @@ class Scene:
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
+            "citations": OBSERVATION,
             "change_record": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,

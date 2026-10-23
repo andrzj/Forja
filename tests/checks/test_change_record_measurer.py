@@ -6,7 +6,7 @@ from pathlib import Path
 from forja.core.artifacts.llm_output import Claim, FileCitation
 from forja.core.artifacts.models import Executor, Producer
 from forja.core.gates import Approved, Rejected
-from forja.orchestrator.ports import AttemptContext, RecordFile, TaskInfo
+from forja.orchestrator.ports import AttemptContext, Expectations, RecordFile, TaskInfo
 from tests.checks.support import SAMPLE, Scene, sinks
 from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-exported as a fixture
 
@@ -114,3 +114,23 @@ def test_the_record_the_forja_wrote_passes_gate_14_and_a_missing_one_does_not(
     scene.write(record.path, record.text)
 
     assert isinstance(judged_record(scene), Approved)
+
+
+def test_the_citations_of_the_documenter_are_judged_by_gate_13(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    commit_the_code(scene, repo, MOD + "\n\nX = 1\n")
+    scene.write("README.md", "# sample\n")
+    nowhere = Claim(
+        statement="it is slow",
+        citations=(FileCitation(kind="file", path="src/none.py", line_start=1, line_end=1),),
+    )
+    expectations = Expectations(frozenset(), (), (CLAIM, nowhere))
+
+    outcome = asyncio.run(scene.measurer.judge(documenter_context(scene), sinks, expectations))
+
+    found = next(run.result for run in outcome.runs if run.check_id == "citations")
+    assert isinstance(found, Rejected)
+    assert [f.target for f in found.findings] == ["src/none.py"]
