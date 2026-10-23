@@ -40,6 +40,13 @@ def default_registry() -> CheckRegistry:
         ),
         CheckSpec("sast", 10, Mode.OBSERVATION, BLOCK),
         CheckSpec("dependency_audit", 10, Mode.OBSERVATION, BLOCK),
+        CheckSpec(
+            "new_dependency",
+            10,
+            Mode.OBSERVATION,
+            PREMISE,
+            thresholds=frozenset({"min_age_days", "min_downloads"}),
+        ),
     ):
         registry.register(spec)
     return registry
