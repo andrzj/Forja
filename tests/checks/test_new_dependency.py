@@ -255,3 +255,24 @@ def test_the_clock_is_the_real_one_unless_a_test_gives_another(tmp_path: Path) -
     )
 
     assert asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a"))) == Approved()
+
+
+def test_a_file_that_cannot_be_read_and_whose_name_does_not_parse_empty_is_a_manifest(
+    tmp_path: Path,
+) -> None:
+    def picky(path: str, text: str) -> Declared | None:
+        if path.endswith(MANIFEST):
+            raise ValueError("an empty manifest is not valid")
+        return None
+
+    (tmp_path / MANIFEST).write_bytes(b"\xff\xfe\x00")
+    (tmp_path / "logo.png").write_bytes(b"\x89PNG\xff")
+    changes = Changes(
+        (Change(ChangeKind.ADDED, "logo.png"), Change(ChangeKind.ADDED, MANIFEST)), 0, ()
+    )
+    check = NewDependencyCheck(tmp_path, changes, {}, picky)
+
+    result = asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a")))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "new_dependency: could not verify package.json (unreadable)"

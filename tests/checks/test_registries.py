@@ -297,3 +297,19 @@ def test_a_registry_that_does_not_answer_is_asked_again_a_few_times(
     calls.clear()
     assert asyncio.run(registries.urllib_get("https://x")) is None
     assert len(calls) == registries.ATTEMPTS
+
+
+def test_the_pause_between_attempts_comes_between_them_and_not_after_the_last(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pauses: list[float] = []
+
+    async def pause(seconds: float) -> None:
+        pauses.append(seconds)
+
+    monkeypatch.setattr(registries, "_fetch", lambda url: None)
+    monkeypatch.setattr(asyncio, "sleep", pause)
+    monkeypatch.setattr(registries, "RETRY_PAUSE", 7.0)
+
+    assert asyncio.run(registries.urllib_get("https://x")) is None
+    assert pauses == [7.0] * (registries.ATTEMPTS - 1)

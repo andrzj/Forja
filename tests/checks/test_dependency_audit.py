@@ -319,3 +319,13 @@ def test_a_forbidden_license_on_one_listed_package_does_not_account_for_an_unlis
 
     assert isinstance(result, Inconclusive)
     assert "gpl-3.0 is in the scan but in no package the report lists" in result.detail
+
+
+def test_a_forbidden_license_that_the_scan_does_not_count_is_not_hidden_anywhere(
+    log: EventLog, tmp_path: Path
+) -> None:
+    write(tmp_path, LOCK, "a 1 licenses=MIT\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "b 1\n"}, forbidden=frozenset({"gpl-3.0"}))
+
+    assert result == Approved()
