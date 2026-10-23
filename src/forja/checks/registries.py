@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 TIMEOUT = 20.0
+ATTEMPTS, RETRY_PAUSE = 3, 1.0
 NPM, PYPI, GO, MAVEN, NUGET = "npm", "PyPI", "Go", "Maven", "NuGet"
 NOT_FOUND = frozenset({404, 410})
 # What each registry allows in a name. The names come from a file the agent wrote, so nothing
@@ -48,6 +49,7 @@ NAME_PATTERNS = {
     MAVEN: re.compile(r"[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+"),
     NUGET: re.compile(r"[A-Za-z0-9_.-]+"),
 }
+MAVEN_PAGE_ROWS, MAVEN_PAGES = 200, 5
 NUGET_INDEX = "https://api.nuget.org/v3/index.json"
 UNLISTED = 1900  # nuget.org sets ``published`` to this year for an unlisted package
 
@@ -93,7 +95,15 @@ def _fetch(url: str) -> Response | None:
 
 
 async def urllib_get(url: str) -> Response | None:
-    return await asyncio.to_thread(_fetch, url)
+    """The answer to a GET, tried ``ATTEMPTS`` times when the registry does not answer: Maven
+    Central's search was seen timing out one request in a few."""
+    for attempt in range(ATTEMPTS):
+        answer = await asyncio.to_thread(_fetch, url)
+        if answer is not None:
+            return answer
+        if attempt + 1 < ATTEMPTS:
+            await asyncio.sleep(RETRY_PAUSE)
+    return None
 
 
 async def _get(get: HttpGet, url: str) -> Response:
@@ -183,11 +193,21 @@ async def _go(module: str, get: HttpGet) -> Standing:
 async def _maven(coordinates: str, get: HttpGet) -> Standing:
     group, _, artifact = coordinates.partition(":")
     query = urllib.parse.quote(f'g:"{group}" AND a:"{artifact}"')
-    url = f"https://search.maven.org/solrsearch/select?q={query}&core=gav&rows=200&wt=json"
-    found = (await _json(get, url))["response"]
-    if int(found["numFound"]) == 0:
-        raise Missing(coordinates)
-    stamps = [datetime.fromtimestamp(int(doc["timestamp"]) / 1000, UTC) for doc in found["docs"]]
+    stamps: list[datetime] = []
+    for page in range(MAVEN_PAGES):
+        start = page * MAVEN_PAGE_ROWS
+        url = (
+            f"https://search.maven.org/solrsearch/select?q={query}&core=gav"
+            f"&rows={MAVEN_PAGE_ROWS}&start={start}&wt=json"
+        )
+        found = (await _json(get, url))["response"]
+        if int(found["numFound"]) == 0:
+            raise Missing(coordinates)
+        stamps += [datetime.fromtimestamp(int(d["timestamp"]) / 1000, UTC) for d in found["docs"]]
+        if start + MAVEN_PAGE_ROWS >= int(found["numFound"]):
+            break
+    # the service lists the newest first and ignores ``sort``, so an artifact with more than
+    # MAVEN_PAGES pages of versions is dated by the oldest it was read: younger than it is
     return Standing(min(stamps, default=None), None)
 
 

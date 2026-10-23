@@ -137,7 +137,7 @@ def test_a_name_the_registry_could_not_hold_is_missing_and_never_reaches_a_url(
 
 MAVEN = (
     "https://search.maven.org/solrsearch/select?"
-    "q=g%3A%22com.google.inject%22%20AND%20a%3A%22guice%22&core=gav&rows=200&wt=json"
+    "q=g%3A%22com.google.inject%22%20AND%20a%3A%22guice%22&core=gav&rows=200&start=0&wt=json"
 )
 
 
@@ -205,3 +205,17 @@ def test_nuget_missing_package_is_missing_and_a_service_index_without_it_is_unre
         run("NuGet", "x", {INDEX: SERVICES, "https://reg/x/index.json": 404})
     with pytest.raises(Unreachable):
         run("NuGet", "x", {INDEX: {"resources": []}})
+
+
+def test_maven_reads_every_page_of_versions_to_find_the_oldest() -> None:
+    base = "https://search.maven.org/solrsearch/select?q=g%3A%22g%22%20AND%20a%3A%22a%22&core=gav"
+    newer = {"response": {"numFound": 201, "docs": [{"timestamp": 2_000_000_000_000}] * 200}}
+    oldest = {"response": {"numFound": 201, "docs": [{"timestamp": 1_000_000_000_000}]}}
+    routes = {
+        f"{base}&rows=200&start=0&wt=json": newer,
+        f"{base}&rows=200&start=200&wt=json": oldest,
+    }
+
+    standing = run("Maven", "g:a", routes)
+
+    assert standing == Standing(datetime.fromtimestamp(1_000_000_000, UTC), None)

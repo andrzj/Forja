@@ -42,6 +42,9 @@ FOUND = 1  # OSV-Scanner: something was found; the report says what
 Package = tuple[str, str, str]  # (ecosystem, name, version)
 
 
+# SPDX ids that osv-scanner accepts and that (nearly) no package uses; it refuses ids that are
+# not SPDX, so an invented name will not do
+UNUSED_LICENSES = ("Glulxe", "xlock", "Wsuipa")
 UNKNOWN_LICENSES = frozenset({"unknown", "non-standard", "noassertion", "none"})
 EXPRESSION_WORDS = frozenset({"and", "or", "with"})
 
@@ -133,6 +136,14 @@ class DependencyAuditCheck:
                     findings.append(Finding(message=message, target=name))
         return findings
 
+    def _allowed(self) -> str:
+        """OSV-Scanner only has a list of allowed licenses, and it lists the licenses of a package
+        only when the package has a vulnerability or breaks that list (seen with osv-scanner
+        2.7.0: with the plain ``--licenses`` a package without vulnerabilities is not listed). So
+        the list given is one that no package is expected to meet, and every package is then
+        listed with its licenses; the forbidden ones are compared here."""
+        return next(name for name in UNUSED_LICENSES if name.lower() not in self.forbidden)
+
     async def _before(self) -> Audit:
         if not self.before:
             return Audit({}, {})
@@ -150,7 +161,7 @@ class DependencyAuditCheck:
                 "json",
                 "--output-file",
                 str(report),
-                *(("--licenses",) if self.forbidden else ()),
+                *((f"--licenses={self._allowed()}",) if self.forbidden else ()),
                 *(arg for path in files for arg in ("-L", _argument(path))),
             ),
             root,

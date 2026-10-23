@@ -272,3 +272,38 @@ def test_a_file_named_like_an_option_is_still_a_file(log: EventLog, tmp_path: Pa
 
     assert isinstance(result, Rejected)
     assert [f.target for f in result.findings] == ["-x/go.mod"]
+
+
+def test_every_package_is_listed_by_giving_osv_a_license_list_that_no_package_meets(
+    log: EventLog, tmp_path: Path
+) -> None:
+    seen = tmp_path / "args.txt"
+    script = (
+        "import sys\n"
+        f"open({str(seen)!r}, 'a').write(' '.join(sys.argv[1:]) + '\\n')\n"
+        "raise SystemExit(128)\n"
+    )
+    write(tmp_path, LOCK, "a 1\n")
+
+    judge(
+        log,
+        tmp_path,
+        modified(),
+        {},
+        forbidden=frozenset({"gpl-3.0"}),
+        osv=(sys.executable, "-c", script),
+    )
+    judge(
+        log,
+        tmp_path,
+        modified(),
+        {},
+        forbidden=frozenset({"glulxe"}),
+        osv=(sys.executable, "-c", script),
+    )
+    judge(log, tmp_path, modified(), {}, osv=(sys.executable, "-c", script))
+
+    first, second, third = seen.read_text(encoding="utf-8").splitlines()
+    assert "--licenses=Glulxe" in first
+    assert "--licenses=xlock" in second  # the forbidden list never contains the stand-in
+    assert "--licenses" not in third

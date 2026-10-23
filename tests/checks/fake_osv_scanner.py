@@ -20,7 +20,7 @@ def main() -> int:
     if args[0] != "scan":
         return 127
     output = Path(args[args.index("--output-file") + 1])
-    licenses = "--licenses" in args
+    licenses = any(arg.startswith("--licenses") for arg in args)
     files = [args[i + 1] for i, arg in enumerate(args) if arg == "-L"]
     results, found = [], False
     for name in files:
