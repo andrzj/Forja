@@ -20,6 +20,7 @@ def default_registry() -> CheckRegistry:
         CheckSpec("build", 4, Mode.BLOCKING, BLOCK, commands=frozenset({"build"})),
         CheckSpec("tests", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
         CheckSpec("red_green", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
+        CheckSpec("e2e", 6, Mode.OBSERVATION, BLOCK),
         CheckSpec(
             "mutation",
             7,
