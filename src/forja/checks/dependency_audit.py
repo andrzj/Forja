@@ -9,7 +9,9 @@ A tool that cannot run, or a package whose license is unknown, is inconclusive, 
 """
 
 import json
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from forja.checks.base import Undecided, decided, rejected
@@ -70,7 +72,10 @@ def is_artifact(path: str) -> bool:
 class Audit:
     vulnerabilities: dict[tuple[Package, str], str]  # (package, advisory) -> the file it is in
     licenses: dict[Package, frozenset[str]]
-    summary: frozenset[str] = frozenset()  # the license ids of the whole scan, lowercase
+    # how many packages the whole scan has under each license id (lowercase), and how many of
+    # the packages the report lists: the two differ when a package was left out of the list
+    summary: Mapping[str, int] = field(default_factory=dict)
+    listed: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -147,12 +152,12 @@ class DependencyAuditCheck:
         return findings
 
     def _unlisted(self, now: Audit) -> frozenset[str]:
-        """Forbidden licenses the scan counts (``license_summary``) that no listed package has:
-        a package osv-scanner did not list, which must not pass as one without the license."""
-        listed = {
-            word for found in now.licenses.values() for item in found for word in _identifiers(item)
-        }
-        return (now.summary & self.forbidden) - listed
+        """Forbidden licenses the scan counts (``license_summary``) in more packages than the
+        report lists: a package osv-scanner left out of its list, which must not pass as one
+        without the license."""
+        return frozenset(
+            word for word in self.forbidden if now.summary.get(word, 0) > now.listed.get(word, 0)
+        )
 
     def _allowed(self) -> str:
         """OSV-Scanner only has a list of allowed licenses, and it lists the licenses of a package
@@ -230,11 +235,11 @@ def _read(report: Path, root: Path) -> Audit | None:
     try:
         document = json.loads(report.read_text(encoding="utf-8"))
         results = document.get("results", [])
-        summary = frozenset(
-            word
-            for item in document.get("license_summary") or []
-            for word in _identifiers(item["name"])
-        )
+        summary: Counter[str] = Counter()
+        for item in document.get("license_summary") or []:
+            for word in _identifiers(item["name"]):
+                summary[word] += int(item["count"])
+        listed: Counter[str] = Counter()
         for result in results:
             source = _relative(str(result["source"]["path"]), root)
             for entry in result["packages"]:
@@ -244,6 +249,7 @@ def _read(report: Path, root: Path) -> Audit | None:
                     vulnerabilities.setdefault((package, str(vulnerability["id"])), source)
                 found = frozenset(str(item) for item in entry.get("licenses") or [])
                 licenses[package] = licenses.get(package, frozenset()) | found
+                listed.update({word for item in found for word in _identifiers(item)})
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
-    return Audit(vulnerabilities, licenses, summary)
+    return Audit(vulnerabilities, licenses, summary, listed)

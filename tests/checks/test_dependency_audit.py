@@ -307,3 +307,15 @@ def test_every_package_is_listed_by_giving_osv_a_license_list_that_no_package_me
     assert "--licenses=Glulxe" in first
     assert "--licenses=xlock" in second  # the forbidden list never contains the stand-in
     assert "--licenses" not in third
+
+
+def test_a_forbidden_license_on_one_listed_package_does_not_account_for_an_unlisted_one(
+    log: EventLog, tmp_path: Path
+) -> None:
+    write(tmp_path, LOCK, "a 1 licenses=GPL-3.0\nb 1 licenses=GPL-3.0 unlisted=1\n")
+    old = {LOCK: "a 1 licenses=GPL-3.0\n"}
+
+    result = judge(log, tmp_path, modified(), old, forbidden=frozenset({"gpl-3.0"}))
+
+    assert isinstance(result, Inconclusive)
+    assert "gpl-3.0 is in the scan but in no package the report lists" in result.detail
