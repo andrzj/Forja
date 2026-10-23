@@ -40,6 +40,28 @@ Estado: plano, nada implementado; sem perguntas abertas. Regra do dono: gates gr
 6. **Documentação do usuário e ADR:** como declarar o comando de E2E, o que a armadilha vê e o que não vê, o que fica do ambiente, onde ficam os dados pessoais e as exceções do scanner. ADR (rede desligada por armadilha de proxy, sem sandbox).
 7. **Ponta a ponta real** (regra do dono: só no fecho do gate) e **gate de mutação no WSL** nos arquivos novos. E2E real por linguagem: teste contra fake em loopback passa; teste que alcança host externo por cliente que honra o proxy reprova com o destino.
 
+## Leitura do passo 0 (23/10, parte medida)
+
+Armadilha em loopback (recusa com 403 e registra a primeira linha), `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (e minúsculas) apontando para ela, alvo `blocked.test` (sem DNS). Windows, Python 3.11, Go 1.27.3, Node 26.12.1, .NET 9.0.319, JDK 21.0.12.
+
+| Cliente | Chega à armadilha? | Registro visto |
+|---|---|---|
+| Python `urllib.request` | sim | `GET http://host/…` e `CONNECT host:443` |
+| Python `http.client` | **não** (resolve DNS direto) | nada |
+| Go `net/http` | sim | idem |
+| Go `net.Dial` cru | não | nada |
+| Node `fetch`, `http`, `https` | **só com `NODE_USE_ENV_PROXY=1`**; sem ela, não | idem |
+| Node `net.connect` cru | não | nada |
+| .NET `HttpClient` | sim | idem |
+| .NET `TcpClient` cru | não | nada |
+| Java `HttpURLConnection` e `java.net.http.HttpClient` | **não** com as variáveis; **sim** com `-Dhttp.proxyHost/Port`, `-Dhttps.proxyHost/Port`, `-Dhttp.nonProxyHosts` em `JAVA_TOOL_OPTIONS` | idem |
+
+Consequências para o plano (corrigem a decisão 3):
+- O ambiente do E2E acrescenta, além das variáveis de proxy, **`NODE_USE_ENV_PROXY=1`** (Node) e **`JAVA_TOOL_OPTIONS`** com as propriedades de proxy da JVM (`nonProxyHosts=localhost|127.0.0.1`). O `JAVA_TOOL_OPTIONS` do usuário, se houver, é preservado e acrescido, e a JVM imprime "Picked up JAVA_TOOL_OPTIONS" no stderr (ruído aceito).
+- O registro é `GET http://host/…` (só host e porta saem da linha) ou `CONNECT host:porta`; a armadilha lê só essa linha.
+- Continuam fora da vista: soquete cru em qualquer linguagem e Python `http.client` (e o que o usa por baixo, a depender da biblioteca). Entram no limite declarado do resumo. Medir `requests` e `httpx` (Python) fica para o passo 6, com a ferramenta real do ponta a ponta.
+- Falta do passo 0: ler a documentação e medir as chaves de modo offline (`GOPROXY=off`, `npm_config_offline`, Maven `-o`, Gradle `--offline`, NuGet, `PIP_NO_INDEX`); **ainda não feito**, e o passo 2 não deve usar nenhuma antes disso. Scripts da medição: scratchpad da sessão (`g6\`), fora do repositório.
+
 ## Limites já conhecidos
 
 - Não é contenção: cliente que ignora o proxy sai sem ser visto; a Especificação diz que a rede é do ambiente e que quem precisa de contenção forte roda a Forja já dentro dela.
