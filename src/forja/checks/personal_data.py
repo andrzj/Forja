@@ -36,11 +36,11 @@ def personal_data_in(text: str) -> Counts:
             for match in pattern.finditer(text)
             if detector.valid(match.group())
         )
-        places, end = 0, -1
+        places, covered = 0, set[int]()
         for start, stop in spans:
-            if start >= end:  # one that overlaps the previous place is the same place
+            if covered.isdisjoint(range(start, stop)):  # an overlapping match is the same place
                 places += 1
-            end = max(end, stop)
+            covered.update(range(start, stop))
         if places:
             counts[detector.kind.value] = places
     return counts

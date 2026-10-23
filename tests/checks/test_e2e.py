@@ -166,3 +166,32 @@ def test_the_gate_inconclusive_when_nothing_else_was_seen_to_fail_in_another_lan
     }
     result = judge(log, tmp_path, None, Scripted("python"), Scripted("go"), declared=declared)
     assert isinstance(result, Inconclusive)
+
+
+def test_a_passing_test_that_now_fails_is_reported_once(log: EventLog, tmp_path: Path) -> None:
+    result = judge(log, tmp_path, "fail", passing=frozenset({FLOW}))
+    assert isinstance(result, Rejected)
+    assert [(f.message, f.target) for f in result.findings] == [("e2e test failed", FLOW)]
+
+
+class Unsupported(Scripted):
+    def plan(self, operation: Operation, request: OperationRequest) -> CommandPlan | NotSupported:
+        return NotSupported("test", "no tests here")
+
+
+def test_a_language_whose_adapter_cannot_run_tests_is_left_out(
+    log: EventLog, tmp_path: Path
+) -> None:
+    declared = {"python": (sys.executable, str(SCRIPT), "pass")}
+    result = judge(log, tmp_path, None, Unsupported(), declared=declared)
+    assert result == NotApplicable(missing_capability="e2e_command")
+
+
+def test_a_trap_that_cannot_open_is_inconclusive(
+    log: EventLog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def refuse(self: object) -> None:
+        raise OSError("no sockets")
+
+    monkeypatch.setattr("forja.checks.e2e.NetworkTrap.__aenter__", refuse)
+    assert isinstance(judge(log, tmp_path, "pass"), Inconclusive)

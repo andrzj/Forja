@@ -129,3 +129,21 @@ def test_the_port_is_released_when_the_block_ends() -> None:
     port = asyncio.run(scenario())
     with socket.socket() as probe:
         assert probe.connect_ex(("127.0.0.1", port)) != 0
+
+
+def test_only_the_first_line_of_the_request_is_read() -> None:
+    async def scenario() -> tuple[str, ...]:
+        async with NetworkTrap() as trap:
+            port = int(trap.url.rsplit(":", 1)[1])
+            _, writer = await asyncio.open_connection("127.0.0.1", port)
+            writer.write(b"GET\nhttp://second-line.test/ HTTP/1.1\r\n")
+            await writer.drain()
+            await asyncio.sleep(0.3)
+            writer.close()
+            return trap.destinations
+
+    assert asyncio.run(scenario()) == (UNKNOWN,)
+
+
+def test_the_address_before_the_trap_opens_has_no_port() -> None:
+    assert NetworkTrap().url == "http://127.0.0.1:0"

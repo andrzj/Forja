@@ -113,3 +113,13 @@ def test_a_rejection_wins_over_an_unreadable_file(tmp_path: Path) -> None:
 def test_overlapping_patterns_count_a_place_once() -> None:
     counts = personal_data_in("+55 11 91234-5678")
     assert counts["phone"] == 1
+
+
+def test_a_place_at_the_very_start_of_the_text_counts() -> None:
+    assert personal_data_in(CPF)["cpf"] == 1
+
+
+def test_the_message_counts_only_what_is_new(tmp_path: Path) -> None:
+    result = judge(tmp_path, f"{EMAIL}\nzeca@gmail.com\nana@gmail.com\n", before=f"{EMAIL}\n")
+    assert isinstance(result, Rejected)
+    assert result.findings[0].message == "2 new email value(s) in test data"

@@ -18,7 +18,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 
 | # | Item | Plano | Estado |
 | --- | --- | --- | --- |
-| 1 | Gate 6, fecho: documentação do usuário e ADR (passo 6) e gate de mutação nos arquivos novos. O E2E real é do dono. | `docs\plano-gate-6.md` | passos 0 a 5 concluídos; passo 6 e mutação a fazer |
+| 1 | Gate 6, fecho: documentação do usuário e ADR (passo 6) e gate de mutação nos arquivos novos. O E2E real é do dono. | `docs\plano-gate-6.md` | **concluído** (23/10); falta só o E2E real, que é do dono |
 | 2 | Incremento 4: documentador (registro de mudança, README, ADR por regra, deriva, voz, citações do documentador, resumo) | `docs\plano-documentador.md` | a fazer (o passo 0 é o primeiro) |
 | 3 | Incremento 6: especificador (critérios, rastreabilidade, `manifesto-testes.json`), arqueólogo, andaime, modo de diretório vazio, premissas e fatos completos, coleta da revisão, gate 13 completo | plano a escrever (`docs\plano-especificador-arqueologo.md`) | a fazer |
 | 4 | Incremento 5, restante: gate 9 (arquitetura) | `docs\plano-gate-9.md` | plano escrito; a fazer |
@@ -31,6 +31,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 
 Mais recente primeiro. Cada linha: data, o que mudou, commits.
 
+- **23/10/2026 (fila 1 concluída):** gate 6 fechado: `docs\e2e-e-dados-de-teste.md`, ADR 0025, gate de mutação limpo em `personal_data.py`, `e2e.py`, `e2e_plan.py`, `network_trap.py` e `security_notes.py` (testes novos mataram os sobreviventes; `personal_data_in` passou a contar lugares por intervalos disjuntos). Não passaram pelo gate de mutação: as mudanças do `measurer.py` (`BaseE2E`) e de `session.py`/`prepare.py` do passo 5. Próximo: fila 2, `docs\plano-documentador.md`, passo 0.
 - **23/10/2026:** o dono apontou desvio da Especificação (infraestrutura de gates construída antes dos papéis que a alimentam). Decididos: este documento passa a governar o trabalho (regras acima); fila fixada; E2E real fora de todos os itens; `docs\plano-documentador.md` escrito. Gate 6, passos 0 a 5 concluídos (`354bf1a`, `f809ab5`, `a2170ad`, `0bd0147`, `76f8c24`, `fd5fe26`, `f325c45`: armadilha de proxy, plano de E2E, `E2ECheck`, `PersonalDataCheck`, integração no medidor e na base).
 - **22/10 e 23/10/2026:** gate 10 concluído (passos 0 a 7; ADR 0024). Plano do gate 11 escrito e adiado; planos dos gates 6 e 9 escritos.
 - **21/10 e 22/10/2026:** pipeline em todas as linguagens, Gradle, monorepo (passos 1 a 6), CLI por papel (Claude Code, Codex, Cursor, Grok; Gemini suspenso), ADR 0022 e 0023.
