@@ -35,6 +35,7 @@ class ComplexityPlanner:
                 scope=(file,),
                 max_files=budget.files_per_task,
                 max_lines=budget.lines_per_task,
+                stages=(Producer.IMPLEMENTER, Producer.DOCUMENTER),
             )
             for _, file, name in worst[: budget.tasks]
         ]
@@ -62,7 +63,7 @@ class FixPlanner:
                 scope=self._scope,
                 max_files=budget.files_per_task,
                 max_lines=budget.lines_per_task,
-                stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER),
+                stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER, Producer.DOCUMENTER),
                 test_root=self._test_root,
             )
         ]

@@ -5,8 +5,8 @@ complexity totals), and judges each attempt and each integration with the checks
 """
 
 import json
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -14,6 +14,13 @@ from pydantic import JsonValue
 
 from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
+from forja.checks.change_record import (
+    RecordFacts,
+    file_changes,
+    record_path,
+    render_record,
+    symbol_changes,
+)
 from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
@@ -34,17 +41,22 @@ from forja.checks.sast import SastCheck
 from forja.checks.scope import TEST_AUTHOR_CLASSES, ScopeCheck
 from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
+from forja.checks.structure import dialect_of
 from forja.checks.tooling import Tools
 from forja.core.adapters import (
     AdapterRegistry,
     CommandPlan,
     FileClass,
+    NotSupported,
     Operation,
     OperationRequest,
 )
+from forja.core.adapters.common import extract_version
 from forja.core.adapters.projects import owner_of
 from forja.core.adapters.scoped import ScopedAdapter
-from forja.core.artifacts.models import Producer
+from forja.core.artifacts.llm_output import Claim
+from forja.core.artifacts.models import Executor, Producer
+from forja.core.artifacts.schemas import ToolVersion
 from forja.core.atomic import atomic_write_bytes
 from forja.core.events import EventLog, LogEventSink, OpenOperation
 from forja.core.gates import (
@@ -57,9 +69,10 @@ from forja.core.gates import (
 )
 from forja.core.idempotency import Decision, Reconciliation
 from forja.core.states import Level
-from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, SinkFactory
+from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, RecordFile, SinkFactory
 
 BASE_FILE = "base.json"
+BASE_METRICS_FILE = "base-metrics.json"
 HEAD = "HEAD"
 UNSTABLE = "unstable"
 PASSING = "passing"
@@ -213,12 +226,15 @@ class PipelineMeasurer:
         problems += [f"tests: {t} fails on the base" for t in sorted(failing)]
         problems += [f"e2e: {t} fails on the base" for t in sorted(e2e.failing)]
         problems += [f"e2e: the base tried to reach {d}" for d in e2e.destinations]
+        metrics = await self._metrics(tools, worktree, active, len(first), len(unstable))
         if not self._base_file.exists():
             stable = sorted(
                 t for t, o in first.items() if o == "passed" and second.get(t) == "passed"
             )
             self._save_base(unstable, stable, e2e)
-        metrics = await self._metrics(tools, worktree, active, len(first), len(unstable))
+            atomic_write_bytes(
+                self._workdir / BASE_METRICS_FILE, json.dumps(metrics, sort_keys=True).encode()
+            )
         return Baseline(not problems, tuple(problems), metrics)
 
     def _overrides(
@@ -302,6 +318,83 @@ class PipelineMeasurer:
     ) -> dict[str, float]:
         counts = {"tests": float(tests), "unstable_tests": float(unstable)}
         return counts | await self._static_metrics(tools, worktree, active)
+
+    def _read_base_metrics(self) -> dict[str, float]:
+        """The numbers the base showed, as the first measurement saw them; none if unknown."""
+        try:
+            data = json.loads((self._workdir / BASE_METRICS_FILE).read_text(encoding="utf-8"))
+            return {str(k): float(v) for k, v in data.items()}
+        except (OSError, ValueError, TypeError, AttributeError):
+            return {}
+
+    async def change_record(
+        self,
+        ctx: AttemptContext,
+        sinks: SinkFactory,
+        claims: Sequence[Claim],
+        gates_passed: Sequence[str],
+        executors: Sequence[Executor],
+    ) -> RecordFile:
+        """The record of the task whose work this worktree holds, read against the commit the task
+        branch started from. Documentation changes are the documenter's own and are left out."""
+        git = self._git.at(ctx.worktree)
+        base = await self._task_base(git, ctx.task.task_id)
+        read = await read_changes(git, base)
+        changes = replace(
+            read,
+            files=tuple(
+                c for c in read.files if self._classify(c.path) is not FileClass.DOCUMENTATION
+            ),
+        )
+        before = await read_before(git, changes, (), base)
+        tracked = await git.lines("ls-files")
+        gone = {c.path for c in changes.files if not c.exists_now}
+        others = {
+            path: text
+            for path in tracked
+            if dialect_of(path) is not None and path not in gone
+            if (text := _text_of(ctx.worktree / path)) is not None
+        }
+        found, unreadable = symbol_changes(changes, before, ctx.worktree, others)
+        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
+        facts = RecordFacts(
+            task_id=ctx.task.task_id,
+            intent=ctx.task.intent,
+            files=file_changes(changes),
+            symbols=found,
+            metrics_before=self._read_base_metrics(),
+            metrics_after=await self._static_metrics(
+                tools, ctx.worktree, self._active(ctx.worktree)
+            ),
+            gates_passed=tuple(gates_passed),
+            toolchains=await self._toolchains(tools, ctx.worktree),
+            executors=tuple(executors),
+            revert_commit=(await git.lines("rev-parse", "HEAD"))[0],
+            unreadable=unreadable,
+        )
+        return RecordFile(record_path(ctx.task.task_id), render_record(facts, claims))
+
+    async def _task_base(self, git: GitAt, task_id: str) -> str:
+        """The commit the task branch started from: the parent of the task's first commit."""
+        found = await git.lines("log", "--reverse", "--format=%H", f"--grep=^Task-Id: {task_id}$")
+        return f"{found[0]}^" if found else HEAD
+
+    async def _toolchains(self, tools: Tools, worktree: Path) -> tuple[ToolVersion, ...]:
+        """The toolchain version of each language the repository has, as its adapter probes it."""
+        found: dict[str, str] = {}
+        for adapter in self._active(worktree):
+            info = adapter.tool_info(Operation.TEST)
+            if isinstance(info, NotSupported) or info.toolchain in found:
+                continue
+            execution = await tools.run("toolchain", info.toolchain_probe.plan)
+            version = (
+                extract_version(info.toolchain_probe, execution.lines)
+                if execution.finished
+                else None
+            )
+            if version:
+                found[info.toolchain] = version
+        return tuple(ToolVersion(name=n, version=v) for n, v in sorted(found.items()))
 
     async def metrics(self, worktree: Path, sinks: SinkFactory) -> dict[str, float]:
         """The numbers that need no test run (lint, complexity), for the change record."""
@@ -567,6 +660,13 @@ class PipelineMeasurer:
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         """A tool run changes nothing the next one depends on, so it is simply run again."""
         return Reconciliation(Decision.REDO)
+
+
+def _text_of(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _capabilities(adapters: Iterable[ScopedAdapter]) -> set[str]:

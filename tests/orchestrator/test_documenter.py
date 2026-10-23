@@ -1,0 +1,116 @@
+"""The documenter is the last stage of a task; the Forja writes the record, not the agent."""
+
+from pathlib import Path
+
+import pytest
+
+from forja.core.artifacts.models import Producer
+from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
+from forja.orchestrator.ports import PlannedTask
+from tests.orchestrator.fakes import (
+    PASSED,
+    REJECTED,
+    ScriptedAgent,
+    ScriptedMeasurer,
+    ScriptedPlanner,
+)
+from tests.orchestrator.harness import MemoryWorld
+
+TASK = PlannedTask(
+    "reduce the complexity of f",
+    ("src/a.py",),
+    8,
+    400,
+    stages=(Producer.IMPLEMENTER, Producer.DOCUMENTER),
+)
+CODE = {"src/a.py": "def f():\n    return 1\n"}
+README = {"README.md": "# a\n\nf returns 1.\n"}
+
+
+@pytest.fixture
+def world(tmp_path: Path) -> MemoryWorld:
+    return MemoryWorld(tmp_path)
+
+
+def test_the_documenter_stage_comes_last_and_the_task_is_integrated_after_it(
+    world: MemoryWorld,
+) -> None:
+    measurer = ScriptedMeasurer()
+
+    outcome, log = world.run(
+        measurer=measurer,
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.state_of(Level.STAGE, "t1-s") is StageState.COMMITTED
+    assert log.state.state_of(Level.STAGE, "t1-d") is StageState.COMMITTED
+    assert log.state.state_of(Level.TASK, "t1") is TaskState.INTEGRATED
+    assert log.state.children_of(Level.ATTEMPT, "t1-d") == ["t1-da1"]
+
+
+def test_the_documenter_commit_is_a_docs_commit_with_the_record_in_it(world: MemoryWorld) -> None:
+    world.run(
+        measurer=ScriptedMeasurer(),
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    memory = world.memory
+    tip = memory.branches[world.workspace.run_branch]
+    commits = [memory.commits[sha] for sha in memory.ancestors(tip)]
+    docs = [c for c in commits if c.subject.startswith("docs: ")]
+    assert [c.subject for c in docs] == ["docs: reduce the complexity of f"]
+    assert docs[0].tree["docs/mudancas/t1.md"] == "record of t1\n"
+    assert docs[0].tree["README.md"] == README["README.md"]
+
+
+def test_a_documenter_that_changes_nothing_still_leaves_the_record_to_commit(
+    world: MemoryWorld,
+) -> None:
+    outcome, log = world.run(
+        measurer=ScriptedMeasurer(),
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.state_of(Level.STAGE, "t1-d") is StageState.COMMITTED
+
+
+def test_the_record_is_asked_for_with_the_gates_the_earlier_stage_passed(
+    world: MemoryWorld,
+) -> None:
+    measurer = ScriptedMeasurer()
+
+    world.run(
+        measurer=measurer,
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    assert measurer.recorded == [("t1", ["complexity"])]
+
+
+def test_a_documenter_rejected_by_a_gate_is_tried_again_without_touching_the_code_stage(
+    world: MemoryWorld,
+) -> None:
+    measurer = ScriptedMeasurer(verdicts=(PASSED, REJECTED, PASSED))
+
+    outcome, log = world.run(
+        measurer=measurer,
+        agent=ScriptedAgent(edits=[CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert log.state.children_of(Level.ATTEMPT, "t1-s") == ["t1-a1"]
+    assert log.state.children_of(Level.ATTEMPT, "t1-d") == ["t1-da1", "t1-da2"]
+    assert log.state.state_of(Level.ATTEMPT, "t1-da1") is AttemptState.REJECTED
+    assert log.state.state_of(Level.ATTEMPT, "t1-da2") is AttemptState.COMMITTED

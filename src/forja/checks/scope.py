@@ -96,14 +96,25 @@ class ScopeCheck:
             for path in (change.old_path, change.path):
                 if path is None:
                     continue
-                finding = self._author(path) if self._writes_tests else self._implementer(path)
+                finding = self._by_role(path)
                 if finding:
                     findings.append(finding)
         return findings
 
-    @property
-    def _writes_tests(self) -> bool:
-        return self.task.role is Producer.TEST_AUTHOR
+    def _by_role(self, path: str) -> Finding | None:
+        match self.task.role:
+            case Producer.TEST_AUTHOR:
+                return self._author(path)
+            case Producer.DOCUMENTER:
+                return self._documenter(path)
+        return self._implementer(path)
+
+    def _documenter(self, path: str) -> Finding | None:
+        kind = self.classify(path)
+        if kind is not FileClass.DOCUMENTATION:
+            message = f"the documenter may change only documentation (this is {kind.value})"
+            return Finding(message=message, target=path)
+        return None
 
     def _implementer(self, path: str) -> Finding | None:
         kind = self.classify(path)
@@ -143,7 +154,9 @@ class ScopeCheck:
         ]
 
     def _too_big(self, data: GateInput) -> list[Finding]:
-        findings = []
+        findings: list[Finding] = []
+        if self.task.role is Producer.DOCUMENTER:  # the limits are for the code of the task
+            return findings
         files = len(self.changes.files)
         max_files = _limit(self.task.max_files, data, "max_files")
         if max_files and files > max_files:

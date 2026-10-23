@@ -139,7 +139,7 @@ def test_the_fix_planner_makes_one_task_with_the_tests_first() -> None:
             ("src",),
             4,
             Budget().lines_per_task,
-            stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER),
+            stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER, Producer.DOCUMENTER),
             test_root="tests",
         )
     ]

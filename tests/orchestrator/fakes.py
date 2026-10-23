@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from forja.core.adapters.executor import ErrorActivity, ErrorKind
-from forja.core.artifacts.llm_output import DeclaredTest
+from forja.core.artifacts.llm_output import Claim, DeclaredTest
+from forja.core.artifacts.models import Executor
 from forja.core.dependencies import is_dependency
 from forja.core.events import OpenOperation
 from forja.core.gates import (
@@ -43,6 +44,7 @@ from forja.orchestrator.ports import (
     Baseline,
     Expectations,
     PlannedTask,
+    RecordFile,
     RejectedWork,
     SinkFactory,
 )
@@ -110,6 +112,17 @@ class ScriptedMeasurer:
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome:
         self.integrations = getattr(self, "integrations", 0) + 1
         return self.integration_verdicts[min(self.integrations, len(self.integration_verdicts)) - 1]
+
+    async def change_record(
+        self,
+        ctx: AttemptContext,
+        sinks: SinkFactory,
+        claims: Sequence[Claim],
+        gates_passed: Sequence[str],
+        executors: Sequence[Executor],
+    ) -> RecordFile:
+        self.recorded = [*getattr(self, "recorded", []), (ctx.task.task_id, list(gates_passed))]
+        return RecordFile(f"docs/mudancas/{ctx.task.task_id}.md", f"record of {ctx.task.task_id}\n")
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         return Reconciliation(Decision.REDO)
@@ -244,6 +257,9 @@ class ScriptedAgent:
 
     def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]:
         return self.tests
+
+    def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
+        return ()
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload

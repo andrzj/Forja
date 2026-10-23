@@ -3,11 +3,11 @@
 from pathlib import Path
 
 from forja.checks.change_record import (
-    IMPACT,
-    WHY,
+    REASONS,
     RecordFacts,
     SymbolChange,
     file_changes,
+    record_path,
     reference_proof,
     render_facts,
     render_record,
@@ -180,21 +180,26 @@ def test_the_rendering_of_the_facts_does_not_depend_on_the_input_order() -> None
 
 def test_why_and_impact_hold_only_claims_with_their_citations() -> None:
     cited = FileCitation(kind="file", path="a.py", line_start=3, line_end=9)
-    why = [Claim(statement="f was too branchy", citations=(cited,))]
     both = (
         EvidenceCitation(kind="evidence", evidence_id="ev1"),
         FactCitation(kind="fact", fact_id="fa1"),
     )
-    impact = [Claim(statement="max_ccn fell", citations=both)]
-    text = render_record(facts(), why, impact)
+    claims = [
+        Claim(statement="f was too branchy", citations=(cited,)),
+        Claim(statement="max_ccn fell", citations=both),
+    ]
+    text = render_record(facts(), claims)
     assert text.startswith(render_facts(facts()))
-    assert f"{WHY}\n\n- f was too branchy (`a.py:3-9`)" in text
-    assert f"{IMPACT}\n\n- max_ccn fell (evidência ev1; fato fa1)" in text
+    assert f"{REASONS}\n\n- f was too branchy (`a.py:3-9`)\n" in text
+    assert "- max_ccn fell (evidência ev1; fato fa1)" in text
 
 
-def test_without_claims_the_sections_say_none() -> None:
-    text = render_record(facts(), [], [])
-    assert f"{WHY}\n\nNenhum.\n\n{IMPACT}\n\nNenhum." in text
+def test_without_claims_the_section_says_none() -> None:
+    assert f"{REASONS}\n\nNenhum." in render_record(facts(), [])
+
+
+def test_the_record_of_a_task_has_a_path_of_its_own() -> None:
+    assert record_path("t7") == "docs/mudancas/t7.md"
 
 
 def test_the_record_is_a_valid_artifact_body() -> None:

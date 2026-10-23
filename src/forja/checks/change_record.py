@@ -1,7 +1,7 @@
 """The change record of a task (increment 4): the facts the Forja measures, and nothing else.
 
 The factual part is generated here and compared again by the gate, so the model cannot change it.
-The two sections the model contributes, why and impact, are built only from claims that carry a
+The section the model contributes, why and impact, is built only from claims that carry a
 citation. A removed symbol comes with the proof that nothing else mentions it, or with the files
 that still do, and a removed public symbol is flagged.
 """
@@ -31,7 +31,8 @@ from forja.core.artifacts.schemas import (
 )
 
 MAX_REFERENCES = 5
-WHY, IMPACT = "## Porquê", "## Impacto"
+REASONS = "## Porquê e impacto"
+CHANGES_DIR = "docs/mudancas"
 NONE = "Nenhum."
 
 
@@ -59,6 +60,11 @@ class RecordFacts:
     revert_commit: str
     assumptions: tuple[Assumption, ...] = ()
     unreadable: tuple[str, ...] = ()  # source files whose symbols could not be listed
+
+
+def record_path(task_id: str) -> str:
+    """Where the record of a task lives in the repository."""
+    return f"{CHANGES_DIR}/{task_id}.md"
 
 
 def file_changes(changes: Changes) -> tuple[RecordedFile, ...]:
@@ -240,10 +246,9 @@ def _premise_line(assumption: Assumption) -> str:
     return f"{assumption.statement} ({why})"
 
 
-def render_record(facts: RecordFacts, why: Sequence[Claim], impact: Sequence[Claim]) -> str:
+def render_record(facts: RecordFacts, claims: Sequence[Claim]) -> str:
     """The whole record: the facts, then why and impact, each sentence with its citation."""
-    sections = [render_facts(facts), WHY, "", *_claims(why), "", IMPACT, "", *_claims(impact), ""]
-    return "\n".join(sections)
+    return "\n".join([render_facts(facts), REASONS, "", *_claims(claims), ""])
 
 
 def _claims(claims: Sequence[Claim]) -> list[str]:

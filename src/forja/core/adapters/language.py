@@ -62,6 +62,20 @@ class FileClass(StrEnum):
     OTHER = "other"  # configuration, lock files, CI: nothing claims them
 
 
+DOCUMENT_SUFFIXES = (".md", ".rst")
+
+
+def is_documentation(path: str) -> bool:
+    """A README, a Markdown or reStructuredText file, or anything under ``docs/``: no language
+    owns these, so the core does."""
+    parts = path.replace("\\", "/").split("/")
+    return (
+        parts[0].lower() == "docs"
+        or parts[-1].lower().startswith("readme")
+        or parts[-1].lower().endswith(DOCUMENT_SUFFIXES)
+    )
+
+
 @dataclass(frozen=True)
 class OperationRequest:
     """What to run. Filters and ``incremental`` need the matching capability, or the answer is

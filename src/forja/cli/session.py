@@ -356,11 +356,16 @@ async def _context(
             sensitive=sensitive,
             redactor=Redactor(policy.redaction, sensitive),
             role=role,
-            permissions=RolePermissions(can_edit_files=True, allowed_commands=commands),
+            permissions=RolePermissions(
+                can_edit_files=True,
+                allowed_commands=() if role is Producer.DOCUMENTER else commands,
+            ),
             model=executor.model,
         )
 
-    agents: dict[Producer, AgentRunner] = {}
+    agents: dict[Producer, AgentRunner] = {
+        Producer.DOCUMENTER: runner(config.implementer, Producer.DOCUMENTER)
+    }
     planner: Planner = ComplexityPlanner(functions)
     test_root = _test_root(policy.test_root, registry, repo)
     if config.fix is not None:

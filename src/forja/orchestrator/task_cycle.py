@@ -18,9 +18,9 @@ from pydantic import JsonValue
 
 from forja.checks.freeze import frozen_digest_of
 from forja.core.adapters.executor import ErrorKind
-from forja.core.artifacts.models import Producer
+from forja.core.artifacts.models import Executor, Producer
 from forja.core.events.state import RunState
-from forja.core.gates import CheckRun, FindingKind, Inconclusive, Rejected, Verdict
+from forja.core.gates import Approved, CheckRun, FindingKind, Inconclusive, Rejected, Verdict
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.config import Objective
@@ -95,17 +95,19 @@ class TaskCycle:
         payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
         scope = payload.get("scope")
         author = role is Producer.TEST_AUTHOR
+        letter = {Producer.TEST_AUTHOR: "t", Producer.DOCUMENTER: "d"}.get(role, "s")
+        prefix = {Producer.TEST_AUTHOR: "ta", Producer.DOCUMENTER: "da"}.get(role, "a")
         test_root = str(payload.get("test_root", ""))
         return TaskInfo(
             task_id,
-            f"{task_id}-t" if author else f"{task_id}-s",
+            f"{task_id}-{letter}",
             str(payload.get("intent", "")),
             tuple(str(p) for p in scope) if isinstance(scope, list) else (),
             _count(payload.get("max_files")),
             _count(payload.get("max_lines")),
             role,
             test_root,
-            f"{task_id}-ta" if author else f"{task_id}-a",
+            f"{task_id}-{prefix}",
             "" if author else self._frozen_digest(task_id),
         )
 
@@ -366,6 +368,8 @@ class TaskCycle:
         except RejectedWork as rejected:
             self._reject(attempt, str(rejected))
             return
+        if ctx.task.role is Producer.DOCUMENTER:
+            await self._write_record(ctx)
         outcome = await run.measurer.judge(ctx, run.sinks, self._expectations(ctx))
         for assumption in outcome.assumptions:
             journal.note(
@@ -374,7 +378,12 @@ class TaskCycle:
             )
         stopper = outcome.stopped_by
         if stopper is None:
-            journal.enter(Level.ATTEMPT, attempt, AttemptState.APPROVED)
+            passed: list[JsonValue] = [
+                r.check_id for r in outcome.runs if isinstance(r.result, Approved)
+            ]
+            journal.enter(
+                Level.ATTEMPT, attempt, AttemptState.APPROVED, payload={"gates_passed": passed}
+            )
         elif outcome.verdict is Verdict.REJECTED:
             untested = untested_targets(stopper)
             sent_back = bool(untested) and ctx.task.role is Producer.IMPLEMENTER
@@ -383,6 +392,41 @@ class TaskCycle:
                 await self._commit_attempt(ctx.task, attempt)
         else:
             self._block(ctx.task, attempt, describe_stop(stopper))
+
+    async def _write_record(self, ctx: AttemptContext) -> None:
+        """The Forja writes the change record itself, from the facts it measured and the claims
+        the documenter made: the agent never writes it, so it can never change a fact."""
+        run = self._ctx
+        record = await run.measurer.change_record(
+            ctx,
+            run.sinks,
+            run.runner(ctx.task.role).declared_claims(ctx),
+            self._gates_passed(ctx.task.task_id),
+            self._executors(),
+        )
+        target = ctx.worktree / record.path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(record.text, encoding="utf-8", newline="\n")
+
+    def _gates_passed(self, task_id: str) -> list[str]:
+        """The gates the task's committed attempts passed, in the order they first passed."""
+        passed: dict[str, None] = {}
+        for stage in self._state.children_of(Level.STAGE, task_id):
+            for attempt in self._state.children_of(Level.ATTEMPT, stage):
+                if self._state.state_of(Level.ATTEMPT, attempt) is not AttemptState.COMMITTED:
+                    continue
+                payload = self._state.transition_payload(
+                    Level.ATTEMPT, attempt, AttemptState.APPROVED
+                )
+                found = payload.get("gates_passed") if payload else None
+                if isinstance(found, list):
+                    passed.update(dict.fromkeys(str(g) for g in found))
+        return list(passed)
+
+    def _executors(self) -> list[Executor]:
+        config = self._ctx.config
+        refs = [config.implementer, *([config.test_author] if config.test_author else [])]
+        return list(dict.fromkeys(Executor(cli=ref.name, version=ref.version) for ref in refs))
 
     def _expectations(self, ctx: AttemptContext) -> Expectations | None:
         fix = self._ctx.config.fix
@@ -416,7 +460,15 @@ class TaskCycle:
             if author
             else (run.config.implementer)
         )
-        kind = "test" if author else "fix" if run.config.objective is Objective.FIX else "refactor"
+        kind = (
+            "docs"
+            if info.role is Producer.DOCUMENTER
+            else "test"
+            if author
+            else "fix"
+            if run.config.objective is Objective.FIX
+            else "refactor"
+        )
         return CommitMessage.of(
             kind,
             info.intent,

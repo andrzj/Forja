@@ -8,6 +8,7 @@ from forja.core.adapters.language import (
     FileClass,
     LanguageAdapter,
     LanguageCapability,
+    is_documentation,
     valid_language,
 )
 from forja.core.adapters.projects import find_projects
@@ -97,9 +98,10 @@ class AdapterRegistry:
         return None
 
     def classify(self, path: str) -> FileClass:
-        """The first adapter that claims the file decides; unclaimed files are ``OTHER``."""
+        """The first adapter that claims the file decides; then documentation (no language owns
+        it); the rest is ``OTHER``."""
         for adapter in self._languages.values():
             claimed = adapter.classify(path)
             if claimed is not None:
                 return claimed
-        return FileClass.OTHER
+        return FileClass.DOCUMENTATION if is_documentation(path) else FileClass.OTHER

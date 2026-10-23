@@ -34,6 +34,7 @@ from forja.core.adapters.executor import (
 from forja.core.artifacts.errors import InvalidLlmOutput
 from forja.core.artifacts.llm_output import (
     ChangeDeclaration,
+    Claim,
     DeclaredTest,
     LlmOutput,
     compare_with_diff,
@@ -132,6 +133,30 @@ every file you created, modified or removed (the list is checked against what re
 had to guess. Then answer with one short sentence.
 """
 
+DOCUMENTER_INSTRUCTIONS = """\
+You are documenting a change that is already made and approved. You do not touch code, tests or
+configuration: you may change only documentation files (the README, files under `docs/`, other
+Markdown or reStructuredText files). Do not write the change record: Forja writes it from your
+claims.
+
+{commands}Read the files you need and change the documents with the edit tools. Change a document
+only when it is wrong or missing something because of this change.
+
+When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. In
+`claims`, say why the change was made and what it affects, each statement with at least one
+citation: a file and lines (`file`), a measurement (`evidence`) or a recorded fact (`fact`). In
+`actions`, list every file you created, modified or removed (checked against what really changed);
+use `"actions": []` if you changed nothing:
+
+{{"claims": [{{"statement": "why or what it affects", "citations": [{{"kind": "file",
+"path": "src/x.py", "line_start": 3, "line_end": 9}}]}}],
+"actions": [{{"summary": "what changed", "reason": "why", "files": [{{"path": "README.md",
+"change": "modified"}}]}}]}}
+
+`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
+had to guess. Then answer with one short sentence.
+"""
+
 _SHORT_NAME = re.compile(r"~\d")
 
 
@@ -200,17 +225,26 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             notes.append(f"`{name}` is a directory: read the files you need from it.")
     result = redactor.redact(items)
     author = task.role is Producer.TEST_AUTHOR
+    documenter = task.role is Producer.DOCUMENTER
     commands = FACADE_COMMANDS if facade else NO_COMMANDS
     tests_in = f"under `{task.test_root}`" if task.test_root else "in the project's test files"
     template = (
-        AUTHOR_INSTRUCTIONS if author else FIX_INSTRUCTIONS if task.frozen_digest else INSTRUCTIONS
+        DOCUMENTER_INSTRUCTIONS
+        if documenter
+        else AUTHOR_INSTRUCTIONS
+        if author
+        else FIX_INSTRUCTIONS
+        if task.frozen_digest
+        else INSTRUCTIONS
     )
     parts = [
         f"# Task\n\n{task.intent}\n",
         template.format(agent_dir=AGENT_DIR, output=OUTPUT, commands=commands, tests_in=tests_in),
         "## What you may change\n",
         (
-            f"Only {tests_in}. The production files below are for reading."
+            "Only documentation files. The files below are the ones the change touched."
+            if documenter
+            else f"Only {tests_in}. The production files below are for reading."
             if author
             else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
         ),
@@ -431,6 +465,10 @@ class ExecutorAgentRunner:
     def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]:
         """The tests the agent says it wrote; the work copy outlives the attempt's judging."""
         return _declared(workcopy_of(ctx)).tests
+
+    def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
+        """The statements, each with its citations, the agent says are true of the change."""
+        return _declared(workcopy_of(ctx)).claims
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload

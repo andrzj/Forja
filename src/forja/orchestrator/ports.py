@@ -13,8 +13,8 @@ from types import TracebackType
 from typing import Protocol
 
 from forja.core.adapters.executor import ErrorActivity
-from forja.core.artifacts.llm_output import DeclaredTest
-from forja.core.artifacts.models import Producer
+from forja.core.artifacts.llm_output import Claim, DeclaredTest
+from forja.core.artifacts.models import Executor, Producer
 from forja.core.events import LogEventSink, OpenOperation
 from forja.core.gates import PipelineOutcome
 from forja.core.gitguard.snapshot import Difference
@@ -96,6 +96,14 @@ class AgentResult:
     error: ErrorActivity | None = None
 
 
+@dataclass(frozen=True)
+class RecordFile:
+    """The change record of a task: where it goes in the repository and what it says."""
+
+    path: str
+    text: str
+
+
 class RejectedWork(Exception):
     """The work cannot even be judged (a symlink, names that differ only by case, a path too long
     for Windows). ``apply_diff`` raises it, so a resumed run finds the same problem again."""
@@ -118,6 +126,15 @@ class Measurer(Protocol):
 
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome: ...
 
+    async def change_record(
+        self,
+        ctx: AttemptContext,
+        sinks: SinkFactory,
+        claims: Sequence[Claim],
+        gates_passed: Sequence[str],
+        executors: Sequence[Executor],
+    ) -> RecordFile: ...
+
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 
 
@@ -131,6 +148,8 @@ class AgentRunner(Protocol):
     def apply_diff(self, ctx: AttemptContext) -> Step: ...
 
     def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]: ...
+
+    def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]: ...
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 
