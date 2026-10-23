@@ -155,6 +155,36 @@ class TestOsvScanner:
             f.message for f in result.findings
         ]
 
+    def test_the_scan_counts_a_package_once_for_each_lockfile_that_has_it(
+        self, log: EventLog, tmp_path: Path
+    ) -> None:
+        """Seen with osv-scanner 2.7.0: two lockfiles with the same package give a count of 2 in
+        ``license_summary``, as many as the report lists, so the accounting stays even."""
+        for name in ("one/requirements.txt", "two/requirements.txt"):
+            work(tmp_path, name, "certifi==2026.1.4\n")
+        changes = Changes(
+            tuple(
+                Change(ChangeKind.ADDED, n)
+                for n in ("one/requirements.txt", "two/requirements.txt")
+            ),
+            0,
+            (),
+        )
+        check = DependencyAuditCheck(
+            tools(log, tmp_path),
+            tmp_path / "work",
+            changes,
+            {},
+            tmp_path / "reports",
+            frozenset({"mpl-2.0"}),
+            (OSV or "osv-scanner",),
+        )
+
+        result = evaluate(check, tmp_path)
+
+        assert isinstance(result, Rejected)
+        assert any(f.message.startswith("forbidden license MPL-2.0") for f in result.findings)
+
     def test_a_file_with_no_package_is_nothing_to_audit(
         self, log: EventLog, tmp_path: Path
     ) -> None:
