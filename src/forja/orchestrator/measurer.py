@@ -300,7 +300,18 @@ class PipelineMeasurer:
         tests: int,
         unstable: int,
     ) -> dict[str, float]:
-        metrics: dict[str, float] = {"tests": float(tests), "unstable_tests": float(unstable)}
+        counts = {"tests": float(tests), "unstable_tests": float(unstable)}
+        return counts | await self._static_metrics(tools, worktree, active)
+
+    async def metrics(self, worktree: Path, sinks: SinkFactory) -> dict[str, float]:
+        """The numbers that need no test run (lint violations, complexity), for the change record."""
+        tools = self._tools(sinks, Level.EXECUTION, self._run_id)
+        return await self._static_metrics(tools, worktree, self._active(worktree))
+
+    async def _static_metrics(
+        self, tools: Tools, worktree: Path, active: tuple[ScopedAdapter, ...]
+    ) -> dict[str, float]:
+        metrics: dict[str, float] = {}
         found = 0
         try:
             for adapter in active:

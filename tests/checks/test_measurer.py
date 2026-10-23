@@ -775,3 +775,11 @@ def test_the_repositorys_own_test_command_is_the_one_the_base_is_measured_with(
 
     assert measured.ok
     assert measured.metrics["tests"] == 1.0
+
+
+def test_the_numbers_that_need_no_test_run_can_be_taken_on_their_own(scene: Scene) -> None:
+    scene.write("src/sample/mod.py", MOD + "\n\nimport os  # LINT:F401\n\n" + deep("branchy", 6))
+
+    taken = asyncio.run(scene.measurer.metrics(scene.repo.path, scene.recorder.sinks))
+
+    assert taken == {"lint_violations": 1.0, "max_ccn": 7.0, "functions": 3.0}

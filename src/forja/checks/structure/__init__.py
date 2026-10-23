@@ -51,7 +51,16 @@ DIALECTS = (
 )
 SUFFIXES = tuple(suffix for dialect in DIALECTS for suffix in dialect.suffixes)
 
-__all__ = ["DIALECTS", "SUFFIXES", "Dialect", "Module", "SyntaxProblem", "analyze", "dialect_of"]
+__all__ = [
+    "DIALECTS",
+    "SUFFIXES",
+    "Dialect",
+    "Module",
+    "SyntaxProblem",
+    "analyze",
+    "dialect_of",
+    "tree_of",
+]
 
 
 def dialect_of(path: str) -> Dialect | None:
@@ -65,8 +74,8 @@ def _parser(name: str) -> Parser:
     return Parser(Language(dialect.grammar()))
 
 
-def analyze(path: str, source: str) -> Module | None:
-    """The shape of ``source``, or ``None`` for a language Forja does not read.
+def tree_of(path: str, source: str) -> tuple[Dialect, Node] | None:
+    """The dialect and syntax tree of ``source``, or ``None`` for a language Forja does not read.
 
     Raises ``SyntaxProblem`` when the text does not parse.
     """
@@ -76,4 +85,13 @@ def analyze(path: str, source: str) -> Module | None:
     root = _parser(dialect.name).parse(source.encode("utf-8")).root_node
     if root.has_error:
         raise SyntaxProblem(f"{path} does not parse as {dialect.name}")
-    return dialect.read(root)
+    return dialect, root
+
+
+def analyze(path: str, source: str) -> Module | None:
+    """The shape of ``source``, or ``None`` for a language Forja does not read.
+
+    Raises ``SyntaxProblem`` when the text does not parse.
+    """
+    tree = tree_of(path, source)
+    return None if tree is None else tree[0].read(tree[1])
