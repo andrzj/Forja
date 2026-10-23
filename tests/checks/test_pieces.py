@@ -115,6 +115,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "tests": (5, Mode.BLOCKING, "block"),
         "red_green": (5, Mode.BLOCKING, "block"),
         "e2e": (6, Mode.OBSERVATION, "block"),
+        "test_data": (6, Mode.OBSERVATION, "premise"),
         "mutation": (7, Mode.OBSERVATION, "premise"),
         "complexity": (8, Mode.BLOCKING, "premise"),
         "crap": (8, Mode.OBSERVATION, "premise"),
