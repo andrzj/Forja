@@ -123,3 +123,11 @@ file = "src/forja/core/dependencies.py"
 function = "link_dependencies"
 change = "True -> False"
 reason = "target_is_directory only matters on Windows; on Linux, where the gate runs, the flag is ignored. The Windows test of the link reads through it."
+
+# Approved by the person who owns the repository on 2026-10-23.
+
+[[suppress]]
+file = "src/forja/checks/oldtree.py"
+function = "old_tree"
+change = "True -> False"
+reason = "The copy leaves out every link through its ignore function, so no link reaches the copy and the symlinks flag has nothing to decide. It stays True as a second defence: a link that got through would be kept as a link, not followed."
