@@ -29,6 +29,7 @@ from forja.core.adapters.executor import locate_in_path
 from forja.core.adapters.ownership import says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.go import parsers
+from forja.languages.go.manifest import declared_dependencies
 
 MANIFEST = "go.mod"
 CONFIG_FILES = (
@@ -80,6 +81,7 @@ def find_golangci_lint(environ: Mapping[str, str] | None = None) -> tuple[str, .
 class GoAdapter:
     contract_version = CONTRACT_VERSION
     language = "go"
+    dependency_ecosystem = "Go"  # the registry of its manifests
     grammar = "go"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
 
@@ -106,6 +108,11 @@ class GoAdapter:
         """The ids (``package/TestX/sub``) do not carry the file: ``func TestX`` has to be in it."""
         name = next((s for s in test_id.split("/") if s.startswith("Test")), "")
         return says(text, f"func {name}") if name else False
+
+    def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+        """The packages a manifest declares; ``None`` when ``path`` is not one of this
+        language's manifests, ``ValueError`` when it is one that cannot be read."""
+        return declared_dependencies(path, text)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

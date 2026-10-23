@@ -9,10 +9,11 @@ cannot be reached, or does not say, is inconclusive: never a pass. This check on
 reports; the decision record that a new dependency calls for is the documenter's.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from forja.checks.base import Undecided, decided, rejected
 from forja.checks.changes import Changes
@@ -40,8 +41,24 @@ class Declared:
     names: frozenset[str]
 
 
-# (path, text) -> what the manifest declares, or None when the path is not a manifest
+# (path, text) -> what the manifest declares, None when the path is not a manifest, and
+# ValueError when it is one that cannot be read
 Manifests = Callable[[str, str], Declared | None]
+
+
+def manifests_of(adapters: Iterable[Any]) -> Manifests:
+    """The manifests the language adapters read. Reading them is a capability an adapter may
+    have (``dependency_ecosystem`` and ``declared_dependencies``), outside its ``Protocol``."""
+
+    def declared(path: str, text: str) -> Declared | None:
+        for adapter in adapters:
+            read = getattr(adapter, "declared_dependencies", None)
+            names = read(path, text) if callable(read) else None
+            if names is not None:
+                return Declared(adapter.language, adapter.dependency_ecosystem, names)
+        return None
+
+    return declared
 
 
 def threshold(data: GateInput, language: str, name: str, default: int) -> int:
@@ -67,8 +84,8 @@ class NewDependencyCheck:
         return await decided(self._judge(data))
 
     async def _judge(self, data: GateInput) -> GateResult:
-        added = self._added()
-        if not added:
+        added, unreadable = self._added()
+        if not added and not unreadable:
             return Approved()
         total = sum(len(names) for names in added.values())
         if total > MAX_LOOKUPS:
@@ -79,7 +96,7 @@ class NewDependencyCheck:
                 )
             )
         findings: list[Finding] = []
-        unknown: list[str] = []
+        unknown: list[str] = [f"{path} (unreadable)" for path in unreadable]
         for (path, declared), names in added.items():
             for name in sorted(names):
                 try:
@@ -110,9 +127,11 @@ class NewDependencyCheck:
             )
         return Approved()
 
-    def _added(self) -> dict[tuple[str, Declared], frozenset[str]]:
-        """Per changed manifest, the names the attempt put in it."""
+    def _added(self) -> tuple[dict[tuple[str, Declared], frozenset[str]], list[str]]:
+        """Per changed manifest, the names the attempt put in it, and the manifests that could not
+        be read: what is in them is unknown, so they are never taken for empty."""
         found: dict[tuple[str, Declared], frozenset[str]] = {}
+        unreadable: list[str] = []
         for change in self.changes.files:
             if not change.exists_now:
                 continue
@@ -120,15 +139,19 @@ class NewDependencyCheck:
                 text = (self.worktree / change.path).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            declared = self.manifests(change.path, text)
+            try:
+                declared = self.manifests(change.path, text)
+                old = self.before.get(change.before or "")
+                was = self.manifests(change.before or "", old) if old is not None else None
+            except ValueError:
+                unreadable.append(change.path)
+                continue
             if declared is None:
                 continue
-            old = self.before.get(change.before or "")
-            was = self.manifests(change.before or "", old) if old is not None else None
             new = declared.names - (was.names if was is not None else frozenset())
             if new:
                 found[(change.path, declared)] = new
-        return found
+        return found, unreadable
 
     def _doubts(
         self, data: GateInput, path: str, declared: Declared, name: str, standing: Standing

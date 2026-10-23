@@ -29,6 +29,7 @@ from forja.core.adapters import (
 )
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.typescript import parsers
+from forja.languages.typescript.manifest import declared_dependencies
 
 MANIFEST = "package.json"
 TSCONFIG = "tsconfig.json"
@@ -88,6 +89,7 @@ def _dependencies(root: Path) -> frozenset[str]:
 class TypeScriptAdapter:
     contract_version = CONTRACT_VERSION
     language = "typescript"
+    dependency_ecosystem = "npm"  # the registry of its manifests
     grammar = "typescript"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
 
@@ -108,6 +110,11 @@ class TypeScriptAdapter:
         head = test_id.split(" > ")[0].replace("\\", "/")
         where = path.replace("\\", "/")
         return bool(head) and (where == head or where.endswith("/" + head))
+
+    def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+        """The packages a manifest declares; ``None`` when ``path`` is not one of this
+        language's manifests, ``ValueError`` when it is one that cannot be read."""
+        return declared_dependencies(path, text)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

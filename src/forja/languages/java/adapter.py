@@ -33,6 +33,7 @@ from forja.core.adapters.executor import locate_in_path
 from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.java import gradle, parsers
+from forja.languages.java.manifest import declared_dependencies
 
 MANIFEST = "pom.xml"
 CONFIG_FILES = (
@@ -95,6 +96,7 @@ def _pom(root: Path) -> str | None:
 class JavaAdapter:
     contract_version = CONTRACT_VERSION
     language = "java"
+    dependency_ecosystem = "Maven"  # the registry of its manifests
     grammar = "java"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
 
@@ -126,6 +128,11 @@ class JavaAdapter:
         """The ids (``pkg.Class.method``) do not carry the file: its class and method are in it."""
         names = dotted_names(test_id)
         return names is not None and all(says(text, name) for name in names)
+
+    def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+        """The packages a manifest declares; ``None`` when ``path`` is not one of this
+        language's manifests, ``ValueError`` when it is one that cannot be read."""
+        return declared_dependencies(path, text)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

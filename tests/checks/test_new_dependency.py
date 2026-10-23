@@ -185,3 +185,34 @@ def test_too_many_new_names_are_not_looked_up_one_by_one(tmp_path: Path) -> None
     assert (
         result.detail == f"new_dependency: {MAX_LOOKUPS + 1} new dependencies (limit {MAX_LOOKUPS})"
     )
+
+
+def test_a_manifest_that_cannot_be_read_is_never_taken_for_an_empty_one(tmp_path: Path) -> None:
+    def broken(path: str, text: str) -> Declared | None:
+        raise ValueError("not valid JSON")
+
+    (tmp_path / MANIFEST).write_text("{", encoding="utf-8")
+    change = Change(ChangeKind.MODIFIED, MANIFEST)
+    check = NewDependencyCheck(tmp_path, Changes((change,), 0, ()), {MANIFEST: "{}"}, broken)
+
+    result = asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a")))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "new_dependency: could not verify package.json (unreadable)"
+
+
+def test_a_registry_that_cannot_date_the_package_is_inconclusive(tmp_path: Path) -> None:
+    def go_manifest(path: str, text: str) -> Declared | None:
+        return Declared("go", "Go", frozenset(text.split()))
+
+    async def listed(url: str) -> Response | None:
+        return Response(200, b"v1.0.0\n")
+
+    (tmp_path / "go.mod").write_text("example.com/m", encoding="utf-8")
+    change = Change(ChangeKind.ADDED, "go.mod")
+    check = NewDependencyCheck(tmp_path, Changes((change,), 0, ()), {}, go_manifest, listed)
+
+    result = asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a")))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "new_dependency: could not verify example.com/m"

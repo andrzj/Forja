@@ -31,6 +31,7 @@ from forja.core.adapters import (
 from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.csharp import parsers
+from forja.languages.csharp.manifest import declared_dependencies
 
 SOLUTIONS = ("*.sln", "*.slnx")
 PROJECTS = ("*.csproj",)
@@ -91,6 +92,7 @@ def _entry(root: Path) -> str | None:
 class CSharpAdapter:
     contract_version = CONTRACT_VERSION
     language = "csharp"
+    dependency_ecosystem = "NuGet"  # the registry of its manifests
     grammar = "csharp"
     capabilities = frozenset({LanguageCapability.COVERAGE, LanguageCapability.STRUCTURAL_METERS})
 
@@ -113,6 +115,11 @@ class CSharpAdapter:
         written in it."""
         names = dotted_names(test_id)
         return names is not None and all(says(text, name) for name in names)
+
+    def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+        """The packages a manifest declares; ``None`` when ``path`` is not one of this
+        language's manifests, ``ValueError`` when it is one that cannot be read."""
+        return declared_dependencies(path, text)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

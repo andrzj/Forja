@@ -95,27 +95,44 @@ def test_pypi_normalizes_the_name_and_dates_the_earliest_upload_with_no_usage() 
     assert run("PyPI", "Zope.Interface", routes) == Standing(at("2019-01-02T03:04:05"), None)
 
 
-def test_go_uses_the_oldest_time_among_the_versions_with_the_name_case_encoded() -> None:
+def test_go_exists_when_the_proxy_lists_it_and_gives_neither_age_nor_usage() -> None:
     base = "https://proxy.golang.org/github.com/!burnt!sushi/toml"
-    routes = {
-        f"{base}/@v/list": "v1.1.0\nv1.0.0\n",
-        f"{base}/@v/v1.1.0.info": {"Version": "v1.1.0", "Time": "2020-01-01T00:00:00Z"},
-        f"{base}/@v/v1.0.0.info": {"Version": "v1.0.0", "Time": "2018-06-07T08:09:10Z"},
-    }
 
-    standing = run("Go", "github.com/BurntSushi/toml", routes)
+    standing = run("Go", "github.com/BurntSushi/toml", {f"{base}/@v/list": "v1.1.0\nv1.0.0\n"})
 
-    assert standing == Standing(at("2018-06-07T08:09:10"), None)
+    assert standing == Standing(None, None)  # the proxy's Time is the author's commit time
+    assert run("Go", "github.com/BurntSushi/toml", {f"{base}/@v/list": ""}) == Standing(None, None)
 
 
-def test_go_without_tagged_versions_is_dated_by_the_latest() -> None:
-    base = "https://proxy.golang.org/example.com/m"
-    routes = {
-        f"{base}/@v/list": "",
-        f"{base}/@latest": {"Version": "v0.0.0-2020", "Time": "2021-02-03T04:05:06Z"},
-    }
+@pytest.mark.parametrize(
+    ("ecosystem", "name"),
+    [
+        ("npm", "../etc"),
+        ("npm", "a/b"),
+        ("npm", "@s/a/b"),
+        ("npm", "a?x=1"),
+        ("PyPI", "a/../b"),
+        ("PyPI", "-a"),
+        ("PyPI", "a b"),
+        ("Go", "example.com/../x"),
+        ("Go", "example.com//x"),
+        ("Go", "/x"),
+        ("Go", "x?y"),
+        ("Maven", 'a" OR g:"b:c'),
+        ("Maven", "a:b:c"),
+        ("Maven", "ab"),
+        ("NuGet", "a/b"),
+        ("NuGet", "a%2fb"),
+    ],
+)
+def test_a_name_the_registry_could_not_hold_is_missing_and_never_reaches_a_url(
+    ecosystem: str, name: str
+) -> None:
+    async def never(url: str) -> Response | None:
+        raise AssertionError(url)
 
-    assert run("Go", "example.com/m", routes).first_published == at("2021-02-03T04:05:06")
+    with pytest.raises(Missing):
+        asyncio.run(look_up(ecosystem, name, never))
 
 
 MAVEN = (

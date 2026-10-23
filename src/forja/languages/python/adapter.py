@@ -28,6 +28,7 @@ from forja.core.adapters import (
 )
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.python import parsers
+from forja.languages.python.manifest import declared_dependencies
 
 MANIFEST = "pyproject.toml"
 CONFIG_FILES = (MANIFEST, "ruff.toml", ".ruff.toml", "setup.cfg", "pytest.ini", "tox.ini")
@@ -59,6 +60,7 @@ def default_cache_dir() -> Path:
 class PythonAdapter:
     contract_version = CONTRACT_VERSION
     language = "python"
+    dependency_ecosystem = "PyPI"  # the registry of its manifests
     grammar = "python"
     test_root = "tests"  # the directory the test author writes in unless the policy says otherwise
     capabilities = frozenset(
@@ -87,6 +89,11 @@ class PythonAdapter:
             return None
         probe = VersionProbe(self._plan(root, (*self._python, "--version")), _PYTHON_VERSION)
         return Detection("python", (".",), (MANIFEST,), probe)
+
+    def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+        """The packages a manifest declares; ``None`` when ``path`` is not one of this
+        language's manifests, ``ValueError`` when it is one that cannot be read."""
+        return declared_dependencies(path, text)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

@@ -9,8 +9,10 @@ Each lookup follows the registry's own documentation:
 - PyPI: ``pypi.org/pypi/<project>/json``, files under ``releases`` carry ``upload_time_iso_8601``
   (docs.pypi.org/api/json); the project name is normalized as PEP 503 says. PyPI gives no download
   count (the field is always -1), so usage is not measured.
-- Go: the module proxy protocol (go.dev/ref/mod#goproxy-protocol): ``$module/@v/list``,
-  ``@v/$version.info`` and ``@latest``, with ``Time``; the module path is case-encoded. No usage.
+- Go: the module proxy protocol (go.dev/ref/mod#goproxy-protocol): ``$module/@v/list`` says
+  whether the module exists (404 or 410 when it does not); the module path is case-encoded. The
+  proxy's ``Time`` is the commit time, which the author of a module chooses, so it does not date
+  the module: the age is not known and no usage is counted.
 - Maven Central: the search API (central.sonatype.org/search/rest-api-guide), ``core=gav`` lists
   the versions of ``g:`` and ``a:``. The guide does not name the response fields;
   ``response.numFound`` and ``response.docs[].timestamp`` (milliseconds) are used and must be
@@ -37,9 +39,17 @@ from typing import Any
 TIMEOUT = 20.0
 NPM, PYPI, GO, MAVEN, NUGET = "npm", "PyPI", "Go", "Maven", "NuGet"
 NOT_FOUND = frozenset({404, 410})
+# What each registry allows in a name. The names come from a file the agent wrote, so nothing
+# else (a slash, a ``..``, a query, a quote) may reach a URL or a search.
+NAME_PATTERNS = {
+    NPM: re.compile(r"(@[A-Za-z0-9~][A-Za-z0-9._~-]*/)?[A-Za-z0-9~][A-Za-z0-9._~-]*"),
+    PYPI: re.compile(r"[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?"),
+    GO: re.compile(r"[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*"),
+    MAVEN: re.compile(r"[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+"),
+    NUGET: re.compile(r"[A-Za-z0-9_.-]+"),
+}
 NUGET_INDEX = "https://api.nuget.org/v3/index.json"
 UNLISTED = 1900  # nuget.org sets ``published`` to this year for an unlisted package
-GO_VERSIONS_LOOKED_AT = 10
 
 
 @dataclass(frozen=True)
@@ -113,7 +123,13 @@ def _when(value: object) -> datetime:
 
 
 async def look_up(ecosystem: str, name: str, get: HttpGet) -> Standing:
-    """The standing of ``name`` in the official registry of ``ecosystem``."""
+    """The standing of ``name`` in the official registry of ``ecosystem``; a name the registry
+    could not hold is ``Missing``."""
+    pattern = NAME_PATTERNS.get(ecosystem)
+    if pattern is not None and (
+        not pattern.fullmatch(name) or any(part in ("", ".", "..") for part in name.split("/"))
+    ):
+        raise Missing(name)
     try:
         match ecosystem:
             case "npm":
@@ -136,7 +152,8 @@ async def look_up(ecosystem: str, name: str, get: HttpGet) -> Standing:
 async def _npm(name: str, get: HttpGet) -> Standing:
     document = await _json(get, f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@')}")
     created = _when(document["time"]["created"])
-    counts = await _json(get, f"https://api.npmjs.org/downloads/point/last-week/{name}")
+    scoped = urllib.parse.quote(name, safe="@/")  # the download counts take the scope's slash
+    counts = await _json(get, f"https://api.npmjs.org/downloads/point/last-week/{scoped}")
     return Standing(created, int(counts["downloads"]))
 
 
@@ -145,7 +162,7 @@ def _pep_503(name: str) -> str:
 
 
 async def _pypi(name: str, get: HttpGet) -> Standing:
-    document = await _json(get, f"https://pypi.org/pypi/{_pep_503(name)}/json")
+    document = await _json(get, f"https://pypi.org/pypi/{urllib.parse.quote(_pep_503(name))}/json")
     uploads = [
         _when(file["upload_time_iso_8601"])
         for files in document["releases"].values()
@@ -159,19 +176,8 @@ def _case_encoded(module: str) -> str:
 
 
 async def _go(module: str, get: HttpGet) -> Standing:
-    base = f"https://proxy.golang.org/{_case_encoded(module)}"
-    listing = (await _get(get, f"{base}/@v/list")).body.decode("utf-8", errors="replace")
-    versions = [line.strip() for line in listing.splitlines() if line.strip()]
-    moments = []
-    for version in versions[:GO_VERSIONS_LOOKED_AT]:
-        info = await _json(get, f"{base}/@v/{_case_encoded(version)}.info")
-        if "Time" in info:
-            moments.append(_when(info["Time"]))
-    if not moments:  # no tagged version: the latest (pseudo-)version still dates the module
-        info = await _json(get, f"{base}/@latest")
-        if "Time" in info:
-            moments.append(_when(info["Time"]))
-    return Standing(min(moments, default=None), None)
+    await _get(get, f"https://proxy.golang.org/{_case_encoded(module)}/@v/list")
+    return Standing(None, None)  # the proxy's Time is the author's commit time: no honest age
 
 
 async def _maven(coordinates: str, get: HttpGet) -> Standing:
