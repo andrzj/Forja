@@ -70,6 +70,7 @@ def is_artifact(path: str) -> bool:
 class Audit:
     vulnerabilities: dict[tuple[Package, str], str]  # (package, advisory) -> the file it is in
     licenses: dict[Package, frozenset[str]]
+    summary: frozenset[str] = frozenset()  # the license ids of the whole scan, lowercase
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,15 @@ class DependencyAuditCheck:
         ]
         if findings:
             return rejected(findings)
+        hidden = self._unlisted(now)
+        if hidden:
+            raise Undecided(
+                Inconclusive(
+                    reason=InconclusiveReason.TOOL_FAILED,
+                    detail=f"dependency_audit: {', '.join(sorted(hidden))} is in the scan "
+                    "but in no package the report lists",
+                )
+            )
         unknown = sorted(
             f"{package[1]} {package[2]}"
             for package, found in now.licenses.items()
@@ -135,6 +145,14 @@ class DependencyAuditCheck:
                     message = f"forbidden license {license_id} in {name} {version}"
                     findings.append(Finding(message=message, target=name))
         return findings
+
+    def _unlisted(self, now: Audit) -> frozenset[str]:
+        """Forbidden licenses the scan counts (``license_summary``) that no listed package has:
+        a package osv-scanner did not list, which must not pass as one without the license."""
+        listed = {
+            word for found in now.licenses.values() for item in found for word in _identifiers(item)
+        }
+        return (now.summary & self.forbidden) - listed
 
     def _allowed(self) -> str:
         """OSV-Scanner only has a list of allowed licenses, and it lists the licenses of a package
@@ -210,7 +228,13 @@ def _read(report: Path, root: Path) -> Audit | None:
     vulnerabilities: dict[tuple[Package, str], str] = {}
     licenses: dict[Package, frozenset[str]] = {}
     try:
-        results = json.loads(report.read_text(encoding="utf-8")).get("results", [])
+        document = json.loads(report.read_text(encoding="utf-8"))
+        results = document.get("results", [])
+        summary = frozenset(
+            word
+            for item in document.get("license_summary") or []
+            for word in _identifiers(item["name"])
+        )
         for result in results:
             source = _relative(str(result["source"]["path"]), root)
             for entry in result["packages"]:
@@ -222,4 +246,4 @@ def _read(report: Path, root: Path) -> Audit | None:
                 licenses[package] = licenses.get(package, frozenset()) | found
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
-    return Audit(vulnerabilities, licenses)
+    return Audit(vulnerabilities, licenses, summary)
