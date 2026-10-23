@@ -193,3 +193,41 @@ def test_go_keeps_reading_after_a_block_and_ignores_an_empty_one() -> None:
     text = "require ()\nrequire (\n)\nrequire example.com/b v1.0.0\n"
 
     assert go("go.mod", text) == frozenset({"example.com/b"})
+
+
+def test_python_names_do_not_keep_the_space_before_them() -> None:
+    text = '[project]\ndependencies = ["  spaced>=1", "\ttabbed"]\n'
+
+    assert python("pyproject.toml", text) == frozenset({"spaced", "tabbed"})
+
+
+def test_python_requirement_comments_are_cut_before_looking_for_a_url() -> None:
+    text = "numpy  # docs: https://numpy.org\nscipy @ https://x.dev/scipy.whl\n"
+
+    assert python("requirements.txt", text) == frozenset({"numpy"})
+
+
+def test_python_options_comments_blanks_and_paths_name_nothing() -> None:
+    text = "-r base.txt\n--index-url x\n# c\n\n./local\n/abs\n"
+
+    assert python("requirements.txt", text) == frozenset()
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [("npm:@s/real", "@s/real"), ("npm:a@1", "a"), ("npm:@s/real@2", "@s/real"), ("npm:b", "b")],
+)
+def test_typescript_aliases_name_the_package_they_point_to(spec: str, expected: str) -> None:
+    text = '{"dependencies": {"alias": "' + spec + '"}}'
+
+    assert typescript("package.json", text) == frozenset({expected})
+
+
+@pytest.mark.parametrize(
+    "text", ["<!DOCTYPE x><project/>", "<project><!ENTITY a 'b'></project>", "<!doctype x><a/>"]
+)
+def test_the_refusal_of_entities_says_so_and_a_broken_document_says_that(text: str) -> None:
+    with pytest.raises(ValueError, match="DOCTYPE or entity"):
+        java("pom.xml", text)
+    with pytest.raises(ValueError, match="not valid XML"):
+        java("pom.xml", "<project")

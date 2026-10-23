@@ -256,3 +256,18 @@ def test_the_notices_say_what_the_security_checks_could_not_do() -> None:
     assert security_notices(rules=False, licenses=True) == (NO_SAST, UNMEASURED)
     assert security_notices(rules=True, licenses=True) == (UNMEASURED,)
     assert "PyPI, Go e Maven" in UNMEASURED and "[licenses] forbidden" in NO_LICENSES
+
+
+class NoGit:
+    async def lines(self, *args: str) -> list[str]:
+        raise AssertionError(args)
+
+
+def test_the_copy_of_named_rules_makes_the_directories_it_needs(tmp_path: Path) -> None:
+    mine = tmp_path / "r.yml"
+    mine.write_text("mine", encoding="utf-8")
+    target = tmp_path / "runs" / "one" / "semgrep-rules"
+
+    found = run(export_rules(NoGit(), "HEAD", str(mine), target))
+
+    assert found == target / "r.yml" and found.read_text(encoding="utf-8") == "mine"

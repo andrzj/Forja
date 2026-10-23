@@ -2,11 +2,15 @@
 
 import asyncio
 import json
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from forja.checks import registries
 from forja.checks.registries import Missing, Response, Standing, Unreachable, look_up
 
 
@@ -219,3 +223,77 @@ def test_maven_reads_every_page_of_versions_to_find_the_oldest() -> None:
     standing = run("Maven", "g:a", routes)
 
     assert standing == Standing(datetime.fromtimestamp(1_000_000_000, UTC), None)
+
+
+def test_maven_asks_for_one_page_when_that_is_all_there_is() -> None:
+    base = "https://search.maven.org/solrsearch/select?q=g%3A%22g%22%20AND%20a%3A%22a%22&core=gav"
+    docs = [{"timestamp": 1_000_000_000_000}] * 200
+    only = {"response": {"numFound": 200, "docs": docs}}
+
+    standing = run("Maven", "g:a", {f"{base}&rows=200&start=0&wt=json": only})
+
+    assert standing.first_published == datetime.fromtimestamp(1_000_000_000, UTC)
+
+
+class Answer:
+    """What ``urlopen`` hands back for a good request."""
+
+    status = 200
+
+    def __enter__(self) -> "Answer":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return b"body"
+
+
+def test_fetch_only_speaks_https_and_turns_failures_into_answers_or_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("not even asked")
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    local = tmp_path / "f.txt"
+    local.write_text("secret", encoding="utf-8")
+    assert registries._fetch(local.as_uri()) is None
+    assert registries._fetch("http://registry.example/x") is None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Answer())
+    assert registries._fetch("https://registry.example/x") == Response(200, b"body")
+
+    def not_found(*args: object, **kwargs: object) -> None:
+        raise urllib.error.HTTPError("https://registry.example/x", 404, "no", {}, None)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(urllib.request, "urlopen", not_found)
+    assert registries._fetch("https://registry.example/x") == Response(404, b"")
+
+    def down(*args: object, **kwargs: object) -> None:
+        raise urllib.error.URLError("no route")
+
+    monkeypatch.setattr(urllib.request, "urlopen", down)
+    assert registries._fetch("https://registry.example/x") is None
+
+
+def test_a_registry_that_does_not_answer_is_asked_again_a_few_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    answers: list[Response | None] = [None, None, Response(200, b"late")]
+
+    def fetch(url: str) -> Response | None:
+        calls.append(url)
+        return answers.pop(0)
+
+    monkeypatch.setattr(registries, "_fetch", fetch)
+    monkeypatch.setattr(registries, "RETRY_PAUSE", 0.0)
+
+    assert asyncio.run(registries.urllib_get("https://x")) == Response(200, b"late")
+    assert len(calls) == 3
+    answers[:] = [None, None, None, Response(200, b"too late")]
+    calls.clear()
+    assert asyncio.run(registries.urllib_get("https://x")) is None
+    assert len(calls) == registries.ATTEMPTS

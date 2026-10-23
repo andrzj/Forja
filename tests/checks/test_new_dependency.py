@@ -236,3 +236,22 @@ def test_a_manifest_that_is_not_text_is_unreadable_but_another_binary_file_is_no
     assert (
         asyncio.run(only_image.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a"))) == Approved()
     )
+
+
+def test_exactly_the_limit_of_new_names_is_still_looked_up(tmp_path: Path) -> None:
+    names = "\n".join(f"p{n}" for n in range(MAX_LOOKUPS))
+
+    assert judge(tmp_path, names, "") == Approved()
+
+
+def test_the_clock_is_the_real_one_unless_a_test_gives_another(tmp_path: Path) -> None:
+    (tmp_path / MANIFEST).write_text("left-pad", encoding="utf-8")
+    check = NewDependencyCheck(
+        tmp_path,
+        Changes((Change(ChangeKind.ADDED, MANIFEST),), 0, ()),
+        {},
+        manifests,
+        registry(),
+    )
+
+    assert asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t", "s", "a"))) == Approved()

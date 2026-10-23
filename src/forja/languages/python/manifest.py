@@ -49,10 +49,8 @@ def _requirements(text: str) -> frozenset[str]:
     found = set()
     for line in text.splitlines():
         requirement = line.split(" #", 1)[0].strip()
-        if not requirement or requirement.startswith(("-", "#")) or "://" in requirement:
-            continue  # an option, a comment or a package that is not in the registry
-        if requirement.startswith((".", "/")):
-            continue
-        if name := _name(requirement):
+        if "://" in requirement:
+            continue  # a package that is not in the registry
+        if name := _name(requirement):  # an option, a comment, a blank or a path has none
             found.add(name)
     return frozenset(found)
