@@ -6,7 +6,7 @@ same; what is in memory is the history around them.
 
 import os
 import shutil
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -154,29 +154,47 @@ class MemoryWorkspace:
         )
 
     def commit_stage(
-        self, task_id: str, stage_id: str, attempt_id: str, message: CommitMessage
+        self,
+        task_id: str,
+        stage_id: str,
+        attempt_id: str,
+        message: CommitMessage,
+        apart: Sequence[str] = (),
+        apart_message: CommitMessage | None = None,
     ) -> Step:
         branch = task_branch_name(self.run_id, task_id)
+
+        def commit(
+            tree: Mapping[str, str], note: CommitMessage, *trailers: tuple[str, str]
+        ) -> None:
+            tip = self.repo.tip(branch)
+            made = self.repo.commit(
+                tree,
+                note.subject,
+                body=note.body,
+                trailers=(
+                    ("Task-Id", task_id),
+                    *trailers,
+                    ("Attempt-Id", attempt_id),
+                    ("Agent", note.agent),
+                    ("Policy-Version", note.policy_version),
+                ),
+                parents=(tip.sha,),
+            )
+            self.repo.advance(branch, made)
 
         async def run() -> None:
             tip = self.repo.tip(branch)
             tree = read_tree(self.layout.attempt_worktree(attempt_id))
             if tree == tip.tree:
                 raise NothingToCommit(f"attempt {attempt_id} changed nothing")
-            made = self.repo.commit(
-                tree,
-                message.subject,
-                body=message.body,
-                trailers=(
-                    ("Task-Id", task_id),
-                    ("Stage-Id", stage_id),
-                    ("Attempt-Id", attempt_id),
-                    ("Agent", message.agent),
-                    ("Policy-Version", message.policy_version),
-                ),
-                parents=(tip.sha,),
-            )
-            self.repo.advance(branch, made)
+            changed = {p for p in tree.keys() | tip.tree.keys() if tree.get(p) != tip.tree.get(p)}
+            first = changed & set(apart)
+            if apart_message is not None and first and first != changed:
+                middle = {p: t for p, t in tip.tree.items() if p not in first}
+                middle |= {p: tree[p] for p in first if p in tree}
+                commit(middle, apart_message)
+            commit(tree, message, ("Stage-Id", stage_id))
 
         return Step.plain({"task_branch": branch, "stage_id": stage_id}, run)
 

@@ -17,6 +17,7 @@ from pathlib import Path
 from pydantic import JsonValue
 
 from forja.checks.freeze import frozen_digest_of
+from forja.checks.readme import README_NAMES
 from forja.core.adapters.executor import ErrorKind
 from forja.core.artifacts.models import Executor, Producer
 from forja.core.events.state import RunState
@@ -293,6 +294,8 @@ class TaskCycle:
             attempt,
             run.workspace.create_attempt_worktree(task, attempt),
         )
+        if ctx.task.role is Producer.DOCUMENTER:
+            ctx = replace(ctx, readme=await run.measurer.readme_report(ctx))
         await journal.operate(
             "prepare_workcopy",
             Level.ATTEMPT,
@@ -455,7 +458,7 @@ class TaskCycle:
         )
         self._exhaust(info, "inconclusive_gate")
 
-    def _commit_message(self, info: TaskInfo, attempt: str) -> CommitMessage:
+    def _commit_message(self, info: TaskInfo, attempt: str, kind: str = "") -> CommitMessage:
         run = self._ctx
         validating = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.VALIDATING)
         assert validating is not None  # _work records the agent's reason on the way in
@@ -465,7 +468,7 @@ class TaskCycle:
             if author
             else (run.config.implementer)
         )
-        kind = (
+        kind = kind or (
             "docs"
             if info.role is Producer.DOCUMENTER
             else "test"
@@ -484,13 +487,22 @@ class TaskCycle:
 
     async def _commit_attempt(self, info: TaskInfo, attempt: str) -> None:
         """Also what keeps the work of an attempt sent back to the test author, so it sees it."""
+        apart: list[str] = []
+        if info.role is Producer.DOCUMENTER:  # the README gets a commit of its own
+            worktree = self._ctx.workspace.attempt_worktree(attempt)
+            apart = [name for name in README_NAMES if (worktree / name).is_file()]
         await self._journal.operate(
             "commit_stage",
             Level.ATTEMPT,
             attempt,
             attempt,
             self._ctx.workspace.commit_stage(
-                info.task_id, info.stage_id, attempt, self._commit_message(info, attempt)
+                info.task_id,
+                info.stage_id,
+                attempt,
+                self._commit_message(info, attempt),
+                apart,
+                self._commit_message(info, attempt, "docs(readme)") if apart else None,
             ),
         )
 

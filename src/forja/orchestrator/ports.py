@@ -76,6 +76,7 @@ class AttemptContext:
     worktree: Path
     previous_rejection: str | None
     message: str = ""  # the reason the agent gave, which becomes the body of the commit
+    readme: str = ""  # what is wrong with the README as the documenter's stage begins
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,8 @@ class Measurer(Protocol):
     ) -> PipelineOutcome: ...
 
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome: ...
+
+    async def readme_report(self, ctx: AttemptContext) -> str: ...
 
     async def change_record(
         self,
@@ -199,7 +202,13 @@ class Workspace(Protocol):
     def create_attempt_worktree(self, task_id: str, attempt_id: str) -> Step: ...
 
     def commit_stage(
-        self, task_id: str, stage_id: str, attempt_id: str, message: CommitMessage
+        self,
+        task_id: str,
+        stage_id: str,
+        attempt_id: str,
+        message: CommitMessage,
+        apart: Sequence[str] = (),
+        apart_message: CommitMessage | None = None,
     ) -> Step: ...
 
     def integrate_task(self, task_id: str, subject: str) -> Step: ...

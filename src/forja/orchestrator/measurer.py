@@ -40,6 +40,8 @@ from forja.checks.mutation import MutationCheck
 from forja.checks.new_dependency import NewDependencyCheck, is_manifest, manifests_of
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.personal_data import PersonalDataCheck
+from forja.checks.readme import Signature, evaluate, signature
+from forja.checks.readme_gate import ReadmeCheck, read_readme, readme_path
 from forja.checks.red_green import RedGreenCheck
 from forja.checks.registries import HttpGet, urllib_get
 from forja.checks.sast import SastCheck
@@ -371,6 +373,27 @@ class PipelineMeasurer:
         )
         return RecordFile(record_path(ctx.task.task_id), render_record(facts, claims))
 
+    async def readme_report(self, ctx: AttemptContext) -> str:
+        """What is wrong with the README of the worktree, one line each; empty when nothing is."""
+        _, text = read_readme(ctx.worktree)
+        build, test = self._readme_commands(ctx.worktree)
+
+        def exists(relative: str) -> bool:
+            return (ctx.worktree / relative).exists()
+
+        return "\n".join(f"- {p.message}" for p in evaluate(text, exists, build, test))
+
+    def _readme_commands(self, worktree: Path) -> tuple[frozenset[Signature], frozenset[Signature]]:
+        """The commands the adapters run to build and to test, as the README would name them."""
+        found: dict[Operation, set[Signature]] = {Operation.BUILD: set(), Operation.TEST: set()}
+        for adapter in self._active(worktree):
+            for operation, signatures in found.items():
+                plan = adapter.plan(operation, OperationRequest(root=worktree))
+                known = signature(plan.argv) if isinstance(plan, CommandPlan) else None
+                if known is not None:
+                    signatures.add(known)
+        return frozenset(found[Operation.BUILD]), frozenset(found[Operation.TEST])
+
     async def _task_changes(
         self, ctx: AttemptContext
     ) -> tuple[tuple[RecordedFile, ...], tuple[SymbolChange, ...], tuple[str, ...]]:
@@ -603,6 +626,11 @@ class PipelineMeasurer:
             claims = expectations.claims if expectations is not None else ()
             evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
             checks.append(CitationCheck(worktree, claims, evidence))
+            name = readme_path(worktree)
+            tracked = await git.lines("ls-files", "--", name) if name else []
+            old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None
+            build, test = self._readme_commands(worktree)
+            checks.append(ReadmeCheck(worktree, old, build, test))
             checks.append(
                 ChangeRecordCheck(
                     worktree, ctx.task.task_id, render_changed(files, found, unreadable)

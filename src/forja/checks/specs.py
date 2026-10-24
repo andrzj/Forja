@@ -53,6 +53,7 @@ def default_registry() -> CheckRegistry:
         CheckSpec("comments", 12, Mode.OBSERVATION, PREMISE),
         CheckSpec("citations", 13, Mode.OBSERVATION, BLOCK),
         CheckSpec("change_record", 14, Mode.OBSERVATION, BLOCK),
+        CheckSpec("readme", 14, Mode.OBSERVATION, PREMISE),
     ):
         registry.register(spec)
     return registry

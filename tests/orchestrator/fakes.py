@@ -113,6 +113,9 @@ class ScriptedMeasurer:
         self.integrations = getattr(self, "integrations", 0) + 1
         return self.integration_verdicts[min(self.integrations, len(self.integration_verdicts)) - 1]
 
+    async def readme_report(self, ctx: AttemptContext) -> str:
+        return ""
+
     async def change_record(
         self,
         ctx: AttemptContext,

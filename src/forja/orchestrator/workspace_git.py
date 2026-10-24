@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import stat
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -279,27 +279,46 @@ class GitWorkspace:
         )
 
     def commit_stage(
-        self, task_id: str, stage_id: str, attempt_id: str, message: CommitMessage
+        self,
+        task_id: str,
+        stage_id: str,
+        attempt_id: str,
+        message: CommitMessage,
+        apart: Sequence[str] = (),
+        apart_message: CommitMessage | None = None,
     ) -> Step:
+        """Commit the stage's work. The files in ``apart`` go first in a commit of their own, with
+        ``apart_message`` and no ``Stage-Id``, when the stage changed other files too: only the
+        last commit says the stage is done, so a run cut between the two repeats only the last."""
         branch = task_branch_name(self.run_id, task_id)
+
+        def arguments(note: CommitMessage, *trailers: tuple[str, str]) -> list[str]:
+            args = ["commit", "-m", note.subject]
+            if note.body:
+                args += ["-m", note.body]
+            for key, value in (
+                ("Task-Id", task_id),
+                *trailers,
+                ("Attempt-Id", attempt_id),
+                ("Agent", note.agent),
+                ("Policy-Version", note.policy_version),
+            ):
+                args += ["--trailer", f"{key}: {value}"]
+            return args
 
         async def run() -> None:
             git = self._git.at(self.layout.attempt_worktree(attempt_id))
             await stage_all(git)
-            if (await git.run("diff", "--cached", "--quiet")).exit_code == 0:
+            changed = await git.lines("diff", "--cached", "--name-only")
+            if not changed:
                 raise NothingToCommit(f"attempt {attempt_id} changed nothing")
-            args = ["commit", "-m", message.subject]
-            if message.body:
-                args += ["-m", message.body]
-            for key, value in (
-                ("Task-Id", task_id),
-                ("Stage-Id", stage_id),
-                ("Attempt-Id", attempt_id),
-                ("Agent", message.agent),
-                ("Policy-Version", message.policy_version),
-            ):
-                args += ["--trailer", f"{key}: {value}"]
-            await git.lines(*args)
+            first = [path for path in changed if path in set(apart)]
+            if apart_message is not None and first and len(first) < len(changed):
+                await git.run("reset", "-q")
+                await git.run("add", "--", *first)
+                await git.lines(*arguments(apart_message))
+                await stage_all(git)
+            await git.lines(*arguments(message, ("Stage-Id", stage_id)))
 
         return Step.plain({"task_branch": branch, "stage_id": stage_id}, run)
 

@@ -258,6 +258,12 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
     parts += notes
     for dropped in result.dropped:
         parts.append(f"`{dropped.name}` was withheld ({dropped.reason.value}).")
+    if documenter and ctx.readme:
+        parts.append(
+            f"## README sections to fix\n\n{ctx.readme}\n\n"
+            "Change only these sections of the README (or add the one that is missing); every "
+            "other section stays exactly as it is.\n"
+        )
     if ctx.previous_rejection:
         parts.append(f"## The previous attempt was rejected\n\n{ctx.previous_rejection}\n")
     return "\n".join(parts) + "\n"
