@@ -47,6 +47,7 @@ from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.structure import dialect_of
 from forja.checks.tooling import Tools
+from forja.checks.voice import VoiceCheck
 from forja.core.adapters import (
     AdapterRegistry,
     CommandPlan,
@@ -589,6 +590,7 @@ class PipelineMeasurer:
                 passing=e2e_passing,
             ),
             PersonalDataCheck(worktree, changes, test_texts, self.is_test),
+            VoiceCheck(worktree, changes, self._classify),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         if ctx.task.role is Producer.DOCUMENTER:

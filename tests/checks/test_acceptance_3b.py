@@ -32,6 +32,7 @@ def blocking(scene: Scene, *checks: str) -> Scene:
             "new_dependency",
             "e2e",
             "test_data",
+            "voice",
         )
     }
     scene.measurer = scene.make_measurer(settings=standard | {c: BLOCKING for c in checks})

@@ -46,6 +46,7 @@ def extra_stage(scene: Scene) -> list[str]:
             "new_dependency": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
+            "voice": OBSERVATION,
         }
     )
     asyncio.run(scene.measurer.judge(context, scene.recorder.sinks))

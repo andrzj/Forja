@@ -49,6 +49,7 @@ def default_registry() -> CheckRegistry:
             PREMISE,
             thresholds=frozenset({"min_age_days", "min_downloads"}),
         ),
+        CheckSpec("voice", 12, Mode.OBSERVATION, PREMISE, limits=frozenset({"max_dashes"})),
         CheckSpec("citations", 13, Mode.OBSERVATION, BLOCK),
         CheckSpec("change_record", 14, Mode.OBSERVATION, BLOCK),
     ):

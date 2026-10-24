@@ -16,6 +16,7 @@ EVERY_CHECK = (
     "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
     "pass_through", "module_depth", "sast", "dependency_audit", "new_dependency", "e2e",
     "test_data",
+    "voice",
 )  # fmt: skip
 FAKE_E2E = Path(__file__).with_name("fake_e2e.py")
 
