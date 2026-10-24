@@ -31,3 +31,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0023](0023-a-forja-e-agnostica-de-cli-uma-por-papel-e-a-diversidade-de-autor-e-so-uma-sugestao.md) | A Forja é agnóstica de CLI, com uma CLI por papel; a diversidade de autor é só uma sugestão | Aceito |
 | [0024](0024-o-usuario-fornece-as-regras-do-semgrep-e-sem-elas-o-sast-nao-executa.md) | O usuário fornece as regras do Semgrep; sem elas o SAST não executa | Aceito |
 | [0025](0025-a-rede-do-e2e-e-desligada-por-armadilha-de-proxy-sem-sandbox.md) | A rede do E2E é desligada por armadilha de proxy, sem sandbox | Aceito |
+| [0026](0026-o-registro-de-mudanca-e-escrito-pela-forja-e-a-documentacao-tem-commits-proprios.md) | O registro de mudança é escrito pela Forja e a documentação tem commits próprios | Aceito |
