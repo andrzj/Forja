@@ -183,6 +183,7 @@ class Scene:
             "citations": OBSERVATION,
             "change_record": OBSERVATION,
             "readme": OBSERVATION,
+            "doc_drift": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,

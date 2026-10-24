@@ -54,6 +54,7 @@ def default_registry() -> CheckRegistry:
         CheckSpec("citations", 13, Mode.OBSERVATION, BLOCK),
         CheckSpec("change_record", 14, Mode.OBSERVATION, BLOCK),
         CheckSpec("readme", 14, Mode.OBSERVATION, PREMISE),
+        CheckSpec("doc_drift", 14, Mode.OBSERVATION, PREMISE),
     ):
         registry.register(spec)
     return registry

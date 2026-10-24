@@ -15,6 +15,7 @@ from pydantic import JsonValue
 from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
 from forja.checks.change_record import (
+    CHANGES_DIR,
     RecordFacts,
     SymbolChange,
     file_changes,
@@ -31,6 +32,7 @@ from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_function
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
+from forja.checks.doc_drift_gate import Base, DocDriftCheck, read_repository
 from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
@@ -631,6 +633,14 @@ class PipelineMeasurer:
             old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None
             build, test = self._readme_commands(worktree)
             checks.append(ReadmeCheck(worktree, old, build, test))
+            documents, facts = await read_repository(
+                git,
+                worktree,
+                lambda path: self._classify(path) is FileClass.DOCUMENTATION,
+                CHANGES_DIR,
+            )
+            since = Base(git, await self._task_base(git, ctx.task.task_id))
+            checks.append(DocDriftCheck(documents, facts, since))
             checks.append(
                 ChangeRecordCheck(
                     worktree, ctx.task.task_id, render_changed(files, found, unreadable)
