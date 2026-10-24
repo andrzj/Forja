@@ -13,6 +13,7 @@ from forja.checks.new_dependency import (
     MAX_LOOKUPS,
     Declared,
     NewDependencyCheck,
+    manifests_of,
     threshold,
 )
 from forja.checks.registries import Response
@@ -276,3 +277,17 @@ def test_a_file_that_cannot_be_read_and_whose_name_does_not_parse_empty_is_a_man
 
     assert isinstance(result, Inconclusive)
     assert result.detail == "new_dependency: could not verify package.json (unreadable)"
+
+
+def test_the_manifests_can_be_asked_about_many_paths_from_a_one_shot_iterator() -> None:
+    class Python:
+        language, dependency_ecosystem = "python", "PyPI"
+
+        def declared_dependencies(self, path: str, text: str) -> frozenset[str] | None:
+            return frozenset({"x"}) if path == "pyproject.toml" else None
+
+    manifests = manifests_of(iter([Python()]))
+
+    assert manifests("a.py", "") is None
+    assert manifests("pyproject.toml", "") is not None
+    assert manifests("pyproject.toml", "") is not None

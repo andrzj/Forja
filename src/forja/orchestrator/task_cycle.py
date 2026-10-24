@@ -295,7 +295,11 @@ class TaskCycle:
             run.workspace.create_attempt_worktree(task, attempt),
         )
         if ctx.task.role is Producer.DOCUMENTER:
-            ctx = replace(ctx, readme=await run.measurer.readme_report(ctx))
+            ctx = replace(
+                ctx,
+                readme=await run.measurer.readme_report(ctx),
+                adr=await run.measurer.adr_report(ctx),
+            )
         await journal.operate(
             "prepare_workcopy",
             Level.ATTEMPT,

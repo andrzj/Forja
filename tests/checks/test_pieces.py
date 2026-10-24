@@ -130,6 +130,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "change_record": (14, Mode.OBSERVATION, "block"),
         "readme": (14, Mode.OBSERVATION, "premise"),
         "doc_drift": (14, Mode.OBSERVATION, "premise"),
+        "adr": (14, Mode.OBSERVATION, "premise"),
     }
     assert specs["scope"].limits == {"max_files", "max_lines"}
     assert specs["mutation"].thresholds == {"min_score"} and specs["mutation"].limits == {"workers"}

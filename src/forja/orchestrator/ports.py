@@ -77,6 +77,7 @@ class AttemptContext:
     previous_rejection: str | None
     message: str = ""  # the reason the agent gave, which becomes the body of the commit
     readme: str = ""  # what is wrong with the README as the documenter's stage begins
+    adr: str = ""  # the decision record the task owes, if a rule says it owes one
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,8 @@ class Measurer(Protocol):
     async def integration(self, worktree: Path, sinks: SinkFactory) -> PipelineOutcome: ...
 
     async def readme_report(self, ctx: AttemptContext) -> str: ...
+
+    async def adr_report(self, ctx: AttemptContext) -> str: ...
 
     async def change_record(
         self,

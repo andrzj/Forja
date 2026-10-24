@@ -50,8 +50,10 @@ def manifests_of(adapters: Iterable[Any]) -> Manifests:
     """The manifests the language adapters read. Reading them is a capability an adapter may
     have (``dependency_ecosystem`` and ``declared_dependencies``), outside its ``Protocol``."""
 
+    known = tuple(adapters)  # an iterator would be spent by the first path asked about
+
     def declared(path: str, text: str) -> Declared | None:
-        for adapter in adapters:
+        for adapter in known:
             read = getattr(adapter, "declared_dependencies", None)
             names = read(path, text) if callable(read) else None
             if names is not None:
@@ -74,6 +76,37 @@ def threshold(data: GateInput, language: str, name: str, default: int) -> int:
     per_language = thresholds.get(language) if isinstance(thresholds, dict) else None
     value = per_language.get(name) if isinstance(per_language, dict) else None
     return int(value) if isinstance(value, int | float) and value >= 0 else default
+
+
+def added_dependencies(
+    worktree: Path, changes: Changes, before: dict[str, str], manifests: Manifests
+) -> tuple[dict[tuple[str, Declared], frozenset[str]], list[str]]:
+    """Per changed manifest, the names the attempt put in it, and the manifests that could not
+    be read: what is in them is unknown, so they are never taken for empty."""
+    found: dict[tuple[str, Declared], frozenset[str]] = {}
+    unreadable: list[str] = []
+    for change in changes.files:
+        if not change.exists_now:
+            continue
+        try:
+            text = (worktree / change.path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            if is_manifest(manifests, change.path):  # one that cannot be read is not an empty one
+                unreadable.append(change.path)
+            continue
+        try:
+            declared = manifests(change.path, text)
+            old = before.get(change.before or "")
+            was = manifests(change.before or "", old) if old is not None else None
+        except ValueError:
+            unreadable.append(change.path)
+            continue
+        if declared is None:
+            continue
+        new = declared.names - (was.names if was is not None else frozenset())
+        if new:
+            found[(change.path, declared)] = new
+    return found, unreadable
 
 
 @dataclass(frozen=True)
@@ -136,34 +169,7 @@ class NewDependencyCheck:
         return Approved()
 
     def _added(self) -> tuple[dict[tuple[str, Declared], frozenset[str]], list[str]]:
-        """Per changed manifest, the names the attempt put in it, and the manifests that could not
-        be read: what is in them is unknown, so they are never taken for empty."""
-        found: dict[tuple[str, Declared], frozenset[str]] = {}
-        unreadable: list[str] = []
-        for change in self.changes.files:
-            if not change.exists_now:
-                continue
-            try:
-                text = (self.worktree / change.path).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                if is_manifest(
-                    self.manifests, change.path
-                ):  # one that cannot be read is not an empty one
-                    unreadable.append(change.path)
-                continue
-            try:
-                declared = self.manifests(change.path, text)
-                old = self.before.get(change.before or "")
-                was = self.manifests(change.before or "", old) if old is not None else None
-            except ValueError:
-                unreadable.append(change.path)
-                continue
-            if declared is None:
-                continue
-            new = declared.names - (was.names if was is not None else frozenset())
-            if new:
-                found[(change.path, declared)] = new
-        return found, unreadable
+        return added_dependencies(self.worktree, self.changes, self.before, self.manifests)
 
     def _doubts(
         self, data: GateInput, path: str, declared: Declared, name: str, standing: Standing

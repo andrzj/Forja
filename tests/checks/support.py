@@ -184,6 +184,7 @@ class Scene:
             "change_record": OBSERVATION,
             "readme": OBSERVATION,
             "doc_drift": OBSERVATION,
+            "adr": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,

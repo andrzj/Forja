@@ -116,6 +116,9 @@ class ScriptedMeasurer:
     async def readme_report(self, ctx: AttemptContext) -> str:
         return ""
 
+    async def adr_report(self, ctx: AttemptContext) -> str:
+        return ""
+
     async def change_record(
         self,
         ctx: AttemptContext,

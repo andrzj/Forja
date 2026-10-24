@@ -67,6 +67,7 @@ from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork
 
 PACKAGE = "package.md"
 README_REPORT = "README report"
+ADR_REPORT = "ADR report"
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
@@ -141,7 +142,9 @@ Markdown or reStructuredText files). Do not write the change record: Forja write
 claims.
 
 {commands}Read the files you need and change the documents with the edit tools. Change a document
-only when it is wrong or missing something because of this change.
+only when it is wrong or missing something because of this change. If the task below says a
+decision record is owed, write it: the alternatives you weigh and the consequences, each backed
+by the claims you declare.
 
 When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. In
 `claims`, say why the change was made and what it affects, each statement with at least one
@@ -227,6 +230,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
     documenter = task.role is Producer.DOCUMENTER
     if documenter and ctx.readme:  # text from the repository's README: redacted like a file
         items.append(PackageItem(ItemKind.TEXT, README_REPORT, ctx.readme, True))
+    if documenter and ctx.adr:  # names come from the repository's manifests: redacted too
+        items.append(PackageItem(ItemKind.TEXT, ADR_REPORT, ctx.adr, True))
     result = redactor.redact(items)
     report = next((i.content for i in result.items if i.name == README_REPORT), "")
     author = task.role is Producer.TEST_AUTHOR
@@ -254,7 +259,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]
-    shown = [i for i in result.items if i.name != README_REPORT]
+    adr = next((i.content for i in result.items if i.name == ADR_REPORT), "")
+    shown = [i for i in result.items if i.name not in (README_REPORT, ADR_REPORT)]
     if shown or notes:
         parts.append("## Files in scope\n")
     for item in shown:
@@ -269,6 +275,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             "Change only these sections of the README (or add the one that is missing); every "
             "other section stays exactly as it is.\n"
         )
+    if adr:
+        parts.append(f"## Decision record owed\n\n{adr}\n")
     if ctx.previous_rejection:
         parts.append(f"## The previous attempt was rejected\n\n{ctx.previous_rejection}\n")
     return "\n".join(parts) + "\n"

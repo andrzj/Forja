@@ -12,6 +12,7 @@ from typing import Protocol
 
 from pydantic import JsonValue
 
+from forja.checks.adr_trigger import ADR_DIR, AdrCheck, Trigger, new_modules, report
 from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
 from forja.checks.change_record import (
@@ -25,7 +26,7 @@ from forja.checks.change_record import (
     symbol_changes,
 )
 from forja.checks.change_record_gate import ChangeRecordCheck
-from forja.checks.changes import Changes, read_before, read_changes
+from forja.checks.changes import ChangeKind, Changes, read_before, read_changes
 from forja.checks.citations import CitationCheck
 from forja.checks.comments import CommentsCheck
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
@@ -39,7 +40,12 @@ from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
-from forja.checks.new_dependency import NewDependencyCheck, is_manifest, manifests_of
+from forja.checks.new_dependency import (
+    NewDependencyCheck,
+    added_dependencies,
+    is_manifest,
+    manifests_of,
+)
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.personal_data import PersonalDataCheck
 from forja.checks.readme import Signature, evaluate, signature
@@ -385,6 +391,38 @@ class PipelineMeasurer:
 
         return "\n".join(f"- {p.message}" for p in evaluate(text, exists, build, test))
 
+    async def adr_report(self, ctx: AttemptContext) -> str:
+        """The decision record the task owes, said to the documenter; empty when it owes none."""
+        triggers = await self._adr_triggers(ctx)
+        paths = await self._git.at(ctx.worktree).lines("ls-tree", "-r", "--name-only", HEAD)
+        return report(triggers, paths)
+
+    async def _adr_triggers(self, ctx: AttemptContext) -> list[Trigger]:
+        """The rules that call for a record: a dependency or a module the task brought in."""
+        git = self._git.at(ctx.worktree)
+        base = await self._task_base(git, ctx.task.task_id)
+        changes = await read_changes(git, base)
+        manifests = manifests_of(self._adapters.languages())
+        before = await read_before(git, changes, lambda path: is_manifest(manifests, path), base)
+        added, _ = added_dependencies(ctx.worktree, changes, before, manifests)
+        found = [
+            Trigger("dependency", name, path)
+            for (path, _), names in sorted(added.items(), key=lambda item: item[0][0])
+            for name in sorted(names)
+        ]
+        production = {p for p in changes.current() if self._classify(p) is FileClass.PRODUCTION}
+        old = [
+            p
+            for p in await git.lines("ls-tree", "-r", "--name-only", base)
+            if self._classify(p) is FileClass.PRODUCTION
+        ]
+        brought = [
+            c.path
+            for c in changes.files
+            if c.kind in (ChangeKind.ADDED, ChangeKind.RENAMED) and c.exists_now
+        ]
+        return found + new_modules(brought, old, production)
+
     def _readme_commands(self, worktree: Path) -> tuple[frozenset[Signature], frozenset[Signature]]:
         """The commands the adapters run to build and to test, as the README would name them."""
         found: dict[Operation, set[Signature]] = {Operation.BUILD: set(), Operation.TEST: set()}
@@ -633,6 +671,10 @@ class PipelineMeasurer:
             old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None
             build, test = self._readme_commands(worktree)
             checks.append(ReadmeCheck(worktree, old, build, test))
+            records = frozenset(
+                await git.lines("ls-tree", "-r", "--name-only", HEAD, "--", ADR_DIR)
+            )
+            checks.append(AdrCheck(worktree, tuple(await self._adr_triggers(ctx)), records))
             documents, facts = await read_repository(
                 git,
                 worktree,
