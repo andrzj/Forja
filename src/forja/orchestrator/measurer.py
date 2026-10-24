@@ -49,6 +49,7 @@ from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.structure import dialect_of
 from forja.checks.tooling import Tools
 from forja.checks.voice import VoiceCheck
+from forja.checks.voice_markers import MARKERS, Marker
 from forja.core.adapters import (
     AdapterRegistry,
     CommandPlan,
@@ -130,6 +131,7 @@ class PipelineMeasurer:
         registry_get: HttpGet = urllib_get,
         timeouts: Mapping[str, float] | None = None,
         e2e_commands: Mapping[str, tuple[str, ...]] | None = None,
+        markers: Sequence[Marker] = MARKERS,
     ) -> None:
         self._adapters = adapters
         self._git = git
@@ -147,6 +149,7 @@ class PipelineMeasurer:
         self._registry_get = registry_get
         self._timeouts = timeouts or {}
         self._e2e = e2e_commands or {}
+        self._markers = markers
 
     # -- helpers -------------------------------------------------------------------------------
 
@@ -591,7 +594,7 @@ class PipelineMeasurer:
                 passing=e2e_passing,
             ),
             PersonalDataCheck(worktree, changes, test_texts, self.is_test),
-            VoiceCheck(worktree, changes, self._classify),
+            VoiceCheck(worktree, changes, self._classify, self._markers, ctx.message),
             CommentsCheck(worktree, changes, everything, self._classify),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]

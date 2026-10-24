@@ -247,7 +247,17 @@ def policy_changes(policy: EffectivePolicy) -> tuple[str, ...]:
         for name, argv in sorted(commands.items()):
             notes.append(f"{language}: roda no lugar do padrão ({name}): {' '.join(argv)}")
     notes += _redaction_changes(policy)
+    notes += _voice_changes(policy)
     return tuple(notes)
+
+
+def _voice_changes(policy: EffectivePolicy) -> list[str]:
+    notes = []
+    if policy.voice_off:
+        notes.append(f"voz: marcadores desligados pelo repositório: {', '.join(policy.voice_off)}")
+    if policy.voice_extra:
+        notes.append(f"voz: padrões proibidos pelo repositório: {', '.join(policy.voice_extra)}")
+    return notes
 
 
 def _redaction_changes(policy: EffectivePolicy) -> list[str]:

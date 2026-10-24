@@ -357,6 +357,8 @@ class TaskCycle:
     async def _judge(self, ctx: AttemptContext) -> None:
         run, journal = self._ctx, self._journal
         attempt = ctx.attempt_id
+        validating = self._state.transition_payload(Level.ATTEMPT, attempt, AttemptState.VALIDATING)
+        ctx = replace(ctx, message=str(validating.get("reason", "")) if validating else "")
         try:
             await journal.operate(
                 "apply_diff",

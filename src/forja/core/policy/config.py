@@ -108,6 +108,8 @@ class EffectivePolicy:
     redaction: RedactionSettings = field(default_factory=RedactionSettings)
     test_root: str | None = None  # where the test author may write; None: the adapter's own
     forbidden_licenses: tuple[str, ...] = ()  # SPDX ids the repository forbids; no default list
+    voice_extra: tuple[str, ...] = ()  # regular expressions the repository adds to the voice list
+    voice_off: tuple[str, ...] = ()  # ids of the Forja's voice markers the repository turns off
 
     def settings(self) -> dict[str, CheckSettings]:
         return {check_id: check.settings for check_id, check in self.checks.items()}
@@ -121,6 +123,11 @@ class EffectivePolicy:
             data["tests"] = {"root": self.test_root}
         if self.forbidden_licenses:  # absent when unset, for the same reason
             data["licenses"] = {"forbidden": list(self.forbidden_licenses)}
+        if self.voice_extra or self.voice_off:
+            data["voice"] = {
+                "markers_extra": list(self.voice_extra),
+                "markers_off": list(self.voice_off),
+            }
         return data
 
     def _to_dict(self) -> dict[str, Any]:
@@ -201,6 +208,8 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         _merge_redaction(layers),
         _merge_test_root(layers),
         _collect(layers, "licenses", "forbidden"),
+        _collect(layers, "voice", "markers_extra"),
+        _collect(layers, "voice", "markers_off"),
     )
 
 
@@ -219,10 +228,12 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         "redaction",
         "tests",
         "licenses",
+        "voice",
     }
     for key in sorted(unknown_top):
         bad(key, "unknown section")
     _validate_string_list(layer.data.get("licenses"), "licenses", "forbidden", bad, _check_license)
+    _validate_voice(layer.data.get("voice"), bad)
     _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
     _validate_string_list(layer.data.get("branches"), "branches", "protected", bad, _check_branch)
     _validate_adapters(layer.data.get("adapters"), bad)
@@ -413,6 +424,37 @@ def _collect(layers: Sequence[Layer], section: str, key: str) -> tuple[str, ...]
 def _check_pattern(value: str) -> None:
     # Only validity matters here, and case folding never changes whether a pattern compiles.
     compile_pattern(value, case_insensitive=False)
+
+
+def _check_marker_pattern(value: str) -> None:
+    try:
+        compiled = re.compile(value)
+    except re.error as error:
+        raise ValueError(f"invalid voice pattern {value!r}: {error}") from None
+    if compiled.match(""):
+        raise ValueError(f"the voice pattern {value!r} matches the empty string")
+
+
+def _check_marker_id(value: str) -> None:
+    if not re.fullmatch(r"[a-z][a-z0-9-]*", value):
+        raise ValueError(f"invalid voice marker id {value!r}")
+
+
+def _validate_voice(section: Any, bad: Any) -> None:
+    if section is None:
+        return
+    if not isinstance(section, dict):
+        bad("voice", "must be a table")
+        return
+    for extra in sorted(set(section) - {"markers_extra", "markers_off"}):
+        bad(f"voice.{extra}", "unknown key")
+    for key, check_one in (
+        ("markers_extra", _check_marker_pattern),
+        ("markers_off", _check_marker_id),
+    ):
+        _validate_string_list(
+            {key: section[key]} if key in section else None, "voice", key, bad, check_one
+        )
 
 
 def _check_license(value: str) -> None:

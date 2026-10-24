@@ -75,6 +75,7 @@ class AttemptContext:
     attempt_id: str
     worktree: Path
     previous_rejection: str | None
+    message: str = ""  # the reason the agent gave, which becomes the body of the commit
 
 
 @dataclass(frozen=True)

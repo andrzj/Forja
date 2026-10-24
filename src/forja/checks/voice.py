@@ -20,6 +20,7 @@ from forja.core.adapters import FileClass
 from forja.core.gates import Approved, Finding, GateInput, GateResult, Location
 
 DASH = "—"
+COMMIT_MESSAGE = "commit message"
 
 
 def comment_lines(path: str, source: str) -> frozenset[int] | None:
@@ -43,6 +44,7 @@ class VoiceCheck:
     changes: Changes
     classify: Callable[[str], FileClass]
     markers: Sequence[Marker] = MARKERS
+    message: str = ""  # the commit message the attempt would get: same profile as the rest
     id: str = "voice"
     gate: int = 12
     requires: frozenset[str] = frozenset()
@@ -52,7 +54,20 @@ class VoiceCheck:
 
     async def _judge(self, data: GateInput) -> GateResult:
         limit = _max_dashes(data)
-        findings: list[Finding] = []
+        findings: list[Finding] = [
+            Finding(message=f"commit message: {marker.why}", target=COMMIT_MESSAGE)
+            for marker in self.markers
+            if marker.pattern.search(self.message)
+        ]
+        if self.message.count(DASH) > limit:
+            findings.append(
+                Finding(
+                    message="too many em dashes in the commit message",
+                    target=COMMIT_MESSAGE,
+                    measured=self.message.count(DASH),
+                    limit=limit,
+                )
+            )
         for path, lines in self._prose().items():
             for line in lines:
                 for marker in self.markers:

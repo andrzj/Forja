@@ -7,6 +7,7 @@ person who disagrees knows what they are turning off. The list grows only with a
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 VERSION = 1
@@ -22,6 +23,17 @@ class Marker:
 
 def _marker(id: str, pattern: str, why: str) -> Marker:
     return Marker(id, re.compile(pattern, re.IGNORECASE), why)
+
+
+def build_markers(extra: Iterable[str] = (), off: Iterable[str] = ()) -> tuple[Marker, ...]:
+    """The Forja's list without the markers the repository turned off, then the repository's own
+    patterns. An id nobody has is ignored: the list stays as strict as it was."""
+    turned_off = set(off)
+    added = tuple(
+        _marker(f"repository-{number}", pattern, "a pattern the repository forbids")
+        for number, pattern in enumerate(extra, start=1)
+    )
+    return (*(m for m in MARKERS if m.id not in turned_off), *added)
 
 
 MARKERS = (

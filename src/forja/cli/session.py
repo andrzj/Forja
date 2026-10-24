@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.checks.specs import default_registry
+from forja.checks.voice_markers import build_markers
 from forja.cli.security_notes import e2e_notices, security_notices
 from forja.cli.semgrep_rules import export_rules
 from forja.core.adapters import AdapterRegistry
@@ -334,6 +335,7 @@ async def _context(
         osv_scanner=(missing_tool("osv-scanner"),),
         forbidden_licenses=policy.forbidden_licenses,
         e2e_commands=e2e_commands(policy),
+        markers=build_markers(policy.voice_extra, policy.voice_off),
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
