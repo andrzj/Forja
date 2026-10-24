@@ -66,6 +66,7 @@ from forja.orchestrator.operations import Step
 from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork
 
 PACKAGE = "package.md"
+README_REPORT = "README report"
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
@@ -223,9 +224,12 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             items.append(PackageItem(ItemKind.FILE, name, path.read_text(encoding="utf-8"), True))
         else:
             notes.append(f"`{name}` is a directory: read the files you need from it.")
-    result = redactor.redact(items)
-    author = task.role is Producer.TEST_AUTHOR
     documenter = task.role is Producer.DOCUMENTER
+    if documenter and ctx.readme:  # text from the repository's README: redacted like a file
+        items.append(PackageItem(ItemKind.TEXT, README_REPORT, ctx.readme, True))
+    result = redactor.redact(items)
+    report = next((i.content for i in result.items if i.name == README_REPORT), "")
+    author = task.role is Producer.TEST_AUTHOR
     commands = FACADE_COMMANDS if facade else NO_COMMANDS
     tests_in = f"under `{task.test_root}`" if task.test_root else "in the project's test files"
     template = (
@@ -250,17 +254,18 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]
-    if result.items or notes:
+    shown = [i for i in result.items if i.name != README_REPORT]
+    if shown or notes:
         parts.append("## Files in scope\n")
-    for item in result.items:
+    for item in shown:
         fence = _fence(item.content)
         parts.append(f"### `{item.name}`\n\n{fence}\n{item.content}\n{fence}\n")
     parts += notes
     for dropped in result.dropped:
         parts.append(f"`{dropped.name}` was withheld ({dropped.reason.value}).")
-    if documenter and ctx.readme:
+    if report:
         parts.append(
-            f"## README sections to fix\n\n{ctx.readme}\n\n"
+            f"## README sections to fix\n\n{report}\n\n"
             "Change only these sections of the README (or add the one that is missing); every "
             "other section stays exactly as it is.\n"
         )

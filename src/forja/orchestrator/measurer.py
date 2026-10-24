@@ -41,7 +41,7 @@ from forja.checks.new_dependency import NewDependencyCheck, is_manifest, manifes
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.personal_data import PersonalDataCheck
 from forja.checks.readme import Signature, evaluate, signature
-from forja.checks.readme_gate import ReadmeCheck, read_readme, readme_path
+from forja.checks.readme_gate import ReadmeCheck, exists_inside, read_readme, readme_path
 from forja.checks.red_green import RedGreenCheck
 from forja.checks.registries import HttpGet, urllib_get
 from forja.checks.sast import SastCheck
@@ -379,7 +379,7 @@ class PipelineMeasurer:
         build, test = self._readme_commands(ctx.worktree)
 
         def exists(relative: str) -> bool:
-            return (ctx.worktree / relative).exists()
+            return exists_inside(ctx.worktree, relative)
 
         return "\n".join(f"- {p.message}" for p in evaluate(text, exists, build, test))
 
@@ -627,7 +627,7 @@ class PipelineMeasurer:
             evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
             checks.append(CitationCheck(worktree, claims, evidence))
             name = readme_path(worktree)
-            tracked = await git.lines("ls-files", "--", name) if name else []
+            tracked = await git.lines("ls-tree", "--name-only", "HEAD", "--", name) if name else []
             old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None
             build, test = self._readme_commands(worktree)
             checks.append(ReadmeCheck(worktree, old, build, test))

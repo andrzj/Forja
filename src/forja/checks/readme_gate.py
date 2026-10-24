@@ -5,16 +5,40 @@ section that was fine is byte for byte what it was, and says what is still wrong
 """
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from forja.checks.base import decided, rejected
 from forja.checks.readme import README_NAMES, Signature, evaluate, touched_chunks
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 
 
+def inside(worktree: Path, relative: str) -> Path | None:
+    """The path a README names, if it is inside the worktree and reaches it by no link; the
+    README is text from the repository, so what it names is not to be trusted."""
+    text = relative.replace("\\", "/")
+    parts = [part for part in text.split("/") if part not in ("", ".")]
+    if PurePosixPath(text).is_absolute() or PureWindowsPath(text).drive or ".." in parts:
+        return None
+    root, step = worktree.resolve(), worktree
+    for part in parts:  # no step of the way may be a link
+        step = step / part
+        if step.is_symlink() or step.is_junction():
+            return None
+    resolved = step.resolve()
+    return step if root == resolved or root in resolved.parents else None
+
+
+def exists_inside(worktree: Path, relative: str) -> bool:
+    found = inside(worktree, relative)
+    return found is not None and found.exists()
+
+
 def readme_path(worktree: Path) -> str | None:
-    """The README at the root of the worktree, ``None`` if there is none."""
-    return next((name for name in README_NAMES if (worktree / name).is_file()), None)
+    """The README at the root of the worktree, ``None`` if there is none or it is a link."""
+    return next(
+        (n for n in README_NAMES if (found := inside(worktree, n)) is not None and found.is_file()),
+        None,
+    )
 
 
 def read_readme(worktree: Path) -> tuple[str | None, str | None]:
@@ -46,7 +70,7 @@ class ReadmeCheck:
         target = name or README_NAMES[0]
 
         def exists(relative: str) -> bool:
-            return (self.worktree / relative).exists()
+            return exists_inside(self.worktree, relative)
 
         findings = []
         if self.old is not None and new is not None:

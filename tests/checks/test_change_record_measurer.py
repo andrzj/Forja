@@ -134,3 +134,21 @@ def test_the_citations_of_the_documenter_are_judged_by_gate_13(
     found = next(run.result for run in outcome.runs if run.check_id == "citations")
     assert isinstance(found, Rejected)
     assert [f.target for f in found.findings] == ["src/none.py"]
+
+
+def test_a_readme_already_in_the_repository_is_read_as_it_was_before_the_stage(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    scene.write("README.md", "# sample")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "docs: a readme")
+    commit_the_code(scene, repo, MOD + "\n\nX = 1\n")
+    scene.write("README.md", "# sample, changed")
+
+    outcome = asyncio.run(scene.measurer.judge(documenter_context(scene), sinks))
+
+    found = next(run.result for run in outcome.runs if run.check_id == "readme")
+    assert isinstance(found, Rejected)
+    assert "README: the README has no section for build" in [f.message for f in found.findings]
