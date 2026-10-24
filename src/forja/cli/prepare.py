@@ -340,6 +340,7 @@ def summary_of(
             if config.test_author
             else (f"  agente: {_agent(config.implementer)}",)
         ),
+        "  agente que documenta: o mesmo que implementa, sem comandos, só em documentação",
         f"  onde: {where}",
         f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "

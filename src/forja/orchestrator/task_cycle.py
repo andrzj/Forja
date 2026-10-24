@@ -16,6 +16,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
+from forja.checks.change_record import record_path
 from forja.checks.freeze import frozen_digest_of
 from forja.checks.readme import README_NAMES
 from forja.core.adapters.executor import ErrorKind
@@ -34,6 +35,7 @@ from forja.orchestrator.ports import (
     RunContext,
     TaskInfo,
 )
+from forja.orchestrator.summary import DOCUMENTATION
 from forja.orchestrator.workspace_git import CommitMessage
 
 REASON_LIMIT = 1500
@@ -393,6 +395,15 @@ class TaskCycle:
             journal.enter(
                 Level.ATTEMPT, attempt, AttemptState.APPROVED, payload={"gates_passed": passed}
             )
+            if ctx.task.role is Producer.DOCUMENTER:
+                journal.note(
+                    DOCUMENTATION,
+                    {
+                        "task": ctx.task.task_id,
+                        "record": record_path(ctx.task.task_id),
+                        "files": [*await run.measurer.documents(ctx)],
+                    },
+                )
         elif outcome.verdict is Verdict.REJECTED:
             untested = untested_targets(stopper)
             sent_back = bool(untested) and ctx.task.role is Producer.IMPLEMENTER

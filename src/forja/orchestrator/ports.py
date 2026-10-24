@@ -135,6 +135,8 @@ class Measurer(Protocol):
 
     async def adr_report(self, ctx: AttemptContext) -> str: ...
 
+    async def documents(self, ctx: AttemptContext) -> list[str]: ...
+
     async def change_record(
         self,
         ctx: AttemptContext,

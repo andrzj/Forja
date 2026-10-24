@@ -243,6 +243,7 @@ def test_each_role_of_a_fix_can_run_on_its_own_cli(
     assert go(argv, talk, environ) == 0
     assert "agente que escreve os testes: outra-cli 2.1.0" in talk.text
     assert "agente que implementa: claude-code 2.1.0" in talk.text
+    assert "agente que documenta: o mesmo que implementa, sem comandos" in talk.text
 
 
 def test_the_model_is_the_clis_own_unless_one_is_asked_for_per_role(

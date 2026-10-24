@@ -397,6 +397,17 @@ class PipelineMeasurer:
         paths = await self._git.at(ctx.worktree).lines("ls-tree", "-r", "--name-only", HEAD)
         return report(triggers, paths)
 
+    async def documents(self, ctx: AttemptContext) -> list[str]:
+        """The documents the task has changed besides its own change record, for the summary."""
+        git = self._git.at(ctx.worktree)
+        read = await read_changes(git, await self._task_base(git, ctx.task.task_id))
+        own = record_path(ctx.task.task_id)
+        return sorted(
+            c.path
+            for c in read.files
+            if c.exists_now and c.path != own and self._classify(c.path) is FileClass.DOCUMENTATION
+        )
+
     async def _adr_triggers(self, ctx: AttemptContext) -> list[Trigger]:
         """The rules that call for a record: a dependency or a module the task brought in."""
         git = self._git.at(ctx.worktree)

@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from forja.checks.readme import README_NAMES
 from forja.core.artifacts.schemas import ExecutionSummaryBody, TaskOutcome, TaskOutcomeKind
 from forja.core.confirmation import ConfirmationError, load_confirmation
 from forja.core.events.state import RunState
@@ -18,6 +19,8 @@ from forja.orchestrator.config import RunConfig
 
 METRICS = "metrics"
 PREMISE = "premise"
+DOCUMENTATION = "documentation"
+ADR_DIR = "docs/adr/"
 NOT_APPLICABLE = "Não se aplica nesta versão."
 
 
@@ -28,11 +31,20 @@ class Premise:
     check: str
 
 
+@dataclass(frozen=True)
+class Documented:
+    """What a task's documenter left in the repository: its record and the other documents."""
+
+    record: str
+    files: tuple[str, ...]
+
+
 @dataclass
 class Facts:
     """What the log says that the states alone do not: assumptions and the measured numbers."""
 
     premises: list[Premise] = field(default_factory=list)
+    documented: dict[str, Documented] = field(default_factory=dict)
     baseline: dict[str, float] = field(default_factory=dict)
     final: dict[str, float] = field(default_factory=dict)
 
@@ -55,6 +67,12 @@ def read_facts(log_path: Path) -> Facts:
             if premise not in seen:
                 seen.add(premise)
                 facts.premises.append(premise)
+        elif kind == DOCUMENTATION:
+            files = payload.get("files")
+            if isinstance(files, list):
+                facts.documented[str(payload.get("task"))] = Documented(
+                    str(payload.get("record")), tuple(str(f) for f in files)
+                )
         elif kind == METRICS:
             values = payload.get("values")
             if isinstance(values, dict):
@@ -138,7 +156,7 @@ def render_summary(
         "",
         "## Documentação",
         "",
-        NOT_APPLICABLE,
+        *_documentation(state, facts),
         "",
         "## Métricas antes e depois",
         "",
@@ -206,6 +224,7 @@ def _agents(config: RunConfig) -> list[str]:
     for role, executor in roles:
         model = f", modelo `{executor.model}`" if executor.model else ""
         lines.append(f"- Quem {role}: `{executor.name}` {executor.version}{model}.")
+    lines.append("- Quem documenta: o mesmo que implementa, sem comandos e só em documentação.")
     for role, executor in roles:
         if executor.enforces_permissions is False:
             lines.append(
@@ -257,6 +276,31 @@ def _refactorings(state: RunState) -> list[str]:
         if o.outcome is TaskOutcomeKind.INTEGRATED
     ]
     return done or ["Nenhuma."]
+
+
+def _documentation(state: RunState, facts: Facts) -> list[str]:
+    """Per integrated task: its record, the README it fixed and the decision records it wrote."""
+    lines = []
+    for outcome in task_outcomes(state):
+        found = facts.documented.get(outcome.task_id)
+        if outcome.outcome is not TaskOutcomeKind.INTEGRATED or found is None:
+            continue
+        readme = [f for f in found.files if f in README_NAMES]
+        adrs = [f for f in found.files if f.startswith(ADR_DIR)]
+        others = [f for f in found.files if f not in readme and f not in adrs]
+        parts = [f"registro `{found.record}`"]
+        for label, paths in (("README", readme), ("ADR", adrs), ("outros", others)):
+            if paths:
+                parts.append(f"{label}: " + ", ".join(f"`{p}`" for p in paths))
+        lines.append(f"- `{outcome.task_id}`: " + "; ".join(parts) + ".")
+    if not lines:
+        return ["Nenhuma tarefa integrada com documentação."]
+    return [
+        *lines,
+        "",
+        "Não conferido: links externos do README (exigiriam rede). O texto que o agente "
+        "escreveu fora das afirmações com citação só passa pelas verificações de tópico.",
+    ]
 
 
 def _intent(state: RunState, task: str) -> str:

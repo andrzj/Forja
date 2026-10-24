@@ -119,6 +119,9 @@ class ScriptedMeasurer:
     async def adr_report(self, ctx: AttemptContext) -> str:
         return ""
 
+    async def documents(self, ctx: AttemptContext) -> list[str]:
+        return list(getattr(self, "documented", []))
+
     async def change_record(
         self,
         ctx: AttemptContext,
