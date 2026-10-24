@@ -125,6 +125,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "dependency_audit": (10, Mode.OBSERVATION, "block"),
         "new_dependency": (10, Mode.OBSERVATION, "premise"),
         "voice": (12, Mode.OBSERVATION, "premise"),
+        "comments": (12, Mode.OBSERVATION, "premise"),
         "citations": (13, Mode.OBSERVATION, "block"),
         "change_record": (14, Mode.OBSERVATION, "block"),
     }

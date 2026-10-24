@@ -86,6 +86,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,
+            "comments": OBSERVATION,
         },
         lizard=LIZARD,
         gitleaks=(sys.executable, str(FAKE_GITLEAKS)),

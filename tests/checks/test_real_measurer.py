@@ -83,6 +83,7 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "dependency_audit",
         "new_dependency",
         "voice",
+        "comments",
     ]
 
 
@@ -249,6 +250,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
             "e2e",
             "test_data",
             "voice",
+            "comments",
         )
     }
     scene = Scene(repo, tmp_path / "scene", real=True, settings=observing)

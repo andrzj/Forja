@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from tree_sitter import Node
 
 from forja.checks.structure import SyntaxProblem, tree_of
-from forja.checks.structure.nodes import text
+from forja.checks.structure.nodes import COMMENTS, text
 
 KINDS = {
     "python": {"function_definition": "function", "class_definition": "class"},
@@ -53,6 +53,7 @@ SCRIPTS = ("javascript", "typescript")
 FUNCTION_VALUES = frozenset({"arrow_function", "function_expression", "function"})
 CONTAINERS = frozenset({"class", "interface", "enum", "record", "struct"})
 PRIVATE_MODIFIERS = frozenset({"private", "protected"})
+WRAPPERS = ("decorated_definition", "export_statement")
 MEMBER_OWNERS = ("class_declaration", "record_declaration", "struct_declaration")
 
 
@@ -62,6 +63,8 @@ class Symbol:
     kind: str
     public: bool
     shape: str  # what is compared to tell a symbol changed: only the header for a container
+    line: int = 1  # where it starts, from 1
+    documented: bool = True  # a comment right above it, or a docstring in it
 
 
 def symbols_in(path: str, source: str) -> tuple[Symbol, ...] | None:
@@ -88,7 +91,16 @@ def _collect(
         name, kind = declared
         qualified = ".".join((*around, name))
         public = _public(node, language, name, around)
-        found.append(Symbol(qualified, kind, public, _shape(node, kind, source)))
+        found.append(
+            Symbol(
+                qualified,
+                kind,
+                public,
+                _shape(node, kind, source),
+                node.start_point[0] + 1,
+                _documented(node, language),
+            )
+        )
         inside = (*around, name)
     for child in node.children:
         _collect(child, language, source, inside, found)
@@ -110,6 +122,29 @@ def _declaration(node: Node, language: str) -> tuple[str, str] | None:
     if language == "python" and kind == "function" and _in_class(node):
         kind = "method"
     return name, kind
+
+
+def _documented(node: Node, language: str) -> bool:
+    """Whether a comment sits right above the declaration (above its decorators, its ``export``
+    or its ``const``, when it has them) or, in Python, a docstring opens its body."""
+    if language == "python":
+        body = node.child_by_field_name("body")
+        first = body.named_children[0] if body is not None and body.named_children else None
+        if first is not None and first.type == "expression_statement":
+            inner = first.named_children
+            if inner and inner[0].type == "string":
+                return True
+    anchor = node
+    if anchor.type == "variable_declarator" and anchor.parent is not None:
+        anchor = anchor.parent
+    while anchor.parent is not None and anchor.parent.type in WRAPPERS:
+        anchor = anchor.parent
+    above = anchor.prev_sibling
+    return (
+        above is not None
+        and above.type in COMMENTS
+        and above.end_point[0] >= anchor.start_point[0] - 1
+    )
 
 
 def _in_class(node: Node) -> bool:

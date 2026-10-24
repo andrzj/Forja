@@ -26,6 +26,7 @@ from forja.checks.change_record import (
 from forja.checks.change_record_gate import ChangeRecordCheck
 from forja.checks.changes import Changes, read_before, read_changes
 from forja.checks.citations import CitationCheck
+from forja.checks.comments import CommentsCheck
 from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_functions
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
@@ -591,6 +592,7 @@ class PipelineMeasurer:
             ),
             PersonalDataCheck(worktree, changes, test_texts, self.is_test),
             VoiceCheck(worktree, changes, self._classify),
+            CommentsCheck(worktree, changes, everything, self._classify),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
         if ctx.task.role is Producer.DOCUMENTER:

@@ -185,6 +185,7 @@ class Scene:
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,
+            "comments": OBSERVATION,
         }
         return PipelineMeasurer(
             adapters=registry_of(self.adapter),

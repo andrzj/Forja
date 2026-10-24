@@ -14,7 +14,7 @@ from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-export
 EVERY_CHECK = (
     "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
     "pass_through", "module_depth", "sast", "dependency_audit", "new_dependency",
-    "e2e", "test_data", "voice",
+    "e2e", "test_data", "voice", "comments",
 )  # fmt: skip
 FAKE_SEMGREP = Path(__file__).with_name("fake_semgrep.py")
 FAKE_OSV = Path(__file__).with_name("fake_osv_scanner.py")
