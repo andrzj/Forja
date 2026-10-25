@@ -116,6 +116,32 @@ def test_the_proof_names_at_most_five_files() -> None:
     assert reference_proof("run", "a.py", others).endswith("`f4.py` e mais 3")
 
 
+def test_the_proof_looks_for_the_last_part_of_a_qualified_name() -> None:
+    proof = reference_proof("A.run", "a.py", {"b.py": "x.run()"})
+    assert proof == "ainda mencionado em `b.py`"
+
+
+def test_exactly_five_files_are_all_named_with_nothing_more() -> None:
+    others = {f"f{i}.py": "run" for i in range(5)}
+    assert reference_proof("run", "a.py", others).endswith("`f4.py`")
+
+
+def test_a_file_that_is_code_on_only_one_side_of_a_rename_is_not_left_out(tmp_path: Path) -> None:
+    (tmp_path / "b.txt").write_text("x\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("def a(): pass\n", encoding="utf-8")
+    from_code = symbol_changes(
+        changes_of(Change(ChangeKind.RENAMED, "b.txt", "a.py")),
+        {"a.py": "def a(): pass\n"},
+        tmp_path,
+        {},
+    )
+    to_code = symbol_changes(
+        changes_of(Change(ChangeKind.RENAMED, "b.py", "a.txt")), {"a.txt": "x\n"}, tmp_path, {}
+    )
+    assert from_code == ((), ("b.txt",))
+    assert to_code == ((), ("b.py",))
+
+
 def facts(**extra: object) -> RecordFacts:
     base: dict[str, object] = {
         "task_id": "t1",

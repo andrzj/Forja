@@ -38,6 +38,13 @@ def judge(
     return asyncio.run(check.evaluate(data))
 
 
+def test_lines_added_to_no_file_are_never_read(tmp_path: Path) -> None:
+    patch = ("+++ /dev/null", "@@ -0,0 +1 @@", "+# Sure! here it is")
+    check = VoiceCheck(tmp_path, Changes((), 1, patch), classify)
+    data = GateInput(tmp_path, "c" * 40, "t1", "t1-s", "t1-a1")
+    assert isinstance(asyncio.run(check.evaluate(data)), Approved)
+
+
 def said(result: GateResult) -> list[tuple[str, str]]:
     assert isinstance(result, Rejected)
     return [(f.target, f.message) for f in result.findings]

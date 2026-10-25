@@ -97,3 +97,10 @@ def test_the_readme_is_the_one_at_the_root_and_an_unreadable_one_is_none(tmp_pat
     (tmp_path / "README.md").write_bytes(b"\xff\xfe\x00\x80")
     assert readme_path(tmp_path) == "README.md"
     assert read_readme(tmp_path) == (None, None)
+
+
+def test_with_no_readme_the_finding_is_about_readme_md(tmp_path: Path) -> None:
+    check = ReadmeCheck(tmp_path, None, frozenset(), frozenset())
+    result = asyncio.run(check.evaluate(GateInput(tmp_path, "c" * 40, "t1", "t1-d", "t1-da1")))
+    assert isinstance(result, Rejected)
+    assert {f.target for f in result.findings} == {"README.md"}

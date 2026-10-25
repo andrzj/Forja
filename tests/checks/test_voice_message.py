@@ -32,6 +32,15 @@ def test_too_many_dashes_in_the_commit_message_are_excess() -> None:
     assert (result.findings[0].measured, result.findings[0].limit) == (4, 3)
 
 
+def test_dashes_at_the_limit_are_not_excess() -> None:
+    assert isinstance(judge(f"a {DASH} b {DASH} c {DASH} d"), Approved)
+
+
+def test_the_repositorys_own_patterns_are_numbered_from_one() -> None:
+    own = build_markers(extra=["a", "b"])[-2:]
+    assert [m.id for m in own] == ["repository-1", "repository-2"]
+
+
 def test_a_plain_message_and_no_message_are_approved() -> None:
     assert isinstance(judge("Split the parser so each rule has one function."), Approved)
     assert isinstance(judge(""), Approved)

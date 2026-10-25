@@ -103,6 +103,42 @@ def test_typescript_public_is_exported_and_not_private() -> None:
     }
 
 
+def test_a_go_method_is_public_by_its_own_name_and_not_by_its_receiver() -> None:
+    source = (
+        "package p\ntype t struct{}\ntype T struct{}\n"
+        "func (x *t) M() {}\nfunc (x *t) m() {}\nfunc (x *T) m() {}\n"
+    )
+    assert listed("a.go", source) == {
+        "t": ("type", False),
+        "T": ("type", True),
+        "t.M": ("method", True),
+        "t.m": ("method", False),
+        "T.m": ("method", False),
+    }
+
+
+def test_typescript_a_public_modifier_does_not_hide_a_member_and_protected_does() -> None:
+    source = "export class A { public m(): void {} protected q(): void {} private p(): void {} }\n"
+    assert listed("a.ts", source) == {
+        "A": ("class", True),
+        "A.m": ("method", True),
+        "A.q": ("method", False),
+        "A.p": ("method", False),
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    ["def f():\n", "class A:\n", "def f():\n    print(1)\n", "def f():\n    x = 1\n"],
+)
+def test_a_python_body_that_does_not_open_with_a_docstring_leaves_the_symbol_undocumented(
+    source: str,
+) -> None:
+    found = symbols_in("a.py", source)
+    assert found is not None
+    assert [s.documented for s in found] == [False]
+
+
 @pytest.mark.parametrize("path", ["notes.txt", "README.md", "data.json"])
 def test_a_file_in_a_language_that_is_not_read_has_no_answer(path: str) -> None:
     assert symbols_in(path, "anything") is None

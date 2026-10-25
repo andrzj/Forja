@@ -131,3 +131,41 @@ file = "src/forja/checks/oldtree.py"
 function = "old_tree"
 change = "True -> False"
 reason = "The copy leaves out every link through its ignore function, so no link reaches the copy and the symlinks flag has nothing to decide. It stays True as a second defence: a link that got through would be kept as a link, not followed."
+
+# Approved by the person who owns the repository on 2026-10-24, after the gate on the documenter.
+
+[[suppress]]
+file = "src/forja/checks/readme.py"
+function = "chunks"
+change = "0 -> 1"
+reason = "fence.group(1) is a run of one character (backticks or tildes), so its first and second character are the same."
+
+[[suppress]]
+file = "src/forja/checks/readme.py"
+function = "cited_commands"
+change = "0 -> 1"
+reason = "fence.group(1) is a run of one character (backticks or tildes), so its first and second character are the same."
+
+[[suppress]]
+file = "src/forja/checks/readme.py"
+function = "_without_code"
+change = "0 -> 1"
+reason = "fence.group(1) is a run of one character (backticks or tildes), so its first and second character are the same."
+
+[[suppress]]
+file = "src/forja/checks/doc_drift.py"
+function = "references"
+change = "0 -> 1"
+reason = "fence.group(1) is a run of one character (backticks or tildes), so its first and second character are the same."
+
+[[suppress]]
+file = "src/forja/checks/adr_trigger.py"
+function = "AdrCheck._judge"
+change = "delete -"
+reason = "The path is built as docs/adr/<name>, so it always has a slash and rsplit gives exactly two parts: index -1 and index 1 are the same one."
+
+[[suppress]]
+file = "src/forja/checks/comments.py"
+function = "CommentsCheck._judge"
+change = "and -> or"
+reason = "added_lines never gives a line number of None, so the only difference is a None key in a dict that is read only by the path of a changed file, which is never None."

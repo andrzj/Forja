@@ -71,3 +71,15 @@ def test_what_is_wrong_with_the_readme_is_redacted_before_it_reaches_the_agent(
     assert "## README sections to fix" in text
     assert "the project runs go build" in text
     assert "## Files in scope" not in text
+
+
+def test_the_worktree_itself_is_inside_it(tmp_path: Path) -> None:
+    assert inside(tmp_path, ".") == tmp_path
+    assert exists_inside(tmp_path, "")
+
+
+def test_a_link_that_stays_inside_the_worktree_is_still_a_link(tmp_path: Path) -> None:
+    (tmp_path / "real.md").write_text("x", encoding="utf-8")
+    link_or_skip(tmp_path / "alias.md", tmp_path / "real.md")
+    assert inside(tmp_path, "alias.md") is None
+    assert not exists_inside(tmp_path, "alias.md")

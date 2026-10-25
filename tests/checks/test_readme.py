@@ -178,3 +178,67 @@ def test_new_sections_are_allowed_only_when_the_old_readme_lacked_a_required_one
     assert touched_chunks(complete, complete + "\n## Extra\n\nmore\n", problems(complete)) == [
         "Extra (new)"
     ]
+
+
+def test_a_fence_opened_indented_and_closed_flush_ends_there() -> None:
+    text = "# T\n  " + FENCE + "\ncode\n" + FENCE + "\n## Next\ntext"
+    assert [c.heading for c in chunks(text)] == ["T", "Next"]
+
+
+def test_cited_commands_stop_at_a_fence_opened_indented_and_closed_flush() -> None:
+    chunk = "  " + FENCE + "\nmake build\n" + FENCE + "\nmake other\n"
+    assert cited_commands(chunk) == [("make", "build")]
+
+
+def test_a_link_after_a_fence_opened_indented_and_closed_flush_is_checked() -> None:
+    text = "# T\n\nbody\n  " + FENCE + "\ncode\n" + FENCE + "\n[b](y.md)\n"
+    found = evaluate(text, lambda path: False)
+    assert [p.message for p in found if p.section == "links"] == [
+        "the link to y.md points at nothing"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("tokens", "expected"),
+    [
+        (["pytest"], ("pytest", "")),
+        (["python", "-m"], ("python", "")),
+        (["python", "script.py", "arg"], ("python", "")),
+        (["node", "-m", "thing"], ("node", "")),
+    ],
+)
+def test_only_python_dash_m_and_the_known_launchers_are_looked_through(
+    tokens: list[str], expected: tuple[str, str]
+) -> None:
+    assert signature(tokens) == expected
+
+
+@pytest.mark.parametrize(
+    ("cited", "run", "matches"),
+    [
+        ("go", ("go", "build"), True),
+        ("make build", ("make", ""), True),
+        ("go build ./...", ("go", "build"), True),
+        ("go test ./...", ("go", "build"), False),
+        ("npm test", ("make", "test"), False),
+    ],
+)
+def test_a_command_matches_by_program_and_by_subcommand_when_both_name_one(
+    cited: str, run: tuple[str, str], matches: bool
+) -> None:
+    text = GOOD.replace("go build ./...", cited)
+    found = evaluate(text, lambda path: True, {run}, TEST)
+    assert ([p for p in found if p.section == "build"] == []) is matches
+
+
+def test_an_empty_readme_lacks_every_section_and_a_lone_title_says_nothing() -> None:
+    names = ["what", "build", "test", "run", "configure", "dependencies"]
+    assert [p.section for p in evaluate("", lambda path: True)] == names
+    assert "what" in [p.section for p in evaluate("# Sample\n", lambda path: True)]
+
+
+def test_a_section_with_a_problem_does_not_let_a_new_section_in() -> None:
+    old = "# T\n\ntext\n\n## Build\n\nmake\n"
+    new = old + "\n## Extra\n\nmore\n"
+    assert touched_chunks(old, new, [Problem("build", "m", "Build")]) == ["Extra (new)"]
+    assert touched_chunks(old, new, [Problem("links", "m")]) == ["Extra (new)"]

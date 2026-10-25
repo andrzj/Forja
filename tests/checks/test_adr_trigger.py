@@ -18,6 +18,7 @@ from forja.core.gates import Approved, GateInput, GateResult, Rejected
 from forja.core.redaction import Redactor
 from forja.orchestrator.agent_runner import build_package
 from forja.orchestrator.ports import AttemptContext, TaskInfo
+from tests.checks.test_readme_paths import link_or_skip
 
 SECTIONS = ["# 0003. Use x", "## Context", "c", "## Decision", "d"]
 SECTIONS += ["## Alternatives", "a", "## Consequences", "c"]
@@ -122,3 +123,24 @@ def test_what_a_record_is_owed_for_is_redacted_before_it_reaches_the_agent(
     assert token not in text
     assert "## Decision record owed" in text
     assert "docs/adr/0001-<short-title>.md" in text
+
+
+def owes_a_record(result: GateResult) -> bool:
+    return len(said(result)) == 1 and "owes a record" in said(result)[0]
+
+
+def test_a_record_the_stage_began_with_is_not_a_new_record(tmp_path: Path) -> None:
+    record(tmp_path, "0001-old.md", GOOD.replace("0003", "0001"))
+    assert owes_a_record(judge(tmp_path, (DEP,), {"docs/adr/0001-old.md"}))
+
+
+def test_a_file_in_the_folder_that_is_not_a_record_is_left_alone(tmp_path: Path) -> None:
+    record(tmp_path, "README.md", "index\n")
+    assert owes_a_record(judge(tmp_path, (DEP,), set()))
+
+
+def test_a_link_in_the_folder_is_not_a_record(tmp_path: Path) -> None:
+    (tmp_path / "docs" / "adr").mkdir(parents=True)
+    (tmp_path / "good.md").write_text(GOOD, encoding="utf-8")
+    link_or_skip(tmp_path / "docs" / "adr" / "0004-link.md", tmp_path / "good.md")
+    assert owes_a_record(judge(tmp_path, (DEP,), set()))

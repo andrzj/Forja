@@ -3,7 +3,8 @@
 import asyncio
 from pathlib import Path
 
-from forja.checks.doc_drift_gate import Base, DocDriftCheck, read_repository
+from forja.checks.doc_drift import Facts
+from forja.checks.doc_drift_gate import MAX_TEXT_BYTES, Base, DocDriftCheck, read_repository
 from forja.core.gates import Approved, GateInput, GateResult, Rejected
 from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-exported as a fixture
 
@@ -111,3 +112,33 @@ def test_a_link_to_a_file_outside_the_worktree_adds_nothing_to_what_can_be_cited
     assert said(judge(repo, base)) == [
         "line 1 cites symbol `secret_name()` and secret_name is gone"
     ]
+
+
+def read(repo: Repo) -> Facts:  # noqa: F811
+    async def run() -> Facts:
+        _, facts = await read_repository(
+            repo.git, repo.path, lambda path: path.endswith(".md"), "docs/mudancas"
+        )
+        return facts
+
+    return asyncio.run(run())
+
+
+def test_a_makefile_and_a_package_json_below_the_root_are_read(repo: Repo) -> None:  # noqa: F811
+    write(repo, "sub/Makefile", "build:\n\techo\n")
+    write(repo, "web/package.json", '{"scripts": {"lint": "x"}}')
+    write(repo, "data.json", '{"scripts": {"stray": "x"}}')
+    facts = read(repo)
+    assert "build" in facts.make_targets
+    assert "lint" in facts.scripts
+    assert "stray" not in facts.scripts
+
+
+def test_a_file_of_exactly_the_size_limit_is_read_and_one_byte_more_is_not(
+    repo: Repo,  # noqa: F811
+) -> None:
+    write(repo, "src/at_limit.py", "atlimitword" + " " * (MAX_TEXT_BYTES - 11))
+    write(repo, "src/over_limit.py", "overlimitword" + " " * (MAX_TEXT_BYTES - 12))
+    facts = read(repo)
+    assert "atlimitword" in facts.words
+    assert "overlimitword" not in facts.words

@@ -71,6 +71,7 @@ def test_words_split_identifiers_and_drop_the_filler() -> None:
         ("# retries because the server drops idle connections", "def retries(server):", False),
         ("// get the user name", "getUserName()", True),
         ("/* set the retry limit */", "setRetryLimit(3);", True),
+        ("# alpha beta gamma delta", "alpha beta gamma", True),
     ],
 )
 def test_a_comment_repeats_the_code_when_nearly_all_its_words_are_the_codes(
@@ -88,6 +89,34 @@ def test_a_trailing_comment_is_read_against_its_own_line(tmp_path: Path) -> None
     body = ["    total_price = sum(items)  # total price", "    return total_price"]
     code = "\n".join([MODULE, "", "", "def f(items):", DOC, *body, ""])
     assert said(judge(tmp_path, code)) == [("a comment repeats the code next to it", 6)]
+
+
+def test_a_trailing_comment_is_not_read_against_the_line_below(tmp_path: Path) -> None:
+    body = ["    total_price = sum(items)  # total price", "    return 0"]
+    code = "\n".join([MODULE, "", "", "def f(items):", DOC, *body, ""])
+    assert said(judge(tmp_path, code)) == [("a comment repeats the code next to it", 6)]
+
+
+def test_a_comment_with_no_code_after_it_has_nothing_to_repeat(tmp_path: Path) -> None:
+    code = "\n".join([MODULE, "", "", "x = 1", "", "# something unrelated here", ""])
+    assert isinstance(judge(tmp_path, code), Approved)
+
+
+def test_code_further_than_the_next_line_is_not_what_the_comment_is_about(tmp_path: Path) -> None:
+    code = "\n".join([MODULE, "", "# total price of the items", "", "", *TOTAL_PRICE])
+    assert isinstance(judge(tmp_path, code), Approved)
+
+
+def test_a_comment_above_a_declaration_is_read_against_its_header_only(tmp_path: Path) -> None:
+    body = ["# compute total price", "def run(items):", "    compute_total_price = items", ""]
+    code = "\n".join([MODULE, "", "", *body])
+    assert isinstance(judge(tmp_path, code), Approved)
+
+
+def test_a_comment_that_is_the_only_line_added_is_still_judged(tmp_path: Path) -> None:
+    old = "\n".join([MODULE, "", "", "def f(items):", DOC, "    total_price = sum(items)", ""])
+    new = old.replace("sum(items)", "sum(items)  # total price")
+    assert said(judge(tmp_path, new, before=old)) == [("a comment repeats the code next to it", 6)]
 
 
 def test_a_comment_that_says_why_is_approved(tmp_path: Path) -> None:
