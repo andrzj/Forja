@@ -18,6 +18,7 @@ from forja.cli.facade import run_facade
 from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
+from forja.cli.review import revisao
 from forja.cli.run import Ended, ForcedExit, Renderer, closing_lines, execute, exit_code
 from forja.cli.session import PolicyChanged, Session, open_session
 from forja.cli.settings import (
@@ -175,6 +176,8 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
             )
         if args.command == "agente":
             return run_facade(args.agent, Path.cwd(), environ)
+        if args.command == "revisao":
+            return await revisao(args, console, environ, detection)
         return await start(args, console, environ, detection)
     except Refused as refused:
         console.say(refused.message)

@@ -56,17 +56,23 @@ def read_run(directory: Path) -> tuple[str, str, str] | None:
     return (repo, state, reason) if repo else None
 
 
-def find_unfinished(home: Path, repo: Path) -> list[Unfinished]:
-    """The runs of ``repo`` that can still be resumed, the newest first."""
+def runs_of(home: Path, repo: Path) -> list[Unfinished]:
+    """Every confirmed run of ``repo``, in any state, the newest first."""
     runs = home / "runs"
     if not runs.is_dir():
         return []
     found = []
     for directory in sorted(runs.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
         info = read_run(directory)
-        if info and _same(info[0], repo) and info[1] in {s.value for s in OPEN_STATES}:
+        if info and _same(info[0], repo):
             found.append(Unfinished(directory.name, info[1], info[2], directory))
     return found
+
+
+def find_unfinished(home: Path, repo: Path) -> list[Unfinished]:
+    """The runs of ``repo`` that can still be resumed, the newest first."""
+    open_states = {s.value for s in OPEN_STATES}
+    return [run for run in runs_of(home, repo) if run.state in open_states]
 
 
 def discard(directory: Path) -> None:

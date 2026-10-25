@@ -263,6 +263,18 @@ class EventLog:
                 _logger.exception("event subscriber failed")
 
 
+def read_state(
+    path: Path, run_id: str, *, upgraders: Mapping[int, Upgrader] = UPGRADERS
+) -> RunState:
+    """The state a log holds, read without opening it for writing: nothing is recovered or changed.
+
+    An unfinished last line is ignored; damage anywhere else raises ``CorruptLogError``.
+    """
+    state = RunState(run_id)
+    _replay(path.read_bytes(), state, upgraders)
+    return state
+
+
 def _replay(
     data: bytes, state: RunState, upgraders: Mapping[int, Upgrader]
 ) -> tuple[int, bytes | None, bool]:

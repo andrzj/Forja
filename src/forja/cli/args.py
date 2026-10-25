@@ -39,6 +39,8 @@ class Arguments:
     config: Path | None = None
     semgrep_config: str = ""  # text, so a registry reference is seen as typed
     facts: Path | None = None
+    run: str = ""  # revisao: the run to read; empty is the newest of the repository
+    main_ref: str = ""  # revisao: the main branch; empty is origin/HEAD
     agent: tuple[str, ...] = field(default=())
 
 
@@ -103,6 +105,26 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--semgrep-config", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--fatos", type=Path, metavar="ARQUIVO", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
+    review = sub.add_parser(
+        "revisao",
+        help="depois do `git fetch`, diz o que de uma execução chegou à branch principal",
+    )
+    review.add_argument(
+        "execucao", nargs="?", default="", help="id da execução; padrão: a mais recente"
+    )
+    review.add_argument(
+        "--principal",
+        metavar="REF",
+        default="",
+        help="a branch principal a ler, como origin/main; padrão: origin/HEAD",
+    )
+    review.add_argument(
+        "--fatos",
+        type=Path,
+        metavar="ARQUIVO",
+        default=argparse.SUPPRESS,
+        help="comentários e confirmações do revisor (uma linha por fato)",
+    )
     agent = sub.add_parser("agente")  # for the agents: left out of the help
     agent.add_argument("what", choices=AGENT_COMMANDS)
     agent.add_argument("rest", nargs="*")
@@ -127,5 +149,7 @@ def parse(argv: list[str] | None = None) -> Arguments:
         config=found.config,
         semgrep_config=found.semgrep_config or "",
         facts=found.fatos,
+        run=getattr(found, "execucao", "") or "",
+        main_ref=getattr(found, "principal", "") or "",
         agent=(found.what, *found.rest) if command == "agente" else (),
     )
