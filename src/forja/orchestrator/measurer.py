@@ -87,7 +87,14 @@ from forja.core.gates import (
 )
 from forja.core.idempotency import Decision, Reconciliation
 from forja.core.states import Level
-from forja.orchestrator.ports import AttemptContext, Baseline, Expectations, RecordFile, SinkFactory
+from forja.orchestrator.ports import (
+    NO_COMMIT,
+    AttemptContext,
+    Baseline,
+    Expectations,
+    RecordFile,
+    SinkFactory,
+)
 
 BASE_FILE = "base.json"
 BASE_METRICS_FILE = "base-metrics.json"
@@ -567,8 +574,8 @@ class PipelineMeasurer:
     async def judge(
         self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
     ) -> PipelineOutcome:
-        if ctx.task.role is Producer.SPECIFIER:
-            return await self._judge_specification(ctx, expectations)
+        if ctx.task.role in NO_COMMIT:
+            return await self._judge_answer(ctx, expectations)
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         own = own_files(self._adapters)
@@ -707,11 +714,11 @@ class PipelineMeasurer:
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(active))
 
-    async def _judge_specification(
+    async def _judge_answer(
         self, ctx: AttemptContext, expectations: Expectations | None
     ) -> PipelineOutcome:
-        """The specifier writes no file: only that holds, its claims cite what exists, and its
-        criteria and the elements of the input lead to each other."""
+        """The specifier and the archaeologist write no file: only that holds and their claims cite
+        what exists. The specifier's criteria and the elements of the input lead to each other."""
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         spec = expectations or Expectations(frozenset(), ())
@@ -719,8 +726,9 @@ class PipelineMeasurer:
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
             CitationCheck(ctx.worktree, spec.claims, evidence, self._fact_ids),
-            TraceabilityCheck(spec.elements, spec.specified, spec.left_out),
         ]
+        if ctx.task.role is Producer.SPECIFIER:
+            checks.append(TraceabilityCheck(spec.elements, spec.specified, spec.left_out))
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(ctx.worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, ())

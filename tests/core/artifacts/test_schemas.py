@@ -23,7 +23,7 @@ CITATION = {"kind": "fact", "fact_id": "f1"}
 VALID: dict[ArtifactType, tuple[type[BaseModel], dict[str, Any]]] = {
     ArtifactType.FINDINGS: (
         FindingsBody,
-        {"claims": [{"statement": "parse is pure", "citations": [CITATION]}]},
+        {"claims": [{"statement": "parse is pure", "citations": [CITATION], "basis": "confirmed"}]},
     ),
     ArtifactType.CRITERIA: (
         CriteriaBody,

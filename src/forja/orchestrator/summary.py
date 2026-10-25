@@ -16,7 +16,7 @@ from forja.core.events.state import RunState
 from forja.core.events.versioning import BadLine, parse_line
 from forja.core.isolation import Context, Guarantee, Status
 from forja.core.states import AttemptState, Level, StageState, TaskState
-from forja.orchestrator.config import RunConfig
+from forja.orchestrator.config import Objective, RunConfig
 
 METRICS = "metrics"
 PREMISE = "premise"
@@ -203,7 +203,7 @@ def render_summary(
         "",
         "## Refatorações",
         "",
-        *_refactorings(state),
+        *_refactorings(state, config),
         "",
         "## Rastreabilidade",
         "",
@@ -272,14 +272,16 @@ def _environment(state: RunState, config: RunConfig) -> list[str]:
 
 def _agents(config: RunConfig) -> list[str]:
     """Which CLI and model each role used, and the CLIs that do not hold their role to the rules."""
-    roles = [("implementa", config.implementer)]
+    investigating = config.objective is Objective.INVESTIGATE
+    roles = [("investiga" if investigating else "implementa", config.implementer)]
     if config.test_author:
         roles.append(("escreve os testes", config.test_author))
     lines = [""]
     for role, executor in roles:
         model = f", modelo `{executor.model}`" if executor.model else ""
         lines.append(f"- Quem {role}: `{executor.name}` {executor.version}{model}.")
-    lines.append("- Quem documenta: o mesmo que implementa, sem comandos e só em documentação.")
+    same = "investiga" if investigating else "implementa"
+    lines.append(f"- Quem documenta: o mesmo que {same}, sem comandos e só em documentação.")
     for role, executor in roles:
         if executor.enforces_permissions is False:
             lines.append(
@@ -291,7 +293,8 @@ def _agents(config: RunConfig) -> list[str]:
     return lines
 
 
-SPECIFIER_STAGE = "c"  # the stage of the specifier is ``<task>-c``; it commits nothing
+# the stages that commit nothing: the specifier's ``<task>-c`` and the archaeologist's ``<task>-f``
+NO_COMMIT_STAGES = ("c", "f")
 
 
 def _premises(state: RunState, facts: Facts, config: RunConfig) -> list[str]:
@@ -334,14 +337,15 @@ def _premise_line(state: RunState, premise: Premise, config: RunConfig) -> str:
 
 def _affected(state: RunState, premise: Premise) -> list[str]:
     """The committed stages of the task from the one the premise arose in: what they did rests on
-    it. The specifier's stage commits nothing. Tasks do not depend on each other."""
+    it. The specifier's and the archaeologist's stages commit nothing. Tasks do not depend on each
+    other."""
     stages = state.children_of(Level.STAGE, premise.task)
     start = stages.index(premise.stage) if premise.stage in stages else 0
     return [
         stage
         for stage in stages[start:]
         if state.state_of(Level.STAGE, stage) is StageState.COMMITTED
-        and stage != f"{premise.task}-{SPECIFIER_STAGE}"
+        and stage not in {f"{premise.task}-{letter}" for letter in NO_COMMIT_STAGES}
     ]
 
 
@@ -367,7 +371,9 @@ def _rejections(state: RunState, task: str) -> list[str]:
     return lines
 
 
-def _refactorings(state: RunState) -> list[str]:
+def _refactorings(state: RunState, config: RunConfig) -> list[str]:
+    if config.objective is Objective.INVESTIGATE:
+        return ["Nenhuma: esta execução só investiga e documenta."]
     done = [
         f"- `{o.task_id}`: {_intent(state, o.task_id)} "
         f"({o.attempts} tentativa(s), {o.rejected_attempts} rejeitada(s))"

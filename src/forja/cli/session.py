@@ -45,12 +45,12 @@ from forja.languages import (
 from forja.languages.go.adapter import find_golangci_lint
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
-from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig, load_config
+from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig, load_config
 from forja.orchestrator.facts import Fact
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
 from forja.orchestrator.phases import confirm_run
-from forja.orchestrator.planner import ComplexityPlanner, FixPlanner
+from forja.orchestrator.planner import ComplexityPlanner, FixPlanner, InvestigationPlanner
 from forja.orchestrator.ports import AgentRunner, Planner, RunContext
 from forja.orchestrator.workspace_git import (
     GitWorkspace,
@@ -203,14 +203,22 @@ def new_config(
     test_author: ExecutorRef | None = None,
     semgrep_config: str = "",
     facts: tuple[Fact, ...] = (),
+    question: str = "",
 ) -> RunConfig:
-    from forja.orchestrator.config import Budget, Objective  # noqa: PLC0415
+    from forja.orchestrator.config import Budget  # noqa: PLC0415
 
     return RunConfig(
         repo=str(repo),
         base_commit=base_commit,
-        objective=Objective.REFACTOR if fix is None else Objective.FIX,
+        objective=(
+            Objective.INVESTIGATE
+            if question
+            else Objective.REFACTOR
+            if fix is None
+            else Objective.FIX
+        ),
         fix=fix,
+        question=question,
         implementer=executor_ref(executor_name, executor_path, executor_version, executor_model),
         test_author=test_author,
         budget=Budget(tokens=tokens, tasks=tasks),
@@ -221,6 +229,13 @@ def new_config(
         semgrep_config=semgrep_config,
         facts=facts,
     )
+
+
+OBJECTIVE_NAMES = {
+    Objective.REFACTOR: "refatorar",
+    Objective.FIX: "corrigir",
+    Objective.INVESTIGATE: "investigar",
+}
 
 
 async def open_session(
@@ -278,7 +293,7 @@ async def open_session(
         log.close()
         raise
     view = ViewModel(
-        objective="refatorar",
+        objective=OBJECTIVE_NAMES[config.objective],
         repo=repo.name,
         branch=f"forja-run/{run_id}",
         isolation="ambiente do usuário",
@@ -365,7 +380,7 @@ async def _context(
             permissions=RolePermissions(
                 can_edit_files=True,
                 allowed_commands=()
-                if role in (Producer.DOCUMENTER, Producer.SPECIFIER)
+                if role in (Producer.DOCUMENTER, Producer.SPECIFIER, Producer.ARCHAEOLOGIST)
                 else commands,
             ),
             model=executor.model,
@@ -383,6 +398,9 @@ async def _context(
         planner = FixPlanner(config.fix, config.scope, test_root)
         if config.fix.criteria is None:
             agents[Producer.SPECIFIER] = runner(config.implementer, Producer.SPECIFIER)
+    if config.objective is Objective.INVESTIGATE:
+        agents[Producer.ARCHAEOLOGIST] = runner(config.implementer, Producer.ARCHAEOLOGIST)
+        planner = InvestigationPlanner(config.question, config.scope)
     return RunContext(
         journal=Journal(log),
         config=config,

@@ -532,3 +532,39 @@ def test_a_missing_facts_file_is_named(repo: Path, tmp_path: Path, environ: dict
     talk = Talk()
     assert go(["refatorar", "--plano", "--fatos", str(tmp_path / "nada.txt")], talk, environ) == 2
     assert "Não consegui ler os fatos" in talk.text
+
+
+def test_investigating_needs_a_question(repo: Path, environ: dict[str, str]) -> None:
+    talk = Talk()
+    assert go(["investigar", "--plano"], talk, environ) == 2
+    assert "Faça a pergunta" in talk.text
+
+
+def test_the_investigation_plan_shows_the_question_and_who_answers(
+    repo: Path, environ: dict[str, str]
+) -> None:
+    talk = Talk()
+    assert go(["investigar", "how does paging work?", "--plano"], talk, environ) == 0
+    assert "Vou investigar proj" in talk.text
+    assert "pergunta: how does paging work?" in talk.text
+    assert "agente que investiga" in talk.text
+    assert "erro:" not in talk.text
+
+
+def test_the_question_can_come_from_a_file(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    (tmp_path / "pergunta.txt").write_text("  how does paging work?" + chr(10), encoding="utf-8")
+    talk = Talk()
+    assert go(["investigar", "-f", str(tmp_path / "pergunta.txt"), "--plano"], talk, environ) == 0
+    assert "pergunta: how does paging work?" in talk.text
+
+
+def test_a_saved_investigation_is_read_back_from_execucao() -> None:
+    saved = Execucao(objetivo="investigar", descricao="how does paging work?")
+    assert preparation.read_question(parse(["investigar"]), saved) == "how does paging work?"
+
+
+def test_documenting_is_an_investigation_and_has_no_verb_of_its_own() -> None:
+    with pytest.raises(SystemExit):
+        parse(["documentar"])

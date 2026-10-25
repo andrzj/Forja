@@ -18,8 +18,7 @@ VERBS = {
     "refatorar": "melhora o código sem mudar o comportamento",
     "corrigir": "corrige um erro descrito por você (incremento 3)",
     "criar": "cria um projeto a partir de uma ideia (incremento 6)",
-    "documentar": "entende o código e escreve a documentação (incremento 4)",
-    "investigar": "investiga uma dúvida ou um erro, sem alterar código (incremento 6)",
+    "investigar": "entende o código a partir de uma pergunta e escreve a documentação",
 }
 AGENT_COMMANDS = ("testar", "medir", "lint")
 

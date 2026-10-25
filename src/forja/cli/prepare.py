@@ -18,6 +18,7 @@ from forja.cli.detect import Detection, installed_clis
 from forja.cli.security_notes import NO_LICENSES, UNMEASURED, e2e_notices
 from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
+    OBJECTIVE_NAMES,
     e2e_commands,
     executor_ref,
     git_base_environment,
@@ -35,10 +36,10 @@ from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, run_probe, version_problem
-from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig
+from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig
 from forja.orchestrator.facts import Fact, FactsError, parse_facts
 
-AVAILABLE = frozenset({"refatorar", "corrigir"})
+AVAILABLE = frozenset({"refatorar", "corrigir", "investigar"})
 CRITERIA_FILE = "criterios.json"
 LOW_DISK_GIB = 2.0
 
@@ -109,6 +110,19 @@ def read_fix(args: Arguments, saved: Execucao | None) -> tuple[FixRequest, str, 
         where = ".".join(str(part) for part in first["loc"]) or "arquivo"
         raise Refused(f"Os critérios em {path} não servem: {where}: {first['msg']}.") from None
     return FixRequest(description=description, criteria=criteria), description, str(path.resolve())
+
+
+def read_question(args: Arguments, saved: Execucao | None) -> str:
+    """The question of ``forja investigar``: the text on the command line, else the ``-f`` file."""
+    file = args.file or (Path(saved.arquivo) if saved and saved.arquivo else None)
+    question = args.text.strip() or (saved.descricao.strip() if saved else "")
+    if not question and file is not None:
+        question = _read_text(file, "a pergunta").strip()
+    if not question:
+        raise Refused(
+            'Faça a pergunta: `forja investigar "texto"` ou `forja investigar -f arquivo`.'
+        )
+    return question
 
 
 def read_recorded_facts(args: Arguments, saved: Execucao | None) -> tuple[tuple[Fact, ...], str]:
@@ -332,10 +346,19 @@ def summary_of(
         else "o agente não roda os testes; só edita e consulta lint e complexidade"
     )
     fix = config.fix
-    verb = "corrigir" if config.objective is Objective.FIX else "refatorar"
+    verb = OBJECTIVE_NAMES[config.objective]
     return (
         f"Vou {verb} {detection.repo.name if detection.repo else ''} "
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
+        *(
+            (
+                f"  pergunta: {config.question}",
+                "  agente que investiga: o mesmo que documenta, sem comandos e sem alterar "
+                "arquivos; o que ele afirma precisa citar arquivo e linhas, medição ou fato seu",
+            )
+            if config.question
+            else ()
+        ),
         *(
             (f"  erro: {fix.description}", _criteria_line(fix))
             if fix
@@ -392,6 +415,7 @@ async def prepare(
 ) -> Prepared:
     verb = objective_of(args, saved, console)
     fixing = read_fix(args, saved) if verb == "corrigir" else None
+    question = read_question(args, saved) if verb == "investigar" else ""
     repo = check_repository(detection)
     try:
         policy = repo_policy(repo)
@@ -427,7 +451,7 @@ async def prepare(
         executor_version=version, executor_model=model, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
         policy_version=policy_digest(policy), facts=recorded,
-        fix=fixing[0] if fixing else None,
+        fix=fixing[0] if fixing else None, question=question,
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
@@ -438,8 +462,8 @@ async def prepare(
     )
     lines = summary_of(detection, config, scope, tokens, notes, sast, security)
     execucao = Execucao(
-        objetivo="corrigir" if fixing else "refatorar",
-        descricao=fixing[1] if fixing else "",
+        objetivo="investigar" if question else "corrigir" if fixing else "refatorar",
+        descricao=fixing[1] if fixing else question,
         criterios=fixing[2] if fixing else "",
         cli=name,
         executavel=str(choice.path),

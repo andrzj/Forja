@@ -30,6 +30,9 @@ from forja.orchestrator.facts import Fact
 from forja.orchestrator.operations import Journal, Step
 from forja.orchestrator.workspace_git import CommitMessage
 
+# the roles whose stage ends in an artifact of the run, with nothing changed and nothing committed
+NO_COMMIT = frozenset({Producer.SPECIFIER, Producer.ARCHAEOLOGIST})
+
 # (level, target id, operation) -> where a process reports to; the orchestrator builds these.
 SinkFactory = Callable[[Level, str, str], EventSink]
 
@@ -82,6 +85,7 @@ class AttemptContext:
     readme: str = ""  # what is wrong with the README as the documenter's stage begins
     adr: str = ""  # the decision record the task owes, if a rule says it owes one
     facts: tuple[Fact, ...] = ()  # what a person recorded, offered to every role as evidence
+    findings: str = ""  # what the archaeologist found, for the documenter of an investigation
 
 
 @dataclass(frozen=True)

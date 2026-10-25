@@ -35,3 +35,20 @@ def test_a_specifier_that_changed_a_file_of_any_kind_is_rejected() -> None:
         "docs/criteria.md",
     ]
     assert {f.message for f in result.findings} == {"the specifier writes criteria, not files"}
+
+
+def test_an_archaeologist_that_changed_nothing_is_approved_and_one_that_wrote_a_file_is_not() -> (
+    None
+):
+    def judge_archaeologist(*paths: str) -> object:
+        registry = AdapterRegistry()
+        registry.register_language(PythonAdapter())
+        changes = Changes(tuple(Change(ChangeKind.MODIFIED, p) for p in paths), 3, ())
+        task = TaskInfo("t1", "t1-f", "how?", ("src",), 8, 400, Producer.ARCHAEOLOGIST)
+        data = GateInput(Path("."), "c" * 40, "t1", "t1-f", "t1-fa1")
+        return asyncio.run(ScopeCheck(changes, task, registry.classify).evaluate(data))
+
+    assert isinstance(judge_archaeologist(), Approved)
+    result = judge_archaeologist("src/a.py", "docs/notes.md")
+    assert isinstance(result, Rejected)
+    assert {f.message for f in result.findings} == {"the archaeologist writes findings, not files"}

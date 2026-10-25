@@ -35,8 +35,10 @@ from forja.orchestrator.criteria import (
     manifest_of,
     with_criteria,
 )
+from forja.orchestrator.findings import findings_artifact_id, findings_of, findings_report
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
+    NO_COMMIT,
     AgentResult,
     AttemptContext,
     Expectations,
@@ -107,13 +109,17 @@ class TaskCycle:
         payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
         scope = payload.get("scope")
         author = role is Producer.TEST_AUTHOR
-        letter = {Producer.TEST_AUTHOR: "t", Producer.DOCUMENTER: "d", Producer.SPECIFIER: "c"}.get(
-            role, "s"
-        )
+        letter = {
+            Producer.TEST_AUTHOR: "t",
+            Producer.DOCUMENTER: "d",
+            Producer.SPECIFIER: "c",
+            Producer.ARCHAEOLOGIST: "f",
+        }.get(role, "s")
         prefix = {
             Producer.TEST_AUTHOR: "ta",
             Producer.DOCUMENTER: "da",
             Producer.SPECIFIER: "ca",
+            Producer.ARCHAEOLOGIST: "fa",
         }.get(role, "a")
         test_root = str(payload.get("test_root", ""))
         return TaskInfo(
@@ -332,6 +338,7 @@ class TaskCycle:
                 ctx,
                 readme=await run.measurer.readme_report(ctx),
                 adr=await run.measurer.adr_report(ctx),
+                findings=self._findings(ctx.task.task_id),
             )
         await journal.operate(
             "prepare_workcopy",
@@ -427,6 +434,8 @@ class TaskCycle:
         if stopper is None:
             if ctx.task.role is Producer.SPECIFIER:
                 self._record_criteria(ctx)
+            if ctx.task.role is Producer.ARCHAEOLOGIST:
+                self._record_findings(ctx)
             if ctx.task.role is Producer.TEST_AUTHOR and not ctx.task.reviews:
                 self._record_manifest(ctx)
             passed: list[JsonValue] = [
@@ -469,6 +478,28 @@ class TaskCycle:
             assumptions=(*output.assumptions, *(item.as_assumption() for item in output.left_out)),
             artifact_id=criteria_artifact_id(ctx.task.task_id),
         )
+
+    def _record_findings(self, ctx: AttemptContext) -> None:
+        """The Forja writes what the archaeologist found as an artifact of the run, each claim with
+        the basis it gave it and the premises in the header; the archaeologist writes no file."""
+        run = self._ctx
+        output = run.runner(ctx.task.role).declared_output(ctx)
+        executor = run.config.implementer
+        run.store.put(
+            artifact_type=ArtifactType.FINDINGS,
+            producer=Producer.ARCHAEOLOGIST,
+            body=findings_of(output),
+            executor=Executor(cli=executor.name, version=executor.version),
+            attempt_id=ctx.attempt_id,
+            assumptions=output.assumptions,
+            artifact_id=findings_artifact_id(ctx.task.task_id),
+        )
+
+    def _findings(self, task_id: str) -> str:
+        """What the task's archaeologist found, for the documenter; empty if it has none."""
+        if Producer.ARCHAEOLOGIST not in self.roles(task_id):
+            return ""
+        return findings_report(self._ctx, task_id)
 
     def _note_declared_premises(self, ctx: AttemptContext) -> None:
         """What the agent said it had to guess, and the elements the specifier left out, go to the
@@ -563,6 +594,10 @@ class TaskCycle:
         if ctx.task.role is Producer.DOCUMENTER:
             claims = self._ctx.runner(ctx.task.role).declared_claims(ctx)
             return Expectations(frozenset(), (), claims)
+        if ctx.task.role is Producer.ARCHAEOLOGIST:
+            return Expectations(
+                frozenset(), (), self._ctx.runner(ctx.task.role).declared_claims(ctx)
+            )
         if ctx.task.role is Producer.SPECIFIER:
             output = self._ctx.runner(ctx.task.role).declared_output(ctx)
             elements = elements_of(ctx.task.intent)
@@ -644,7 +679,7 @@ class TaskCycle:
     async def _commit(self, ctx: AttemptContext) -> None:
         journal = self._journal
         attempt, info = ctx.attempt_id, ctx.task
-        if info.role is not Producer.SPECIFIER:  # the specifier changes nothing: no commit
+        if info.role not in NO_COMMIT:  # these roles change nothing: no commit
             await self._commit_attempt(info, attempt)
         journal.enter(Level.ATTEMPT, attempt, AttemptState.COMMITTED)
         journal.enter(

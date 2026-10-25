@@ -171,6 +171,7 @@ class ScriptedAgent:
     criteria: tuple[Criterion, ...] = ()  # what a specifier declares
     left_out: tuple[LeftOut, ...] = ()
     assumptions: tuple[Assumption, ...] = ()
+    claims: tuple[Claim, ...] = ()  # what an archaeologist or a documenter declares
     die_after_the_call: bool = False
     by_feedback: bool = False
     in_process: bool = True  # False starts a real process, as the resume tests need
@@ -271,10 +272,11 @@ class ScriptedAgent:
         return self.tests
 
     def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
-        return ()
+        return self.claims
 
     def declared_output(self, ctx: AttemptContext) -> LlmOutput:
         return LlmOutput(
+            claims=self.claims,
             criteria=self.criteria,
             left_out=self.left_out,
             assumptions=self.assumptions,

@@ -11,6 +11,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validat
 from forja.core.artifacts.llm_output import (
     Claim,
     DeclaredChange,
+    FactCitation,
     check_relative_path,
 )
 from forja.core.artifacts.llm_output import Criterion as Criterion
@@ -34,12 +35,34 @@ RepoPath = Annotated[str, AfterValidator(check_relative_path)]
 # -- findings (archaeologist) ------------------------------------------------------------------
 
 
+class Basis(StrEnum):
+    """What a finding rests on. What is neither is a premise, and a premise is no claim."""
+
+    PROVEN = "proven"  # every citation is a file and lines or a measurement the Forja checked
+    CONFIRMED = "confirmed"  # it rests on a fact a person recorded
+
+
+class LabeledClaim(Claim):
+    """A claim with the basis the Forja gave it; the archaeologist never chooses the basis."""
+
+    basis: Basis
+
+    @model_validator(mode="after")
+    def _basis_matches_the_citations(self) -> Self:
+        on_a_fact = any(isinstance(c, FactCitation) for c in self.citations)
+        if on_a_fact != (self.basis is Basis.CONFIRMED):
+            raise ValueError("a claim is confirmed exactly when it cites a recorded fact")
+        return self
+
+
 class FindingsBody(BaseModel):
-    """What was found in the code, each statement backed by a citation."""
+    """What was found in the code, each statement backed by a citation.
+
+    The premises of the archaeologist are in the assumptions of the artifact's header."""
 
     model_config = _strict()
 
-    claims: tuple[Claim, ...] = ()
+    claims: tuple[LabeledClaim, ...] = ()
 
 
 # -- criteria (specifier) ----------------------------------------------------------------------

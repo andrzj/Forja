@@ -127,3 +127,28 @@ def test_a_claim_that_cites_a_recorded_fact_passes_gate_13_and_an_unknown_one_do
     assert isinstance(good["citations"], Approved)
     assert isinstance(bad["citations"], Rejected)
     assert [f.target for f in bad["citations"].findings] == ["F9"]
+
+
+def test_only_scope_and_citations_run_for_the_archaeologist(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    task = TaskInfo("t1", "t1-f", "how?", (), 8, 400, Producer.ARCHAEOLOGIST)
+    nowhere = Claim(
+        statement="add is slow",
+        citations=(FileCitation(kind="file", path="src/none.py", line_start=1, line_end=1),),
+    )
+
+    outcome = asyncio.run(
+        scene.measurer.judge(
+            AttemptContext(task, "t1-fa1", scene.repo.path, None),
+            sinks,
+            Expectations(frozenset(), (), (nowhere,)),
+        )
+    )
+
+    results = {run.check_id: run.result for run in outcome.runs}
+    assert list(results) == ["scope", "citations"]
+    assert isinstance(results["scope"], Approved)
+    assert isinstance(results["citations"], Rejected)

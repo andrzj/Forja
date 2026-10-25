@@ -18,11 +18,11 @@ from forja.core.idempotency.reconcilers import normalize_stage_id
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.config import Objective, RunConfig
 from forja.orchestrator.facts import Fact
+from forja.orchestrator.ports import NO_COMMIT
 from forja.orchestrator.summary import Premise
 
 # how a rejected attempt says which check stopped it (``describe_stop`` in the task cycle)
 _STOPPED_BY = re.compile(r"^gate (\d+) \(([^)]+)\):")
-NO_COMMIT = frozenset({Producer.SPECIFIER, Producer.ARCHAEOLOGIST})
 NO_GATE = "(fora dos gates)"
 ROLE_TEXT = {
     Producer.ARCHAEOLOGIST: "arqueólogo",
@@ -31,7 +31,11 @@ ROLE_TEXT = {
     Producer.IMPLEMENTER: "implementador",
     Producer.DOCUMENTER: "documentador",
 }
-OBJECTIVE_TEXT = {Objective.REFACTOR: "refatorar", Objective.FIX: "corrigir"}
+OBJECTIVE_TEXT = {
+    Objective.REFACTOR: "refatorar",
+    Objective.FIX: "corrigir",
+    Objective.INVESTIGATE: "investigar",
+}
 INTENT_LIMIT = 80
 
 

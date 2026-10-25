@@ -36,8 +36,8 @@ class Execucao(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    objetivo: Literal["refatorar", "corrigir"] = "refatorar"
-    descricao: str = ""
+    objetivo: Literal["refatorar", "corrigir", "investigar"] = "refatorar"
+    descricao: str = ""  # corrigir: the defect; investigar: the question
     arquivo: str = ""
     criterios: str = ""  # corrigir: the criteria file (CriteriaBody as JSON)
     cli: str = ""

@@ -20,6 +20,7 @@ from forja.orchestrator.facts import Fact
 class Objective(StrEnum):
     REFACTOR = "refactor"
     FIX = "fix"
+    INVESTIGATE = "investigate"
 
 
 class ExecutorRef(BaseModel):
@@ -68,6 +69,7 @@ class RunConfig(BaseModel):
     implementer: ExecutorRef
     test_author: ExecutorRef | None = None  # None: the implementer's executor writes the tests too
     fix: FixRequest | None = None  # what to fix; present exactly when the objective is FIX
+    question: str = ""  # what to find out; present exactly when the objective is INVESTIGATE
     budget: Budget = Budget()
     forja_version: NonEmpty
     policy_version: NonEmpty
@@ -77,9 +79,11 @@ class RunConfig(BaseModel):
     facts: tuple[Fact, ...] = ()  # what the person recorded; evidence in the packages
 
     @model_validator(mode="after")
-    def _fix_goes_with_the_fix_objective(self) -> Self:
+    def _request_goes_with_the_objective(self) -> Self:
         if (self.objective is Objective.FIX) != (self.fix is not None):
             raise ValueError("a fix request is required for, and only for, the fix objective")
+        if (self.objective is Objective.INVESTIGATE) != bool(self.question):
+            raise ValueError("a question is required for, and only for, the investigate objective")
         return self
 
 

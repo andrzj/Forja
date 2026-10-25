@@ -76,3 +76,27 @@ class FixPlanner:
                 test_root=self._test_root,
             )
         ]
+
+
+class InvestigationPlanner:
+    """The plan of an investigation: one task, the archaeologist first and the documenter after.
+
+    The code is not planned from the measure: the question names what to look at, and ``scope``
+    narrows where."""
+
+    def __init__(self, question: str, scope: Sequence[str]) -> None:
+        self._question = question
+        self._scope = tuple(scope)
+
+    async def plan(
+        self, worktree: Path, baseline: Baseline, budget: Budget
+    ) -> Sequence[PlannedTask]:
+        return [
+            PlannedTask(
+                intent=self._question,
+                scope=self._scope,
+                max_files=budget.files_per_task,
+                max_lines=budget.lines_per_task,
+                stages=(Producer.ARCHAEOLOGIST, Producer.DOCUMENTER),
+            )
+        ]

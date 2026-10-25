@@ -74,6 +74,7 @@ PACKAGE = "package.md"
 README_REPORT = "README report"
 ADR_REPORT = "ADR report"
 FACTS_REPORT = "Recorded facts"
+FINDINGS_REPORT = "Findings"
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
@@ -193,6 +194,35 @@ lists. Add `"assumptions"` only for something you had to guess. Then answer with
 sentence.
 """
 
+ARCHAEOLOGIST_INSTRUCTIONS = """\
+You are finding out how the code works, to answer the task below. You do not touch code, tests or
+documents, and you write no file but the answer: what you found goes in it.
+
+{commands}Read the files you need. Every statement you make in `claims` must be backed by at least
+one citation: a file and lines (`file`), a measurement (`evidence`) or a recorded fact (`fact`),
+and it must be something the cited lines or fact show, not something you infer. What you could not
+verify and had to guess is not a claim: put it in `assumptions`, with why you guessed it and what
+evidence would settle it.
+
+When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else:
+
+{{"claims": [{{"statement": "what the code does", "citations": [{{"kind": "file",
+"path": "src/x.py", "line_start": 3, "line_end": 9}}]}}],
+"assumptions": [{{"statement": "what you guessed", "reason": "why", "missing_evidence": "what
+would settle it"}}],
+"actions": []}}
+
+Give at least one claim or one assumption. Then answer with one short sentence.
+"""
+
+FINDINGS_INSTRUCTIONS = """\
+There is no change to document in this task: it asked a question, and an archaeologist answered
+it. Write the documentation from the findings below, in files under `docs/`. Keep the three kinds
+apart, each under a heading of its own: what is proven, what a person confirmed, and the premises,
+which you present as unverified. Do not turn a premise into a statement of fact. Cite what you
+state in `claims`, as above.
+"""
+
 ELEMENTS = "Elements of the input"
 
 _SHORT_NAME = re.compile(r"~\d")
@@ -266,6 +296,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         items.append(PackageItem(ItemKind.TEXT, README_REPORT, ctx.readme, True))
     if documenter and ctx.adr:  # names come from the repository's manifests: redacted too
         items.append(PackageItem(ItemKind.TEXT, ADR_REPORT, ctx.adr, True))
+    if documenter and ctx.findings:  # the archaeologist read the repository: redacted like a file
+        items.append(PackageItem(ItemKind.TEXT, FINDINGS_REPORT, ctx.findings, True))
     if ctx.facts:  # text a person wrote: redacted like the rest
         recorded = "\n".join(f"- `{f.id}` ({f.author}, {f.date}): {f.text}" for f in ctx.facts)
         items.append(PackageItem(ItemKind.TEXT, FACTS_REPORT, recorded, True))
@@ -273,6 +305,7 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
     report = next((i.content for i in result.items if i.name == README_REPORT), "")
     author = task.role is Producer.TEST_AUTHOR
     specifier = task.role is Producer.SPECIFIER
+    archaeologist = task.role is Producer.ARCHAEOLOGIST
     commands = FACADE_COMMANDS if facade else NO_COMMANDS
     tests_in = f"under `{task.test_root}`" if task.test_root else "in the project's test files"
     template = (
@@ -280,6 +313,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         if documenter
         else SPECIFIER_INSTRUCTIONS
         if specifier
+        else ARCHAEOLOGIST_INSTRUCTIONS
+        if archaeologist
         else AUTHOR_INSTRUCTIONS
         if author
         else FIX_INSTRUCTIONS
@@ -294,7 +329,7 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             "Only documentation files. The files below are the ones the change touched."
             if documenter
             else "No file. The files below are for reading."
-            if specifier
+            if specifier or archaeologist
             else f"Only {tests_in}. The production files below are for reading."
             if author
             else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
@@ -306,7 +341,9 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         parts.append(f"## {ELEMENTS}\n\n{listed}\n")
     adr = next((i.content for i in result.items if i.name == ADR_REPORT), "")
     recorded = next((i.content for i in result.items if i.name == FACTS_REPORT), "")
-    shown = [i for i in result.items if i.name not in (README_REPORT, ADR_REPORT, FACTS_REPORT)]
+    found = next((i.content for i in result.items if i.name == FINDINGS_REPORT), "")
+    hidden_names = (README_REPORT, ADR_REPORT, FACTS_REPORT, FINDINGS_REPORT)
+    shown = [i for i in result.items if i.name not in hidden_names]
     if shown or notes:
         parts.append("## Files in scope\n")
     for item in shown:
@@ -326,6 +363,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             f"## Facts a person recorded\n\n{recorded}\n\n"
             'They are true. To rest a claim on one, cite it: {"kind": "fact", "fact_id": "<id>"}.\n'
         )
+    if found:
+        parts.append(f"## Findings\n\n{FINDINGS_INSTRUCTIONS}\n{found}\n")
     if adr:
         parts.append(f"## Decision record owed\n\n{adr}\n")
     if ctx.previous_rejection:
@@ -496,6 +535,8 @@ class ExecutorAgentRunner:
             output = _declared(source)
             if self._role is Producer.SPECIFIER:
                 _check_criteria(output)
+            if self._role is Producer.ARCHAEOLOGIST:
+                _check_findings(output)
             if self._role is Producer.TEST_AUTHOR and not ctx.task.reviews:
                 _check_manifest(output)
             declaration = ChangeDeclaration.from_output(output)
@@ -639,6 +680,13 @@ def _check_manifest(output: LlmOutput) -> None:
     except ValidationError as error:
         problems = "; ".join(item["msg"] for item in error.errors())
         raise RejectedWork(f"the declared tests are not valid: {problems}") from None
+
+
+def _check_findings(output: LlmOutput) -> None:
+    """The archaeologist must have found something: a claim or an assumption. Nothing is not an
+    answer to a question."""
+    if not output.claims and not output.assumptions:
+        raise RejectedWork("the answer holds no claim and no assumption: nothing was found")
 
 
 def _check_criteria(output: LlmOutput) -> None:
