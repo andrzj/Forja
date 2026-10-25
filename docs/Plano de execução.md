@@ -20,7 +20,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 | --- | --- | --- | --- |
 | 1 | Gate 6, fecho: documentação do usuário e ADR (passo 6) e gate de mutação nos arquivos novos. O E2E real é do dono. | `docs\plano-gate-6.md` | **concluído** (23/10); falta só o E2E real, que é do dono |
 | 2 | Incremento 4: documentador (registro de mudança, README, ADR por regra, deriva, voz, citações do documentador, resumo) | `docs\plano-documentador.md` | **concluído** (24/10): passos 0 a 10 |
-| 3 | Incremento 6: especificador (critérios, rastreabilidade, `manifesto-testes.json`), arqueólogo, andaime, modo de diretório vazio, premissas e fatos completos, coleta da revisão, gate 13 completo | `docs\plano-especificador-arqueologo.md` | plano escrito; a fazer |
+| 3 | Incremento 6: especificador (critérios, rastreabilidade, `manifesto-testes.json`), arqueólogo, andaime, modo de diretório vazio, premissas e fatos completos, coleta da revisão, gate 13 completo | `docs\plano-especificador-arqueologo.md` | plano escrito; **em andamento**: passo 0 concluído (25/10), passo 1 a fazer |
 | 4 | Incremento 5, restante: gate 9 (arquitetura) | `docs\plano-gate-9.md` | plano escrito; a fazer |
 | 5 | Incremento 5, restante: gate 11 (teste diferencial); depende do item 3 | `docs\plano-gate-11.md` | plano escrito; a fazer |
 | 6 | Incremento 3, restante: 3e (cache de medições pela chave completa), os 4 sobreviventes de `mutation\executor.py`, calibração dos limiares com dados de revisão | plano a escrever | a fazer |
@@ -31,6 +31,7 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 
 Mais recente primeiro. Cada linha: data, o que mudou, commits.
 
+- **25/10/2026 (fila 3, passo 0):** leitura e conferência do código feitas; `docs\plano-especificador-arqueologo.md` ganhou a seção “Correções do passo 0” (16 itens). Principais: papéis novos gravam `criterios.json` e `achados.json` no `ArtifactStore` da execução e terminam sem diff e sem commit (o documentador escreve arquivo no repositório, não artefato); `LlmOutput` e `Criterion.origin` mudam; critérios chegam depois do plano, então o intent das etapas seguintes é montado após o especificador; o andaime passa a ser da preparação (antes de `base_commit`), não etapa da tarefa; são cinco adaptadores de linguagem, não seis; TypeScript exige `npm install`; squash apaga trailers. Decisões marcadas como reversíveis nos itens 1, 4 e 10. Nenhum código alterado. Próximo: fila 3, passo 1.
 - **25/10/2026 (fila 3, plano escrito):** `docs\plano-especificador-arqueologo.md` (passos 0 a 8: especificador, manifesto de testes, premissas e fatos, coleta da revisão, arqueólogo e `investigar`, andaime e `criar`, gate 13 completo, fecho). Decisões marcadas como reversíveis no plano: segmentação da entrada em elementos, formato do arquivo de fatos, nome `forja revisao`, `documentar` sai da ajuda, CLI dos papéis novos = a do implementador. Próximo: fila 3, passo 0.
 - **24/10/2026 (fila alterada por ordem expressa do dono, fora da fila):** o gate de mutação da própria Forja chamava o binário original do `unclebob/mutator` no WSL, e não o mutator da Forja (`src/forja/mutation`, ADR 0021). Errado: mutação é sempre pelo mutator da Forja, e a Forja roda em qualquer terminal, sem WSL. `scripts/mutate.py` reescrito sobre `forja.mutation` (`discover`, `apply_site`, `run_mutants`): cobertura por teste e supressões como antes, canário no mesmo executor, `PytestRunner` com `PYTHONPATH` da cópia e encerramento da árvore de processos no estouro de tempo; sem `--engine` e sem `--fresh` (o mutator da Forja não tem rodada diferencial). Os testes de link simbólico do passo 10 passaram a simular o link, para valerem no Windows. O resultado do passo 10 (entrada abaixo) foi refeito nesse gate. `docs/estado.md` e os planos dos gates 9 e 11 deixam de citar o WSL. Próximo: fila 3.
 - **24/10/2026 (fila 2, passo 10 concluído; fila 2 concluída):** os 52 sobreviventes do gate de mutação nos 13 arquivos do documentador: 46 mortos com testes novos (`test_change_record.py`, `test_symbols.py`, `test_voice.py`, `test_voice_message.py`, `test_comments.py`, `test_readme.py`, `test_readme_paths.py`, `test_readme_gate.py`, `test_doc_drift.py`, `test_doc_drift_gate.py`, `test_adr_trigger.py`) e 6 equivalentes suprimidos em `mutation-suppressions.toml` com aprovação do dono (`fence.group(1)[0]` vs `[1]` em `readme.py` x3 e `doc_drift.py`; `rsplit("/", 1)[-1]` em `adr_trigger.py`; `and -> or` em `comments.py::_judge`). Próximo: fila 3 (plano `docs\plano-especificador-arqueologo.md` a escrever).
@@ -66,7 +67,7 @@ eadme.py` (`evaluate`, `chunks`, `signature`, `cited_commands`, `touched_chunks`
 | 3 | 3a, 3b, 3c e 3d concluídos; 3e e 3f pendentes (fila 6 e 8) |
 | 4 | concluído (fila 2) |
 | 5 | adaptadores, E2E (gate 6) e segurança (gate 10) feitos ou em andamento; gates 9 e 11 pendentes (fila 4 e 5) |
-| 6 | plano escrito; passo 0 a fazer (fila 3) |
+| 6 | plano escrito; passo 0 concluído; passo 1 a fazer (fila 3) |
 | 7 | não iniciado (fila 7) |
 
 ## Estratégia
