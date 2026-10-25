@@ -49,7 +49,7 @@ Estado: plano, nada implementado; sem perguntas abertas. Regra do dono: gates gr
 5. **`PackageMetricsCheck`** com `CheckSpec("package_metrics", 9, OBSERVATION, PREMISE, thresholds={"max_distance","min_types"})`; testes de `A` por linguagem.
 6. **Integração:** os três no `PipelineMeasurer.judge` (depois de `module_depth`, antes do gate 10; ordem do pipeline atualizada nos testes que a listam), `baseline().metrics`, nomes curtos dos gates na UI (`ui\view.py::GATES`, `ui\live.py::GATE_NAMES`), projetos do monorepo.
 7. **Documentação do usuário e ADR:** como declarar camadas, o que conta como aresta e o que não conta, as métricas e seus limiares, limites de resolução por linguagem. ADR (unidade = diretório; camadas declaradas pelo usuário, nunca deduzidas).
-8. **Ponta a ponta real** (regra do dono: só no fecho do gate) e **gate de mutação no WSL** nos arquivos novos. E2E por linguagem: refatoração que cria ciclo é rejeitada (critério do incremento 5); aresta para camada de cima reprova; sem camadas o aviso aparece.
+8. **Ponta a ponta real** (regra do dono: só no fecho do gate) e **gate de mutação (`scripts/mutate.py`)** nos arquivos novos. E2E por linguagem: refatoração que cria ciclo é rejeitada (critério do incremento 5); aresta para camada de cima reprova; sem camadas o aviso aparece.
 
 ## Limites já conhecidos
 

@@ -3,6 +3,8 @@
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from forja.checks.doc_drift import Facts
 from forja.checks.doc_drift_gate import MAX_TEXT_BYTES, Base, DocDriftCheck, read_repository
 from forja.core.gates import Approved, GateInput, GateResult, Rejected
@@ -142,3 +144,17 @@ def test_a_file_of_exactly_the_size_limit_is_read_and_one_byte_more_is_not(
     facts = read(repo)
     assert "atlimitword" in facts.words
     assert "overlimitword" not in facts.words
+
+
+def test_a_link_is_not_read_as_a_file_of_the_repository(
+    repo: Repo,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write(repo, "src/real.py", "realword = 1\n")
+    write(repo, "src/linked.py", "linkedword = 1\n")
+    real = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == "linked.py" or real(self))
+    facts = read(repo)
+    assert "realword" in facts.words
+    assert "linkedword" not in facts.words
+    assert "src/linked.py" not in facts.files

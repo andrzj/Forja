@@ -4,24 +4,25 @@
     scripts/mutate.py --all        # every source file
     scripts/mutate.py src/forja/checks/changes.py
 
-It runs the engine (unclebob/mutator) the way the engine is meant to be run: the coverage report
-decides which sites are run (a site no test reaches is reported as uncovered, not run), and the
-snapshot the engine keeps in ``.metrics/mutate`` makes every run after the first differential (only
-survivors and the functions whose text changed are run again; ``--fresh`` runs everything). What
-the script adds is the choice of tests: only those that exercise the file, found from a coverage
-run that records which test ran each line. A surviving mutant fails the run
-unless ``mutation-suppressions.toml`` names it, with a reason a person approved. Nothing in the
-source can switch the gate off: a comment that does is rejected by the scope gate.
+It runs the Forja's own mutator (``forja.mutation``, the rules of unclebob/mutator on tree-sitter,
+ADR 0021) on the Forja's own source, the way the mutator runs on any project: the coverage report
+decides which sites are run (a site no test reaches is reported as uncovered, not run), each mutant
+is judged by the test command, and a failing or timed-out run kills it. The choice of tests is the
+script's: only those that exercise the file, found from a coverage run that records which test ran
+each line. A surviving mutant fails the run unless ``mutation-suppressions.toml`` names it, with a
+reason a person approved. Nothing in the source can switch the gate off: a comment that does is
+rejected by the scope gate.
 
 Exit: 0 every mutant was killed or suppressed; 2 the tests fail before any mutation; 3 a mutant
-survived; 4 the canary failed. It needs a POSIX shell, so on Windows run it inside WSL.
+survived; 4 the canary failed. It runs wherever Python runs, Windows included.
 """
 
 import argparse
 import ast
+import asyncio
 import json
 import os
-import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -30,14 +31,21 @@ import tomllib
 from collections import defaultdict
 from pathlib import Path
 
+from forja.core.reports.models import MutantStatus, MutationReport
+from forja.mutation import apply_site, discover
+from forja.mutation.executor import (
+    BaselineFailed,
+    Mutant,
+    TestsDidNotRun,
+    TestVerdict,
+    run_mutants,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 SUPPRESSIONS = ROOT / "mutation-suppressions.toml"
 COVERAGE = ROOT / "target" / "coverage" / "python"
 NL = chr(10)
 LCOV = COVERAGE / "lcov.info"  # where the engine looks for the coverage of a Python project
-OUTCOME = re.compile(
-    r"^(KILLED|SURVIVED|UNCOVERED)\s+(?P<file>\S+?):(?P<line>\d+)\s+(?P<change>.+)$"
-)
 # The integration tests run too: without them the code they alone reach (the call to the agent CLI,
 # the way back) counts as untested. Each file only runs the test files that reach it.
 TESTS_ENV: dict[str, str] = {}
@@ -202,76 +210,109 @@ def suppressions() -> list[dict[str, str]]:
     return entries
 
 
-def function_at(source: Path, line: int) -> str:
-    """The qualified name of the innermost function that holds ``line``."""
-    best, span = "<module>", None
-
-    def visit(node: ast.AST, prefix: str) -> None:
-        nonlocal best, span
-        for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                name = f"{prefix}{child.name}"
-                end = child.end_lineno or child.lineno
-                inside = child.lineno <= line <= end and not isinstance(child, ast.ClassDef)
-                if inside and (span is None or end - child.lineno <= span):
-                    best, span = name, end - child.lineno
-                visit(child, f"{name}.")
-            else:
-                visit(child, prefix)
-
-    visit(ast.parse(source.read_text(encoding="utf-8")), "")
-    return best
+def covered_lines() -> dict[str, frozenset[int]]:
+    """The lines a test runs, by source file, from the coverage report of the last run."""
+    found: dict[str, frozenset[int]] = {}
+    for record in LCOV.read_text(encoding="utf-8").split("end_of_record" + NL):
+        lines = record.splitlines()
+        name = next((line[3:] for line in lines if line.startswith("SF:")), None)
+        if name is None:
+            continue
+        path = Path(name) if Path(name).is_absolute() else ROOT / name
+        try:
+            key = path.resolve().relative_to(ROOT).as_posix()
+        except ValueError:
+            continue
+        found[key] = frozenset(number for number, count in line_hits(lines).items() if count > 0)
+    return found
 
 
-def mutate(
-    file: str, tests: list[str], engine: Path, workers: int, *, fresh: bool = False
-) -> tuple[int, list[str], list[str]]:
-    skipped = " ".join(f"--deselect {name}" for name in settings().get("deselect", []))
-    # --timeout: a mutant that loops forever fails its test in seconds, instead of the engine
-    # waiting ten times the whole baseline for it
-    base = f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 --timeout={TEST_TIMEOUT}"
-    command = f"{base} {skipped} {' '.join(tests)}"
-    done = run(
-        str(engine), "--use-existing-coverage", *(["--mutate-all"] if fresh else []),
-        "--max-workers", str(workers), "--test-command", command, file, env=TESTS_ENV,
-    )  # fmt: skip
-    survived, uncovered = [], []
-    for text in done.stdout.splitlines():
-        found = OUTCOME.match(text)
-        if found and found[1] == "SURVIVED":
-            survived.append(f"{found['file']}:{found['line']} {found['change']}")
-        elif found and found[1] == "UNCOVERED":
-            uncovered.append(f"{found['file']}:{found['line']} {found['change']}")
-    return done.returncode, survived, uncovered
+def mutants_of(file: str, root: Path, covered: frozenset[int]) -> list[Mutant]:
+    source = (root / file).read_text(encoding="utf-8")
+    return [
+        Mutant(
+            file, site.line, site.description, site.function,
+            apply_site(source, site).encode("utf-8"), site.line in covered,
+        )
+        for site in discover(source, file)
+    ]  # fmt: skip
 
 
-def canary(engine: Path) -> bool:
+def stop_tree(pid: int) -> None:
+    """End a process and what it started: a mutant that loops must not leave workers behind."""
+    if sys.platform == "win32":
+        run("taskkill", "/F", "/T", "/PID", str(pid))
+    else:
+        os.killpg(pid, signal.SIGKILL)
+
+
+class PytestRunner:
+    """Runs the chosen test files in a copy of the project, as the executor asks."""
+
+    __test__ = False
+
+    def __init__(self, tests: list[str], deselect: list[str]) -> None:
+        self.tests, self.deselect = tests, deselect
+
+    async def __call__(self, root: Path, timeout: float | None) -> TestVerdict:
+        # --timeout: a mutant that loops forever fails its test in seconds, instead of the
+        # executor waiting ten times the whole baseline for it
+        command = [
+            sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", "-n0",
+            f"--timeout={TEST_TIMEOUT}", *self.deselect, *self.tests,
+        ]  # fmt: skip
+        # the copy's own source must be the one imported, not the installed project's
+        env = {
+            **os.environ,
+            **TESTS_ENV,
+            "PYTHONPATH": str(root / "src"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        process = await asyncio.create_subprocess_exec(
+            *command, cwd=root, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=sys.platform != "win32",
+        )  # fmt: skip
+        try:
+            code = await asyncio.wait_for(process.wait(), timeout)
+        except TimeoutError:
+            stop_tree(process.pid)
+            await process.wait()
+            return TestVerdict.TIMED_OUT
+        if code == 0:
+            return TestVerdict.PASSED
+        if code in (1, 2):  # a test failed, or the changed code no longer loads
+            return TestVerdict.FAILED
+        raise TestsDidNotRun(f"pytest exited with {code}")
+
+
+def judge(mutants: list[Mutant], runner: PytestRunner, workers: int) -> MutationReport:
+    with tempfile.TemporaryDirectory(prefix="forja-mutants-", ignore_cleanup_errors=True) as copies:
+        return asyncio.run(run_mutants(ROOT, Path(copies), mutants, runner, workers=workers))
+
+
+def canary() -> bool:
     """Prove the harness can tell a mutant from a failed command, before trusting any verdict.
 
-    A tiny project is mutated twice with the same shape of command the gate uses: tests that
-    check nothing must let the mutant survive, and tests that check the sum must kill it. A
-    command that fails for its own reasons (a wrong path, a missing module) would "kill" both.
+    A tiny project is mutated twice with the same runner the gate uses: tests that check nothing
+    must let the mutant survive, and tests that check the sum must kill it. A command that fails
+    for its own reasons (a wrong path, a missing module) would "kill" both.
     """
     with tempfile.TemporaryDirectory(prefix="forja-canary-") as name:
-        root = Path(name)
-        (root / "src").mkdir()
+        root = Path(name) / "project"
+        (root / "src").mkdir(parents=True)
         (root / "tests").mkdir()
         (root / "src" / "canary.py").write_text("def add(a, b):\n    return a + b\n", "utf-8")
         head = "from canary import add\n\n\ndef test_it():\n    assert "
         (root / "tests" / "test_loose.py").write_text(head + "add(1, 2) is not None\n", "utf-8")
         (root / "tests" / "test_tight.py").write_text(head + "add(1, 2) == 3\n", "utf-8")
-        results = {}
+        mutants = mutants_of("src/canary.py", root, frozenset({2}))
+        survivors = {}
         for kind in ("loose", "tight"):
-            command = (
-                f"{sys.executable} -m pytest -q -x -p no:cacheprovider -n0 -o pythonpath=src "
-                f"tests/test_{kind}.py"
-            )
-            done = run(
-                str(engine), "--no-coverage", "--mutate-all", "--test-command", command,
-                "src/canary.py", cwd=root, env=TESTS_ENV,
-            )  # fmt: skip
-            results[kind] = (done.returncode, done.stdout.count("SURVIVED"))
-    return results["loose"][1] >= 1 and results["tight"] == (0, 0)
+            runner = PytestRunner([f"tests/test_{kind}.py"], [])
+            with tempfile.TemporaryDirectory(prefix="forja-canary-copies-") as copies:
+                report = asyncio.run(run_mutants(root, Path(copies), mutants, runner, workers=1))
+            survivors[kind] = len(report.with_status(MutantStatus.SURVIVED))
+    return bool(mutants) and survivors["loose"] >= 1 and survivors["tight"] == 0
 
 
 def parse_args() -> argparse.Namespace:
@@ -280,32 +321,24 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("files", nargs="*")
     parser.add_argument("--all", action="store_true")
-    parser.add_argument(
-        "--engine",
-        default=os.environ.get("FORJA_MUTATOR", str(Path.home() / "mutator" / "mutator")),
-    )
-    parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
     parser.add_argument("--reuse-coverage", action="store_true")
     parser.add_argument("--skip-canary", action="store_true")
-    parser.add_argument(
-        "--fresh", action="store_true", help="run every mutant again, ignoring the snapshot"
-    )
     return parser.parse_args()
 
 
-def report_survivors(survived: list[str], allowed: list[dict[str, str]]) -> int:
+def report_survivors(report: MutationReport, allowed: list[dict[str, str]]) -> int:
     """Print the survivors no suppression names; return how many there were."""
     count = 0
-    for entry in survived:
-        where, _, change = entry.partition(" ")
-        path, _, line = where.rpartition(":")
-        function = function_at(ROOT / path, int(line))
+    for mutant in report.with_status(MutantStatus.SURVIVED):
         muted = any(
-            s["file"] == path and s["function"] == function and s["change"] == change
+            s["file"] == mutant.file
+            and s["function"] == mutant.function
+            and s["change"] == mutant.change
             for s in allowed
         )
         if not muted:
-            print(f"SURVIVED {entry}  [{function}]")
+            print(f"SURVIVED {mutant.file}:{mutant.line} {mutant.change}  [{mutant.function}]")
             count += 1
     return count
 
@@ -317,12 +350,13 @@ def main() -> int:
         print("no source file changed: nothing to mutate")
         return 0
     started = time.monotonic()
-    if not args.skip_canary and not canary(Path(args.engine)):
+    if not args.skip_canary and not canary():
         print("the canary failed: the harness cannot tell a mutant from a broken command")
         return 4
     print(f"canary: {time.monotonic() - started:.0f}s")
     started = time.monotonic()
     tests_of = record_coverage(args.reuse_coverage)
+    covered = covered_lines()
     print(f"coverage by test: {time.monotonic() - started:.0f}s")
     allowed = suppressions()
     survivors, unreached = 0, 0
@@ -333,18 +367,19 @@ def main() -> int:
             survivors += 1
             continue
         started = time.monotonic()
-        code, survived, uncovered = mutate(
-            file, tests, Path(args.engine), args.workers, fresh=args.fresh
-        )
+        mutants = mutants_of(file, ROOT, covered.get(file, frozenset()))
+        try:
+            report = judge(mutants, PytestRunner(tests, deselected()), args.workers)
+        except (BaselineFailed, TestsDidNotRun) as error:
+            print(f"{file}: the tests fail before any mutation ({error})")
+            return 2
         took = time.monotonic() - started
         print(f"[{number}/{len(files)}] {file}: {len(tests)} test file(s), {took:.0f}s", flush=True)
-        if code == 2:
-            print(f"{file}: the tests fail before any mutation")
-            return 2
-        survivors += report_survivors(survived, allowed)
-        if uncovered:
-            unreached += len(uncovered)
-            print(f"{file}: {len(uncovered)} site(s) on lines no test runs (not run)")
+        survivors += report_survivors(report, allowed)
+        missed = len(report.with_status(MutantStatus.UNCOVERED))
+        if missed:
+            unreached += missed
+            print(f"{file}: {missed} site(s) on lines no test runs (not run)")
     print(
         "mutation: "
         + ("all mutants killed or suppressed" if not survivors else f"{survivors} survived")

@@ -47,11 +47,11 @@ Estado: plano, nada implementado, **sem perguntas abertas**. **Adiado pelo dono 
 6. **`DifferentialCheck`:** compara a versão nova com a base (saídas e razão de tempo/memória por mediana de 3 execuções, razão 1,25), `CheckSpec` com `thresholds={"max_time_ratio","max_memory_ratio","runs"}`, só em refatoração.
 7. **Integração:** registro no `PipelineMeasurer.judge` depois de `new_dependency`, avisos (`notices`), resumo da preparação, política.
 8. **Documentação do usuário:** de onde vêm os casos, regras de comparação, limites, o que não é medido (I/O e plataformas sem medida de memória).
-9. **Ponta a ponta real** com um repositório de exemplo por linguagem (regra do dono: testes reais só no fecho) e **gate de mutação no WSL** nos arquivos novos.
+9. **Ponta a ponta real** com um repositório de exemplo por linguagem (regra do dono: testes reais só no fecho) e **gate de mutação (`scripts/mutate.py`)** nos arquivos novos.
 
 ## Limites já conhecidos
 
 - Sem os geradores e fakes dos E2E (gate 6) e o autor de testes, não há casos e o check não executa (decisão do dono).
 - A comparação só vale para saídas determinísticas; o que não é determinístico precisa de regra declarada ou fica em quarentena.
 - Tempo e memória variam com a máquina; por isso mediana de várias execuções, razão em vez de valor absoluto e modo observação até haver dados.
-- Em POSIX o ramo do runner não foi exercitado em produção; a medida de memória lá só se verifica no gate de mutação no WSL e no ponta a ponta.
+- Em POSIX o ramo do runner não foi exercitado em produção; a medida de memória lá só se verifica no gate de mutação (`scripts/mutate.py`) e no ponta a ponta.

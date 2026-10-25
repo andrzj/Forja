@@ -3,6 +3,8 @@
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from forja.checks.adr_trigger import (
     DEPENDENCY,
     AdrCheck,
@@ -18,7 +20,6 @@ from forja.core.gates import Approved, GateInput, GateResult, Rejected
 from forja.core.redaction import Redactor
 from forja.orchestrator.agent_runner import build_package
 from forja.orchestrator.ports import AttemptContext, TaskInfo
-from tests.checks.test_readme_paths import link_or_skip
 
 SECTIONS = ["# 0003. Use x", "## Context", "c", "## Decision", "d"]
 SECTIONS += ["## Alternatives", "a", "## Consequences", "c"]
@@ -139,8 +140,10 @@ def test_a_file_in_the_folder_that_is_not_a_record_is_left_alone(tmp_path: Path)
     assert owes_a_record(judge(tmp_path, (DEP,), set()))
 
 
-def test_a_link_in_the_folder_is_not_a_record(tmp_path: Path) -> None:
-    (tmp_path / "docs" / "adr").mkdir(parents=True)
-    (tmp_path / "good.md").write_text(GOOD, encoding="utf-8")
-    link_or_skip(tmp_path / "docs" / "adr" / "0004-link.md", tmp_path / "good.md")
+def test_a_link_in_the_folder_is_not_a_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record(tmp_path, "0004-link.md", GOOD)
+    real = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == "0004-link.md" or real(self))
     assert owes_a_record(judge(tmp_path, (DEP,), set()))

@@ -78,8 +78,11 @@ def test_the_worktree_itself_is_inside_it(tmp_path: Path) -> None:
     assert exists_inside(tmp_path, "")
 
 
-def test_a_link_that_stays_inside_the_worktree_is_still_a_link(tmp_path: Path) -> None:
-    (tmp_path / "real.md").write_text("x", encoding="utf-8")
-    link_or_skip(tmp_path / "alias.md", tmp_path / "real.md")
+def test_a_link_that_stays_inside_the_worktree_is_still_a_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "alias.md").write_text("x", encoding="utf-8")
+    real = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == "alias.md" or real(self))
     assert inside(tmp_path, "alias.md") is None
     assert not exists_inside(tmp_path, "alias.md")
