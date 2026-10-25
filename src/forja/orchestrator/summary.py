@@ -4,6 +4,7 @@ Written in Portuguese, to a file in the run directory and never into the reposit
 come from the log, so a resumed run produces the same text as one that was never interrupted.
 """
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,7 +15,7 @@ from forja.core.confirmation import ConfirmationError, load_confirmation
 from forja.core.events.state import RunState
 from forja.core.events.versioning import BadLine, parse_line
 from forja.core.isolation import Context, Guarantee, Status
-from forja.core.states import AttemptState, Level, TaskState
+from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.config import RunConfig
 
 METRICS = "metrics"
@@ -27,9 +28,25 @@ NOT_APPLICABLE = "Não se aplica nesta versão."
 
 @dataclass(frozen=True)
 class Premise:
+    """Something the run went on without knowing: a check that could not measure (``check``), or
+    what an agent declared it had to guess (``statement``, with why and what evidence was missing).
+
+    ``stage`` is where it arose; the commits of that stage and of the later ones depend on it.
+    """
+
     task: str
     attempt: str
     check: str
+    stage: str = ""
+    statement: str = ""
+    reason: str = ""
+    missing_evidence: str = ""
+
+    @property
+    def id(self) -> str:
+        """A name the person can use in the facts file; the same premise has the same name."""
+        what = self.check or self.statement
+        return "p" + hashlib.sha256(f"{self.task}\n{what}".encode()).hexdigest()[:8]
 
 
 @dataclass(frozen=True)
@@ -74,9 +91,15 @@ def read_facts(log_path: Path) -> Facts:
         kind, payload = event.payload.get("kind"), event.payload
         if kind == PREMISE:
             premise = Premise(
-                str(payload.get("task")), str(payload.get("attempt")), str(payload.get("check"))
+                str(payload.get("task")),
+                str(payload.get("attempt")),
+                str(payload.get("check", "")),
+                str(payload.get("stage", "")),
+                str(payload.get("statement", "")),
+                str(payload.get("reason", "")),
+                str(payload.get("missing_evidence", "")),
             )
-            if premise not in seen:
+            if premise.id not in {known.id for known in seen}:
                 seen.add(premise)
                 facts.premises.append(premise)
         elif kind == DOCUMENTATION:
@@ -168,7 +191,7 @@ def render_summary(
         "",
         "## Premissas assumidas",
         "",
-        *_premises(facts),
+        *_premises(state, facts, config),
         "",
         "## Tarefas bloqueadas",
         "",
@@ -268,13 +291,57 @@ def _agents(config: RunConfig) -> list[str]:
     return lines
 
 
-def _premises(facts: Facts) -> list[str]:
-    if not facts.premises:
-        return ["Nenhuma."]
+SPECIFIER_STAGE = "c"  # the stage of the specifier is ``<task>-c``; it commits nothing
+
+
+def _premises(state: RunState, facts: Facts, config: RunConfig) -> list[str]:
+    """Each premise with its name, the commits that depend on it and what a person recorded."""
+    lines = [_premise_line(state, p, config) for p in facts.premises]
+    names = {p.id for p in facts.premises}
+    lines += [
+        f"- O fato `{f.id}` trata da premissa `{f.premise}`, que esta execução não teve."
+        for f in config.facts
+        if f.premise and f.premise not in names
+    ]
+    return lines or ["Nenhuma."]
+
+
+def _premise_line(state: RunState, premise: Premise, config: RunConfig) -> str:
+    if premise.check:
+        what = (
+            f"{premise.check}: não foi possível medir; a tarefa `{premise.task}` seguiu "
+            f"(tentativa `{premise.attempt}`)."
+        )
+    else:
+        what = (
+            f"{premise.statement} (por quê: {premise.reason}; evidência que faltou: "
+            f"{premise.missing_evidence}); tarefa `{premise.task}`, tentativa `{premise.attempt}`."
+        )
+    affected = _affected(state, premise)
+    commits = (
+        "Commits com " + ", ".join(f"`Stage-Id: {s}`" for s in affected) + "."
+        if affected
+        else "Nenhum commit depende dela."
+    )
+    settled = [
+        f"{'Confirmada' if f.relation == 'confirms' else 'Corrigida'} por `{f.id}` "
+        f"({f.author}, {f.date}): {f.text}"
+        for f in config.facts
+        if f.premise == premise.id
+    ]
+    return " ".join([f"- `{premise.id}` {what}", commits, *settled])
+
+
+def _affected(state: RunState, premise: Premise) -> list[str]:
+    """The committed stages of the task from the one the premise arose in: what they did rests on
+    it. The specifier's stage commits nothing. Tasks do not depend on each other."""
+    stages = state.children_of(Level.STAGE, premise.task)
+    start = stages.index(premise.stage) if premise.stage in stages else 0
     return [
-        f"- {p.check}: não foi possível medir; a tarefa `{p.task}` seguiu "
-        f"(tentativa `{p.attempt}`)."
-        for p in facts.premises
+        stage
+        for stage in stages[start:]
+        if state.state_of(Level.STAGE, stage) is StageState.COMMITTED
+        and stage != f"{premise.task}-{SPECIFIER_STAGE}"
     ]
 
 

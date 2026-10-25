@@ -26,6 +26,7 @@ from forja.core.process import EventSink
 from forja.core.states import Level
 from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import Budget, RunConfig
+from forja.orchestrator.facts import Fact
 from forja.orchestrator.operations import Journal, Step
 from forja.orchestrator.workspace_git import CommitMessage
 
@@ -80,6 +81,7 @@ class AttemptContext:
     message: str = ""  # the reason the agent gave, which becomes the body of the commit
     readme: str = ""  # what is wrong with the README as the documenter's stage begins
     adr: str = ""  # the decision record the task owes, if a rule says it owes one
+    facts: tuple[Fact, ...] = ()  # what a person recorded, offered to every role as evidence
 
 
 @dataclass(frozen=True)

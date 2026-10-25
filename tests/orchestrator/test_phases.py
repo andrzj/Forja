@@ -12,6 +12,7 @@ from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.config import Budget
 from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
+from forja.orchestrator.summary import Premise
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.fakes import (
     INCONCLUSIVE,
@@ -274,7 +275,11 @@ def test_a_gap_the_policy_lets_through_becomes_a_premise_in_the_summary(world: M
 
     assert task_state(log, "t1") is TaskState.INTEGRATED
     text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
-    assert "- complexity: não foi possível medir; a tarefa `t1` seguiu (tentativa `t1-a1`)." in text
+    name = Premise("t1", "", "complexity").id
+    assert (
+        f"- `{name}` complexity: não foi possível medir; a tarefa `t1` seguiu "
+        "(tentativa `t1-a1`). Commits com `Stage-Id: t1-s`."
+    ) in text
 
 
 def test_work_that_cannot_even_be_judged_is_rejected_with_the_reason(world: MemoryWorld) -> None:

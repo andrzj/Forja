@@ -73,6 +73,7 @@ from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork
 PACKAGE = "package.md"
 README_REPORT = "README report"
 ADR_REPORT = "ADR report"
+FACTS_REPORT = "Recorded facts"
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
@@ -265,6 +266,9 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         items.append(PackageItem(ItemKind.TEXT, README_REPORT, ctx.readme, True))
     if documenter and ctx.adr:  # names come from the repository's manifests: redacted too
         items.append(PackageItem(ItemKind.TEXT, ADR_REPORT, ctx.adr, True))
+    if ctx.facts:  # text a person wrote: redacted like the rest
+        recorded = "\n".join(f"- `{f.id}` ({f.author}, {f.date}): {f.text}" for f in ctx.facts)
+        items.append(PackageItem(ItemKind.TEXT, FACTS_REPORT, recorded, True))
     result = redactor.redact(items)
     report = next((i.content for i in result.items if i.name == README_REPORT), "")
     author = task.role is Producer.TEST_AUTHOR
@@ -301,7 +305,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         listed = "\n".join(f"- {e.id}: {e.text}" for e in elements_of(task.intent))
         parts.append(f"## {ELEMENTS}\n\n{listed}\n")
     adr = next((i.content for i in result.items if i.name == ADR_REPORT), "")
-    shown = [i for i in result.items if i.name not in (README_REPORT, ADR_REPORT)]
+    recorded = next((i.content for i in result.items if i.name == FACTS_REPORT), "")
+    shown = [i for i in result.items if i.name not in (README_REPORT, ADR_REPORT, FACTS_REPORT)]
     if shown or notes:
         parts.append("## Files in scope\n")
     for item in shown:
@@ -315,6 +320,11 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
             f"## README sections to fix\n\n{report}\n\n"
             "Change only these sections of the README (or add the one that is missing); every "
             "other section stays exactly as it is.\n"
+        )
+    if recorded:
+        parts.append(
+            f"## Facts a person recorded\n\n{recorded}\n\n"
+            'They are true. To rest a claim on one, cite it: {"kind": "fact", "fact_id": "<id>"}.\n'
         )
     if adr:
         parts.append(f"## Decision record owed\n\n{adr}\n")

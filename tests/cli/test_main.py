@@ -505,3 +505,30 @@ def test_the_pom_wins_over_a_gradle_build_file_in_the_doctor(tmp_path: Path) -> 
     _, tool = doctor_module._java_checks({"PATH": str(tmp_path)}, repo)  # noqa: SLF001
 
     assert tool.name == "maven"
+
+
+def test_a_facts_file_is_read_and_counted(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    facts = tmp_path / "fatos.txt"
+    facts.write_text("F1 | Ana | 2026-10-20 | the page size is 10\n", encoding="utf-8")
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--fatos", str(facts)], talk, environ) == 0
+    assert "fatos registrados por você: 1" in talk.text
+
+
+def test_a_facts_file_with_a_bad_line_stops_the_preparation(
+    repo: Path, tmp_path: Path, environ: dict[str, str]
+) -> None:
+    facts = tmp_path / "fatos.txt"
+    facts.write_text("F1 | Ana | ontem | x\n", encoding="utf-8")
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--fatos", str(facts)], talk, environ) == 2
+    assert "não servem" in talk.text
+    assert "linha 1" in talk.text
+
+
+def test_a_missing_facts_file_is_named(repo: Path, tmp_path: Path, environ: dict[str, str]) -> None:
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--fatos", str(tmp_path / "nada.txt")], talk, environ) == 2
+    assert "Não consegui ler os fatos" in talk.text

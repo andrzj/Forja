@@ -14,6 +14,7 @@ from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import Confirmation, ConfirmationError, confirmation_payload
 from forja.core.events.state import RunState
 from forja.core.states import ExecutionState, Level
+from forja.orchestrator.facts import Fact
 
 
 class Objective(StrEnum):
@@ -73,6 +74,7 @@ class RunConfig(BaseModel):
     agent_runs_tests: bool = True  # the agent may call `forja agente testar` in its copy
     scope: tuple[str, ...] = ()  # only code under these paths is planned; empty is all of it
     semgrep_config: str = ""  # the rules the person named; empty: the ones in the base commit
+    facts: tuple[Fact, ...] = ()  # what the person recorded; evidence in the packages
 
     @model_validator(mode="after")
     def _fix_goes_with_the_fix_objective(self) -> Self:

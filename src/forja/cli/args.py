@@ -38,6 +38,7 @@ class Arguments:
     plan_only: bool = False
     config: Path | None = None
     semgrep_config: str = ""  # text, so a registry reference is seen as typed
+    facts: Path | None = None
     agent: tuple[str, ...] = field(default=())
 
 
@@ -72,6 +73,13 @@ def parser() -> argparse.ArgumentParser:
         "Sem elas, e sem .semgrep.yml ou .semgrep/ no repositório, a análise SAST não executa",
     )
     main.add_argument(
+        "--fatos",
+        type=Path,
+        metavar="ARQUIVO",
+        help="fatos que você registrou (uma linha por fato: id | autor | data | texto); "
+        "entram nos pacotes dos agentes como evidência",
+    )
+    main.add_argument(
         "--config", type=Path, metavar="ARQUIVO", help="rodar com execucao.toml, sem perguntas"
     )
     sub = main.add_subparsers(dest="command", metavar="COMANDO")
@@ -93,6 +101,7 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--modelo-testes", metavar="NOME", default=argparse.SUPPRESS)
         item.add_argument("--plano", action="store_true", default=argparse.SUPPRESS)
         item.add_argument("--semgrep-config", metavar="CAMINHO", default=argparse.SUPPRESS)
+        item.add_argument("--fatos", type=Path, metavar="ARQUIVO", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
     agent = sub.add_parser("agente")  # for the agents: left out of the help
     agent.add_argument("what", choices=AGENT_COMMANDS)
@@ -117,5 +126,6 @@ def parse(argv: list[str] | None = None) -> Arguments:
         plan_only=bool(found.plano),
         config=found.config,
         semgrep_config=found.semgrep_config or "",
+        facts=found.fatos,
         agent=(found.what, *found.rest) if command == "agente" else (),
     )

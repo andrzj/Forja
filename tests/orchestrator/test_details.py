@@ -42,7 +42,7 @@ from forja.orchestrator.ports import (
     RunContext,
     SinkFactory,
 )
-from forja.orchestrator.summary import Facts, render_summary, summary_body
+from forja.orchestrator.summary import Facts, Premise, render_summary, summary_body
 from forja.orchestrator.task_cycle import REASON_LIMIT, TaskCycle, _count, describe_stop
 from tests.orchestrator.crash import Counting, CrashAfter, Interrupted
 from tests.orchestrator.fakes import (
@@ -391,7 +391,9 @@ def test_the_summary_says_everything_in_this_order(world: MemoryWorld) -> None:
             "",
             "## Premissas assumidas",
             "",
-            "- complexity: não foi possível medir; a tarefa `t1` seguiu (tentativa `t1-a1`).",
+            f"- `{Premise('t1', '', 'complexity').id}` complexity: não foi possível medir; "
+            "a tarefa `t1` seguiu "
+            "(tentativa `t1-a1`). Commits com `Stage-Id: t1-s`.",
             "",
             "## Tarefas bloqueadas",
             "",

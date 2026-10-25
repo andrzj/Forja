@@ -108,3 +108,22 @@ def test_a_specifier_that_wrote_a_file_is_stopped_by_the_scope(
 
     assert isinstance(results["scope"], Rejected)
     assert list(results) == ["scope"]
+
+
+def test_a_claim_that_cites_a_recorded_fact_passes_gate_13_and_an_unknown_one_does_not(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    from forja.core.artifacts.llm_output import FactCitation  # noqa: PLC0415
+
+    scene = Scene(repo, tmp_path / "scene", gate_10={"fact_ids": frozenset({"F1"})})
+    known = Claim(statement="pages hold 10", citations=(FactCitation(kind="fact", fact_id="F1"),))
+    unknown = Claim(statement="pages hold 20", citations=(FactCitation(kind="fact", fact_id="F9"),))
+    criteria = (criterion(1, "E1", "E2"),)
+
+    good = judge(scene, Expectations(frozenset(), (), (known,), ELEMENTS, criteria))
+    bad = judge(scene, Expectations(frozenset(), (), (unknown,), ELEMENTS, criteria))
+
+    assert isinstance(good["citations"], Approved)
+    assert isinstance(bad["citations"], Rejected)
+    assert [f.target for f in bad["citations"].findings] == ["F9"]

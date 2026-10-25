@@ -36,6 +36,7 @@ from forja.core.redaction import RedactionSettings
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, run_probe, version_problem
 from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig
+from forja.orchestrator.facts import Fact, FactsError, parse_facts
 
 AVAILABLE = frozenset({"refatorar", "corrigir"})
 CRITERIA_FILE = "criterios.json"
@@ -108,6 +109,17 @@ def read_fix(args: Arguments, saved: Execucao | None) -> tuple[FixRequest, str, 
         where = ".".join(str(part) for part in first["loc"]) or "arquivo"
         raise Refused(f"Os critérios em {path} não servem: {where}: {first['msg']}.") from None
     return FixRequest(description=description, criteria=criteria), description, str(path.resolve())
+
+
+def read_recorded_facts(args: Arguments, saved: Execucao | None) -> tuple[tuple[Fact, ...], str]:
+    """The facts the person recorded, from ``--fatos`` or the saved ``fatos``, and the path."""
+    path = args.facts or (Path(saved.fatos) if saved and saved.fatos else None)
+    if path is None:
+        return (), ""
+    try:
+        return parse_facts(_read_text(path, "os fatos")), str(path.resolve())
+    except FactsError as error:
+        raise Refused(f"Os fatos em {path} não servem: {error}.") from None
 
 
 def check_repository(detection: Detection) -> Path:
@@ -338,6 +350,7 @@ def summary_of(
             else (f"  agente: {_agent(config.implementer)}",)
         ),
         "  agente que documenta: o mesmo que implementa, sem comandos, só em documentação",
+        *((f"  fatos registrados por você: {len(config.facts)}",) if config.facts else ()),
         f"  onde: {where}",
         f"  limite: {limit} tokens, até {config.budget.tasks} tarefas",
         "  ambiente: este terminal. A Forja não cria sandbox: leitura fora da cópia e rede "
@@ -405,6 +418,7 @@ async def prepare(
         author = (name, choice, version)
     scope = args.scope or tuple(saved.escopo if saved else ())
     rules, sast = await semgrep_rules(args, saved, repo, detection.head, environ)
+    recorded, facts_path = read_recorded_facts(args, saved)
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
     tasks = saved.tarefas if saved else 5
@@ -412,7 +426,7 @@ async def prepare(
         repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
         executor_version=version, executor_model=model, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
-        policy_version=policy_digest(policy),
+        policy_version=policy_digest(policy), facts=recorded,
         fix=fixing[0] if fixing else None,
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
@@ -438,6 +452,7 @@ async def prepare(
         agente_roda_testes=runs_tests,
         tarefas=tasks,
         semgrep_config=rules,
+        fatos=facts_path,
         interface=saved.interface if saved else profile.interface,
     )
     return Prepared(config, execucao, lines, (name, str(choice.path)) if offer else None)

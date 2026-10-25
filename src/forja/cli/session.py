@@ -46,6 +46,7 @@ from forja.languages.go.adapter import find_golangci_lint
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig, load_config
+from forja.orchestrator.facts import Fact
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
 from forja.orchestrator.phases import confirm_run
@@ -201,6 +202,7 @@ def new_config(
     fix: FixRequest | None = None,
     test_author: ExecutorRef | None = None,
     semgrep_config: str = "",
+    facts: tuple[Fact, ...] = (),
 ) -> RunConfig:
     from forja.orchestrator.config import Budget, Objective  # noqa: PLC0415
 
@@ -217,6 +219,7 @@ def new_config(
         scope=scope,
         agent_runs_tests=agent_runs_tests,
         semgrep_config=semgrep_config,
+        facts=facts,
     )
 
 
@@ -336,6 +339,7 @@ async def _context(
         forbidden_licenses=policy.forbidden_licenses,
         e2e_commands=e2e_commands(policy),
         markers=build_markers(policy.voice_extra, policy.voice_off),
+        fact_ids=frozenset(fact.id for fact in config.facts),
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:

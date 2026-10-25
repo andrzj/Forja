@@ -44,7 +44,7 @@ from forja.orchestrator.ports import (
     RunContext,
     TaskInfo,
 )
-from forja.orchestrator.summary import DOCUMENTATION, TRACE
+from forja.orchestrator.summary import DOCUMENTATION, PREMISE, TRACE
 from forja.orchestrator.workspace_git import CommitMessage
 
 REASON_LIMIT = 1500
@@ -275,7 +275,11 @@ class TaskCycle:
         journal.enter(Level.ATTEMPT, attempt, AttemptState.CREATED, parent=info.stage_id)
         if self._state.state_of(Level.ATTEMPT, attempt) not in _FINISHED:
             attempt_ctx = AttemptContext(
-                info, attempt, ctx.workspace.attempt_worktree(attempt), self._last_rejection(info)
+                info,
+                attempt,
+                ctx.workspace.attempt_worktree(attempt),
+                self._last_rejection(info),
+                facts=ctx.config.facts,
             )
             await self._work(attempt_ctx)
         elif self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.COMMITTED:
@@ -411,8 +415,13 @@ class TaskCycle:
         outcome = await run.measurer.judge(ctx, run.sinks, self._expectations(ctx))
         for assumption in outcome.assumptions:
             journal.note(
-                "premise",
-                {"task": ctx.task.task_id, "attempt": attempt, "check": assumption.check_id},
+                PREMISE,
+                {
+                    "task": ctx.task.task_id,
+                    "stage": ctx.task.stage_id,
+                    "attempt": attempt,
+                    "check": assumption.check_id,
+                },
             )
         stopper = outcome.stopped_by
         if stopper is None:
@@ -426,6 +435,7 @@ class TaskCycle:
             journal.enter(
                 Level.ATTEMPT, attempt, AttemptState.APPROVED, payload={"gates_passed": passed}
             )
+            self._note_declared_premises(ctx)
             if ctx.task.role is Producer.DOCUMENTER:
                 journal.note(
                     DOCUMENTATION,
@@ -459,6 +469,23 @@ class TaskCycle:
             assumptions=(*output.assumptions, *(item.as_assumption() for item in output.left_out)),
             artifact_id=criteria_artifact_id(ctx.task.task_id),
         )
+
+    def _note_declared_premises(self, ctx: AttemptContext) -> None:
+        """What the agent said it had to guess, and the elements the specifier left out, go to the
+        summary as premises; the artifact of the stage keeps them too."""
+        output = self._ctx.runner(ctx.task.role).declared_output(ctx)
+        for assumption in (*output.assumptions, *(i.as_assumption() for i in output.left_out)):
+            self._journal.note(
+                PREMISE,
+                {
+                    "task": ctx.task.task_id,
+                    "stage": ctx.task.stage_id,
+                    "attempt": ctx.attempt_id,
+                    "statement": assumption.statement,
+                    "reason": assumption.reason,
+                    "missing_evidence": assumption.missing_evidence,
+                },
+            )
 
     def _record_manifest(self, ctx: AttemptContext) -> None:
         """The Forja writes the manifest of the tests the author declared (which test covers which

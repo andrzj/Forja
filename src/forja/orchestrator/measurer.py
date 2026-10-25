@@ -143,6 +143,7 @@ class PipelineMeasurer:
         timeouts: Mapping[str, float] | None = None,
         e2e_commands: Mapping[str, tuple[str, ...]] | None = None,
         markers: Sequence[Marker] = MARKERS,
+        fact_ids: frozenset[str] = frozenset(),
     ) -> None:
         self._adapters = adapters
         self._git = git
@@ -161,6 +162,7 @@ class PipelineMeasurer:
         self._timeouts = timeouts or {}
         self._e2e = e2e_commands or {}
         self._markers = markers
+        self._fact_ids = fact_ids
 
     # -- helpers -------------------------------------------------------------------------------
 
@@ -679,7 +681,7 @@ class PipelineMeasurer:
             files, found, unreadable = await self._task_changes(ctx)
             claims = expectations.claims if expectations is not None else ()
             evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
-            checks.append(CitationCheck(worktree, claims, evidence))
+            checks.append(CitationCheck(worktree, claims, evidence, self._fact_ids))
             name = readme_path(worktree)
             tracked = await git.lines("ls-tree", "--name-only", "HEAD", "--", name) if name else []
             old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None
@@ -716,7 +718,7 @@ class PipelineMeasurer:
         evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
         checks: list[Check] = [
             ScopeCheck(changes, ctx.task, self._classify),
-            CitationCheck(ctx.worktree, spec.claims, evidence),
+            CitationCheck(ctx.worktree, spec.claims, evidence, self._fact_ids),
             TraceabilityCheck(spec.elements, spec.specified, spec.left_out),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
