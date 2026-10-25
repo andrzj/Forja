@@ -66,6 +66,7 @@ from forja.core.redaction import PackageItem, Redactor
 from forja.core.redaction.engine import ItemKind
 from forja.core.states import Level
 from forja.orchestrator.budget import AGENT_ACTIVITY
+from forja.orchestrator.criteria import manifest_of
 from forja.orchestrator.operations import Step
 from forja.orchestrator.ports import AgentResult, AttemptContext, RejectedWork
 
@@ -485,6 +486,8 @@ class ExecutorAgentRunner:
             output = _declared(source)
             if self._role is Producer.SPECIFIER:
                 _check_criteria(output)
+            if self._role is Producer.TEST_AUTHOR and not ctx.task.reviews:
+                _check_manifest(output)
             declaration = ChangeDeclaration.from_output(output)
             after = build_manifest(source, exclude={AGENT_DIR})
             hidden = self._hidden(ctx.worktree)
@@ -617,6 +620,15 @@ def _declared(workcopy: Path) -> LlmOutput:
         raise RejectedWork(
             f"{AGENT_DIR}/{OUTPUT} is not valid: " + "; ".join(error.problems)
         ) from None
+
+
+def _check_manifest(output: LlmOutput) -> None:
+    """The test author's answer must make a manifest: one test at least, none twice."""
+    try:
+        manifest_of(output)
+    except ValidationError as error:
+        problems = "; ".join(item["msg"] for item in error.errors())
+        raise RejectedWork(f"the declared tests are not valid: {problems}") from None
 
 
 def _check_criteria(output: LlmOutput) -> None:

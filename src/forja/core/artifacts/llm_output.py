@@ -10,7 +10,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from forja.core.artifacts.errors import InvalidLlmOutput
 from forja.core.artifacts.models import Assumption, NonEmpty
@@ -118,6 +126,19 @@ class DeclaredTest(BaseModel):
         return check_relative_path(value)
 
 
+RepoPath = Annotated[str, AfterValidator(lambda value: check_relative_path(value))]  # noqa: PLW0108
+
+
+class DataGenerator(BaseModel):
+    """A seeded generator of test data, so fixtures are reproducible and never real data."""
+
+    model_config = _strict()
+
+    name: NonEmpty
+    seed: int = Field(ge=0)
+    path: RepoPath
+
+
 class CriterionLevel(StrEnum):
     UNIT = "unit"
     INTEGRATION = "integration"
@@ -172,6 +193,7 @@ class LlmOutput(BaseModel):
     tests: tuple[DeclaredTest, ...] = ()  # only the test author declares these
     criteria: tuple[Criterion, ...] = ()  # only the specifier declares these
     left_out: tuple[LeftOut, ...] = ()  # and the elements of the input it leaves out
+    generators: tuple[DataGenerator, ...] = ()  # the test author's seeded data generators
 
 
 class ChangeDeclaration(BaseModel):

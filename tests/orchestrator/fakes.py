@@ -275,7 +275,10 @@ class ScriptedAgent:
 
     def declared_output(self, ctx: AttemptContext) -> LlmOutput:
         return LlmOutput(
-            criteria=self.criteria, left_out=self.left_out, assumptions=self.assumptions
+            criteria=self.criteria,
+            left_out=self.left_out,
+            assumptions=self.assumptions,
+            tests=self.tests,
         )
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:

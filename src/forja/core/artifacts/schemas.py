@@ -15,6 +15,7 @@ from forja.core.artifacts.llm_output import (
 )
 from forja.core.artifacts.llm_output import Criterion as Criterion
 from forja.core.artifacts.llm_output import CriterionLevel as CriterionLevel
+from forja.core.artifacts.llm_output import DataGenerator as DataGenerator
 from forja.core.artifacts.models import Executor, GitCommit, NonEmpty, Producer
 
 
@@ -65,16 +66,6 @@ class CriterionTest(BaseModel):
 
     criterion_id: int = Field(ge=1)
     test_id: NonEmpty
-    path: RepoPath
-
-
-class DataGenerator(BaseModel):
-    """A seeded generator of test data, so fixtures are reproducible and never real data."""
-
-    model_config = _strict()
-
-    name: NonEmpty
-    seed: int = Field(ge=0)
     path: RepoPath
 
 

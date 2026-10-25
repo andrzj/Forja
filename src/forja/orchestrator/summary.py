@@ -20,6 +20,7 @@ from forja.orchestrator.config import RunConfig
 METRICS = "metrics"
 PREMISE = "premise"
 DOCUMENTATION = "documentation"
+TRACE = "trace"
 ADR_DIR = "docs/adr/"
 NOT_APPLICABLE = "Não se aplica nesta versão."
 
@@ -39,12 +40,23 @@ class Documented:
     files: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class Traced:
+    """A criterion of a task: where in the input it comes from and the tests that cover it."""
+
+    id: int
+    text: str
+    origin: tuple[str, ...]
+    tests: tuple[str, ...]
+
+
 @dataclass
 class Facts:
     """What the log says that the states alone do not: assumptions and the measured numbers."""
 
     premises: list[Premise] = field(default_factory=list)
     documented: dict[str, Documented] = field(default_factory=dict)
+    traced: dict[str, tuple[Traced, ...]] = field(default_factory=dict)
     baseline: dict[str, float] = field(default_factory=dict)
     final: dict[str, float] = field(default_factory=dict)
 
@@ -73,6 +85,12 @@ def read_facts(log_path: Path) -> Facts:
                 facts.documented[str(payload.get("task"))] = Documented(
                     str(payload.get("record")), tuple(str(f) for f in files)
                 )
+        elif kind == TRACE:
+            rows = payload.get("criteria")
+            if isinstance(rows, list):
+                facts.traced[str(payload.get("task"))] = tuple(
+                    _traced(row) for row in rows if isinstance(row, dict)
+                )
         elif kind == METRICS:
             values = payload.get("values")
             if isinstance(values, dict):
@@ -87,6 +105,16 @@ def read_facts(log_path: Path) -> Facts:
                 if target is not None:
                     target.update(numbers)
     return facts
+
+
+def _traced(row: Mapping[str, object]) -> Traced:
+    origin, tests = row.get("origin"), row.get("tests")
+    return Traced(
+        int(str(row.get("id"))),
+        str(row.get("text")),
+        tuple(str(o) for o in origin) if isinstance(origin, list) else (),
+        tuple(str(t) for t in tests) if isinstance(tests, list) else (),
+    )
 
 
 def task_outcomes(state: RunState) -> list[TaskOutcome]:
@@ -153,6 +181,10 @@ def render_summary(
         "## Refatorações",
         "",
         *_refactorings(state),
+        "",
+        "## Rastreabilidade",
+        "",
+        *_traceability(state, facts),
         "",
         "## Documentação",
         "",
@@ -276,6 +308,29 @@ def _refactorings(state: RunState) -> list[str]:
         if o.outcome is TaskOutcomeKind.INTEGRATED
     ]
     return done or ["Nenhuma."]
+
+
+def _traceability(state: RunState, facts: Facts) -> list[str]:
+    """Per integrated task: each criterion, its origin in the input and its tests."""
+    lines = []
+    for outcome in task_outcomes(state):
+        rows = facts.traced.get(outcome.task_id)
+        if outcome.outcome is not TaskOutcomeKind.INTEGRATED or not rows:
+            continue
+        lines.append(f"- `{outcome.task_id}`:")
+        for row in rows:
+            origin = ", ".join(row.origin)
+            tests = ", ".join(f"`{t}`" for t in row.tests) or "nenhum teste"
+            lines.append(f"  - critério {row.id} (origem {origin}): {row.text} → {tests}")
+    if not lines:
+        return ["Nenhuma tarefa integrada com critérios e testes."]
+    return [
+        *lines,
+        "",
+        "Conferido: cada critério tem teste que falhava antes do conserto. Não conferido: que o "
+        "critério diga o que o elemento da entrada diz, nem que o teste verifique o critério "
+        "além do que falhar e passar mostra; isso é da revisão.",
+    ]
 
 
 def _documentation(state: RunState, facts: Facts) -> list[str]:

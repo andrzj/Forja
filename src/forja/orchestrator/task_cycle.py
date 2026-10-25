@@ -28,7 +28,13 @@ from forja.core.gates import Approved, CheckRun, FindingKind, Inconclusive, Reje
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.config import Objective
-from forja.orchestrator.criteria import criteria_artifact_id, criteria_of, with_criteria
+from forja.orchestrator.criteria import (
+    criteria_artifact_id,
+    criteria_of,
+    manifest_artifact_id,
+    manifest_of,
+    with_criteria,
+)
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
     AgentResult,
@@ -38,7 +44,7 @@ from forja.orchestrator.ports import (
     RunContext,
     TaskInfo,
 )
-from forja.orchestrator.summary import DOCUMENTATION
+from forja.orchestrator.summary import DOCUMENTATION, TRACE
 from forja.orchestrator.workspace_git import CommitMessage
 
 REASON_LIMIT = 1500
@@ -412,6 +418,8 @@ class TaskCycle:
         if stopper is None:
             if ctx.task.role is Producer.SPECIFIER:
                 self._record_criteria(ctx)
+            if ctx.task.role is Producer.TEST_AUTHOR and not ctx.task.reviews:
+                self._record_manifest(ctx)
             passed: list[JsonValue] = [
                 r.check_id for r in outcome.runs if isinstance(r.result, Approved)
             ]
@@ -450,6 +458,43 @@ class TaskCycle:
             attempt_id=ctx.attempt_id,
             assumptions=(*output.assumptions, *(item.as_assumption() for item in output.left_out)),
             artifact_id=criteria_artifact_id(ctx.task.task_id),
+        )
+
+    def _record_manifest(self, ctx: AttemptContext) -> None:
+        """The Forja writes the manifest of the tests the author declared (which test covers which
+        criterion, and its seeded data generators) and notes the trace for the summary."""
+        run = self._ctx
+        criteria = criteria_of(run, ctx.task.task_id)
+        if criteria is None:  # a refactoring has no test author
+            return
+        output = run.runner(ctx.task.role).declared_output(ctx)
+        if not output.tests:  # apply_diff refuses that; only a scripted agent gets here
+            return
+        manifest = manifest_of(output)
+        executor = run.config.test_author or run.config.implementer
+        run.store.put(
+            artifact_type=ArtifactType.TEST_MANIFEST,
+            producer=Producer.TEST_AUTHOR,
+            body=manifest,
+            executor=Executor(cli=executor.name, version=executor.version),
+            attempt_id=ctx.attempt_id,
+            assumptions=output.assumptions,
+            artifact_id=manifest_artifact_id(ctx.task.task_id),
+        )
+        self._journal.note(
+            TRACE,
+            {
+                "task": ctx.task.task_id,
+                "criteria": [
+                    {
+                        "id": c.id,
+                        "text": c.text,
+                        "origin": [*c.origin],
+                        "tests": [t.test_id for t in manifest.tests if t.criterion_id == c.id],
+                    }
+                    for c in criteria.criteria
+                ],
+            },
         )
 
     async def _write_record(self, ctx: AttemptContext) -> None:
@@ -502,7 +547,8 @@ class TaskCycle:
         criteria = criteria_of(self._ctx, ctx.task.task_id)
         if criteria is None:
             return None
-        declared = self._ctx.runner(ctx.task.role).declared_tests(ctx)
+        output = self._ctx.runner(ctx.task.role).declared_output(ctx)
+        declared = output.tests  # apply_diff already refused tests that make no manifest
         return Expectations(frozenset(int(c.id) for c in criteria.criteria), declared)
 
     def _block(self, info: TaskInfo, attempt: str, detail: str) -> None:

@@ -1,6 +1,7 @@
 """The criteria of a task, and how they reach the stages that work from them."""
 
-from forja.core.artifacts.schemas import CriteriaBody
+from forja.core.artifacts.llm_output import LlmOutput
+from forja.core.artifacts.schemas import AuthoredTestsBody, CriteriaBody, CriterionTest
 from forja.orchestrator.ports import RunContext
 
 
@@ -25,3 +26,17 @@ def criteria_of(ctx: RunContext, task_id: str) -> CriteriaBody | None:
     body = ctx.store.get(criteria_artifact_id(task_id)).body
     assert isinstance(body, CriteriaBody)
     return body
+
+
+def manifest_artifact_id(task_id: str) -> str:
+    return f"test-manifest-{task_id}"
+
+
+def manifest_of(output: LlmOutput) -> AuthoredTestsBody:
+    """The test manifest the test author's answer makes: each criterion with its tests, and the
+    seeded data generators. Raises ``ValidationError`` if it makes none (no test, a test twice)."""
+    tests = tuple(
+        CriterionTest(criterion_id=t.criterion_id, test_id=t.test_id, path=t.path)
+        for t in output.tests
+    )
+    return AuthoredTestsBody(tests=tests, generators=output.generators)
