@@ -16,6 +16,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from forja.core.adapters.common import build_spec
 from forja.core.adapters.executor import (
     AGENT_DIR,
@@ -31,6 +33,7 @@ from forja.core.adapters.executor import (
     TextActivity,
     UsageActivity,
 )
+from forja.core.artifacts.elements import elements_of
 from forja.core.artifacts.errors import InvalidLlmOutput
 from forja.core.artifacts.llm_output import (
     ChangeDeclaration,
@@ -41,6 +44,7 @@ from forja.core.artifacts.llm_output import (
     parse_llm_output,
 )
 from forja.core.artifacts.models import Producer
+from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.events import EventLog, OpenOperation
 from forja.core.idempotency import (
     Reconciliation,
@@ -161,6 +165,34 @@ use `"actions": []` if you changed nothing:
 had to guess. Then answer with one short sentence.
 """
 
+SPECIFIER_INSTRUCTIONS = """\
+You are writing the acceptance criteria for the task below. You do not touch code, tests or
+documents, and you write no file but the answer: the criteria go in it. The input was cut into
+numbered elements (below); every element must become at least one criterion, or be left out with
+a reason.
+
+{commands}Read the files you need to see what the code does today. Each criterion is one thing a
+test can check, stated by the behaviour a person or a program sees. `level` is `unit`,
+`integration` or `e2e` (a flow through the whole program is `e2e`). `origin` lists the ids of the
+elements the criterion comes from. If a flow cannot be tested end to end, give it the level it
+can have and say why in `assumptions`.
+
+When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else:
+
+{{"criteria": [{{"id": 1, "text": "what must hold", "level": "unit", "origin": ["E1"]}}],
+"left_out": [{{"element": "E3", "reason": "why it is not built",
+"missing_evidence": "what would settle it"}}],
+"claims": [{{"statement": "what the code does today", "citations": [{{"kind": "file",
+"path": "src/x.py", "line_start": 3, "line_end": 9}}]}}],
+"actions": []}}
+
+The ids of the criteria are 1, 2, 3... with no repeats. `claims` and `left_out` may be empty
+lists. Add `"assumptions"` only for something you had to guess. Then answer with one short
+sentence.
+"""
+
+ELEMENTS = "Elements of the input"
+
 _SHORT_NAME = re.compile(r"~\d")
 
 
@@ -235,11 +267,14 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
     result = redactor.redact(items)
     report = next((i.content for i in result.items if i.name == README_REPORT), "")
     author = task.role is Producer.TEST_AUTHOR
+    specifier = task.role is Producer.SPECIFIER
     commands = FACADE_COMMANDS if facade else NO_COMMANDS
     tests_in = f"under `{task.test_root}`" if task.test_root else "in the project's test files"
     template = (
         DOCUMENTER_INSTRUCTIONS
         if documenter
+        else SPECIFIER_INSTRUCTIONS
+        if specifier
         else AUTHOR_INSTRUCTIONS
         if author
         else FIX_INSTRUCTIONS
@@ -253,12 +288,17 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         (
             "Only documentation files. The files below are the ones the change touched."
             if documenter
+            else "No file. The files below are for reading."
+            if specifier
             else f"Only {tests_in}. The production files below are for reading."
             if author
             else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
         ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]
+    if specifier:
+        listed = "\n".join(f"- {e.id}: {e.text}" for e in elements_of(task.intent))
+        parts.append(f"## {ELEMENTS}\n\n{listed}\n")
     adr = next((i.content for i in result.items if i.name == ADR_REPORT), "")
     shown = [i for i in result.items if i.name not in (README_REPORT, ADR_REPORT)]
     if shown or notes:
@@ -442,7 +482,10 @@ class ExecutorAgentRunner:
         source = workcopy_of(ctx)
 
         async def payload() -> dict[str, Any]:
-            declaration = ChangeDeclaration.from_output(_declared(source))
+            output = _declared(source)
+            if self._role is Producer.SPECIFIER:
+                _check_criteria(output)
+            declaration = ChangeDeclaration.from_output(output)
             after = build_manifest(source, exclude={AGENT_DIR})
             hidden = self._hidden(ctx.worktree)
             before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
@@ -488,6 +531,10 @@ class ExecutorAgentRunner:
     def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
         """The statements, each with its citations, the agent says are true of the change."""
         return _declared(workcopy_of(ctx)).claims
+
+    def declared_output(self, ctx: AttemptContext) -> LlmOutput:
+        """Everything the agent declared, for the roles whose answer holds more than files."""
+        return _declared(workcopy_of(ctx))
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload
@@ -570,6 +617,15 @@ def _declared(workcopy: Path) -> LlmOutput:
         raise RejectedWork(
             f"{AGENT_DIR}/{OUTPUT} is not valid: " + "; ".join(error.problems)
         ) from None
+
+
+def _check_criteria(output: LlmOutput) -> None:
+    """The specifier's answer must hold criteria that make a body: one at least, no id twice."""
+    try:
+        CriteriaBody(criteria=output.criteria)
+    except ValidationError as error:
+        problems = "; ".join(item["msg"] for item in error.errors())
+        raise RejectedWork(f"the criteria are not valid: {problems}") from None
 
 
 def _reason(workcopy: Path) -> str:

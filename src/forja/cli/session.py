@@ -360,7 +360,9 @@ async def _context(
             role=role,
             permissions=RolePermissions(
                 can_edit_files=True,
-                allowed_commands=() if role is Producer.DOCUMENTER else commands,
+                allowed_commands=()
+                if role in (Producer.DOCUMENTER, Producer.SPECIFIER)
+                else commands,
             ),
             model=executor.model,
         )
@@ -375,6 +377,8 @@ async def _context(
             config.test_author or config.implementer, Producer.TEST_AUTHOR
         )
         planner = FixPlanner(config.fix, config.scope, test_root)
+        if config.fix.criteria is None:
+            agents[Producer.SPECIFIER] = runner(config.implementer, Producer.SPECIFIER)
     return RunContext(
         journal=Journal(log),
         config=config,

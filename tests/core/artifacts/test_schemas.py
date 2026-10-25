@@ -186,7 +186,7 @@ def test_a_task_definition_has_a_role_a_bounded_scope_and_unique_lists() -> None
 def test_a_criterion_cannot_be_changed_after_it_was_read() -> None:
     from forja.core.artifacts.schemas import Criterion, CriterionLevel  # noqa: PLC0415
 
-    criterion = Criterion(id=1, text="t", level=CriterionLevel.UNIT, origin="o")
+    criterion = Criterion(id=1, text="t", level=CriterionLevel.UNIT, origin=("o",))
 
     with pytest.raises(ValidationError, match="frozen"):
         criterion.text = "other"

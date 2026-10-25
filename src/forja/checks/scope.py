@@ -88,6 +88,8 @@ class ScopeCheck:
     async def evaluate(self, data: GateInput) -> GateResult:
         changes = self.changes
         if not changes.files:
+            if self.task.role is Producer.SPECIFIER:  # it writes no file: nothing changed is right
+                return Approved()
             return rejected([Finding(message="the attempt changed nothing", target="diff")])
         findings = [
             *self._forbidden(),
@@ -115,6 +117,8 @@ class ScopeCheck:
                 return self._author(path)
             case Producer.DOCUMENTER:
                 return self._documenter(path)
+            case Producer.SPECIFIER:
+                return Finding(message="the specifier writes criteria, not files", target=path)
         return self._implementer(path)
 
     def _documenter(self, path: str) -> Finding | None:

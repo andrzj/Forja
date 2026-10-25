@@ -35,12 +35,14 @@ class ExecutorRef(BaseModel):
 
 
 class FixRequest(BaseModel):
-    """What a fix is asked to do: the defect in words and the criteria its tests must cover."""
+    """What a fix is asked to do: the defect in words and the criteria its tests must cover.
+
+    Without criteria the specifier writes them from the description, in the first stage."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     description: NonEmpty
-    criteria: CriteriaBody
+    criteria: CriteriaBody | None = None
 
 
 class Budget(BaseModel):

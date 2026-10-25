@@ -20,12 +20,15 @@ from forja.checks.change_record import record_path
 from forja.checks.freeze import frozen_digest_of
 from forja.checks.readme import README_NAMES
 from forja.core.adapters.executor import ErrorKind
-from forja.core.artifacts.models import Executor, Producer
+from forja.core.artifacts.elements import elements_of
+from forja.core.artifacts.models import ArtifactType, Executor, Producer
+from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.events.state import RunState
 from forja.core.gates import Approved, CheckRun, FindingKind, Inconclusive, Rejected, Verdict
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.budget import consecutive_infra_failures, quality_attempts
 from forja.orchestrator.config import Objective
+from forja.orchestrator.criteria import criteria_artifact_id, criteria_of, with_criteria
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
     AgentResult,
@@ -98,13 +101,19 @@ class TaskCycle:
         payload = self._state.transition_payload(Level.TASK, task_id, TaskState.PENDING) or {}
         scope = payload.get("scope")
         author = role is Producer.TEST_AUTHOR
-        letter = {Producer.TEST_AUTHOR: "t", Producer.DOCUMENTER: "d"}.get(role, "s")
-        prefix = {Producer.TEST_AUTHOR: "ta", Producer.DOCUMENTER: "da"}.get(role, "a")
+        letter = {Producer.TEST_AUTHOR: "t", Producer.DOCUMENTER: "d", Producer.SPECIFIER: "c"}.get(
+            role, "s"
+        )
+        prefix = {
+            Producer.TEST_AUTHOR: "ta",
+            Producer.DOCUMENTER: "da",
+            Producer.SPECIFIER: "ca",
+        }.get(role, "a")
         test_root = str(payload.get("test_root", ""))
         return TaskInfo(
             task_id,
             f"{task_id}-{letter}",
-            str(payload.get("intent", "")),
+            self._intent(task_id, role, str(payload.get("intent", ""))),
             tuple(str(p) for p in scope) if isinstance(scope, list) else (),
             _count(payload.get("max_files")),
             _count(payload.get("max_lines")),
@@ -114,10 +123,22 @@ class TaskCycle:
             "" if author else self._frozen_digest(task_id),
         )
 
+    def _intent(self, task_id: str, role: Producer, planned: str) -> str:
+        """What the stage is told to do. The stages after the specifier get the criteria it wrote
+        added to the plan's intent, which could not have them when it was made."""
+        if role is Producer.SPECIFIER or Producer.SPECIFIER not in self.roles(task_id):
+            return planned
+        if self._state.state_of(Level.STAGE, f"{task_id}-c") is not StageState.COMMITTED:
+            return planned
+        criteria = criteria_of(self._ctx, task_id)
+        return planned if criteria is None else with_criteria(planned, criteria)
+
     def _frozen_digest(self, task_id: str) -> str:
         """What the test author's stage froze, read from its commit; empty if it had none."""
         if Producer.TEST_AUTHOR not in self.roles(task_id):
             return ""
+        if not self._state.has_target(Level.STAGE, f"{task_id}-t"):
+            return ""  # a stage before the test author's asks, and it has frozen nothing yet
         frozen = self._state.transition_payload(Level.STAGE, f"{task_id}-t", StageState.COMMITTED)
         return str(frozen["frozen_digest"]) if frozen and "frozen_digest" in frozen else ""
 
@@ -389,6 +410,8 @@ class TaskCycle:
             )
         stopper = outcome.stopped_by
         if stopper is None:
+            if ctx.task.role is Producer.SPECIFIER:
+                self._record_criteria(ctx)
             passed: list[JsonValue] = [
                 r.check_id for r in outcome.runs if isinstance(r.result, Approved)
             ]
@@ -412,6 +435,22 @@ class TaskCycle:
                 await self._commit_attempt(ctx.task, attempt)
         else:
             self._block(ctx.task, attempt, describe_stop(stopper))
+
+    def _record_criteria(self, ctx: AttemptContext) -> None:
+        """The Forja writes the criteria the specifier declared as an artifact of the run, with the
+        elements it left out as assumptions; the specifier never writes a file."""
+        run = self._ctx
+        output = run.runner(ctx.task.role).declared_output(ctx)
+        executor = run.config.implementer
+        run.store.put(
+            artifact_type=ArtifactType.CRITERIA,
+            producer=Producer.SPECIFIER,
+            body=CriteriaBody(criteria=output.criteria),
+            executor=Executor(cli=executor.name, version=executor.version),
+            attempt_id=ctx.attempt_id,
+            assumptions=(*output.assumptions, *(item.as_assumption() for item in output.left_out)),
+            artifact_id=criteria_artifact_id(ctx.task.task_id),
+        )
 
     async def _write_record(self, ctx: AttemptContext) -> None:
         """The Forja writes the change record itself, from the facts it measured and the claims
@@ -452,11 +491,19 @@ class TaskCycle:
         if ctx.task.role is Producer.DOCUMENTER:
             claims = self._ctx.runner(ctx.task.role).declared_claims(ctx)
             return Expectations(frozenset(), (), claims)
-        fix = self._ctx.config.fix
-        if ctx.task.role is not Producer.TEST_AUTHOR or fix is None or ctx.task.reviews:
+        if ctx.task.role is Producer.SPECIFIER:
+            output = self._ctx.runner(ctx.task.role).declared_output(ctx)
+            elements = elements_of(ctx.task.intent)
+            return Expectations(
+                frozenset(), (), output.claims, elements, output.criteria, output.left_out
+            )
+        if ctx.task.role is not Producer.TEST_AUTHOR or ctx.task.reviews:
+            return None
+        criteria = criteria_of(self._ctx, ctx.task.task_id)
+        if criteria is None:
             return None
         declared = self._ctx.runner(ctx.task.role).declared_tests(ctx)
-        return Expectations(frozenset(int(c.id) for c in fix.criteria.criteria), declared)
+        return Expectations(frozenset(int(c.id) for c in criteria.criteria), declared)
 
     def _block(self, info: TaskInfo, attempt: str, detail: str) -> None:
         """A gate could not judge and its policy is to block: not the agent's fault, not counted."""
@@ -524,7 +571,8 @@ class TaskCycle:
     async def _commit(self, ctx: AttemptContext) -> None:
         journal = self._journal
         attempt, info = ctx.attempt_id, ctx.task
-        await self._commit_attempt(info, attempt)
+        if info.role is not Producer.SPECIFIER:  # the specifier changes nothing: no commit
+            await self._commit_attempt(info, attempt)
         journal.enter(Level.ATTEMPT, attempt, AttemptState.COMMITTED)
         journal.enter(
             Level.STAGE,

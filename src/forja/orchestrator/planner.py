@@ -10,6 +10,7 @@ from pathlib import Path
 from forja.checks.complexity import DEFAULT_MAX_CCN
 from forja.core.artifacts.models import Producer
 from forja.orchestrator.config import Budget, FixRequest
+from forja.orchestrator.criteria import with_criteria
 from forja.orchestrator.ports import TEST_ROOT, Baseline, PlannedTask
 
 # (file, function) -> cyclomatic complexity
@@ -50,9 +51,12 @@ class FixPlanner:
         self._test_root = test_root
 
     def _intent(self) -> str:
-        """The defect and its criteria; the numbers are the ones the test author declares."""
-        criteria = "\n".join(f"{c.id}. {c.text}" for c in self._fix.criteria.criteria)
-        return f"{self._fix.description}\n\nCriteria:\n{criteria}"
+        """The defect and, when the person gave them, its criteria; otherwise the specifier writes
+        the criteria and the stages after it add them to the intent."""
+        criteria = self._fix.criteria
+        if criteria is None:
+            return self._fix.description
+        return with_criteria(self._fix.description, criteria)
 
     async def plan(
         self, worktree: Path, baseline: Baseline, budget: Budget
@@ -63,7 +67,12 @@ class FixPlanner:
                 scope=self._scope,
                 max_files=budget.files_per_task,
                 max_lines=budget.lines_per_task,
-                stages=(Producer.TEST_AUTHOR, Producer.IMPLEMENTER, Producer.DOCUMENTER),
+                stages=(
+                    *(() if self._fix.criteria else (Producer.SPECIFIER,)),
+                    Producer.TEST_AUTHOR,
+                    Producer.IMPLEMENTER,
+                    Producer.DOCUMENTER,
+                ),
                 test_root=self._test_root,
             )
         ]

@@ -8,7 +8,13 @@ from typing import Annotated, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from forja.core.artifacts.llm_output import Claim, DeclaredChange, check_relative_path
+from forja.core.artifacts.llm_output import (
+    Claim,
+    DeclaredChange,
+    check_relative_path,
+)
+from forja.core.artifacts.llm_output import Criterion as Criterion
+from forja.core.artifacts.llm_output import CriterionLevel as CriterionLevel
 from forja.core.artifacts.models import Executor, GitCommit, NonEmpty, Producer
 
 
@@ -36,23 +42,6 @@ class FindingsBody(BaseModel):
 
 
 # -- criteria (specifier) ----------------------------------------------------------------------
-
-
-class CriterionLevel(StrEnum):
-    UNIT = "unit"
-    INTEGRATION = "integration"
-    E2E = "e2e"
-
-
-class Criterion(BaseModel):
-    """A numbered, verifiable acceptance criterion and the part of the input it comes from."""
-
-    model_config = _strict()
-
-    id: int = Field(ge=1)
-    text: NonEmpty
-    level: CriterionLevel
-    origin: NonEmpty
 
 
 class CriteriaBody(BaseModel):

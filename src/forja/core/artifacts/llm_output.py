@@ -118,6 +118,49 @@ class DeclaredTest(BaseModel):
         return check_relative_path(value)
 
 
+class CriterionLevel(StrEnum):
+    UNIT = "unit"
+    INTEGRATION = "integration"
+    E2E = "e2e"
+
+
+class Criterion(BaseModel):
+    """A numbered, verifiable acceptance criterion and the elements of the input it comes from.
+
+    ``origin`` holds the ids of the input elements (``E1``, ``E2``...). A text from before there
+    were elements is one origin.
+    """
+
+    model_config = _strict()
+
+    id: int = Field(ge=1)
+    text: NonEmpty
+    level: CriterionLevel
+    origin: tuple[NonEmpty, ...] = Field(min_length=1)
+
+    @field_validator("origin", mode="before")
+    @classmethod
+    def _one_origin_is_a_list_of_one(cls, value: object) -> object:
+        return (value,) if isinstance(value, str) else value
+
+
+class LeftOut(BaseModel):
+    """An element of the input the specifier does not turn into a criterion, and why."""
+
+    model_config = _strict()
+
+    element: NonEmpty
+    reason: NonEmpty
+    missing_evidence: NonEmpty
+
+    def as_assumption(self) -> Assumption:
+        return Assumption(
+            statement=f"input element {self.element} is not built",
+            reason=self.reason,
+            missing_evidence=self.missing_evidence,
+        )
+
+
 class LlmOutput(BaseModel):
     """The only shape a role may answer with."""
 
@@ -127,6 +170,8 @@ class LlmOutput(BaseModel):
     actions: tuple[Action, ...] = ()
     assumptions: tuple[Assumption, ...] = ()
     tests: tuple[DeclaredTest, ...] = ()  # only the test author declares these
+    criteria: tuple[Criterion, ...] = ()  # only the specifier declares these
+    left_out: tuple[LeftOut, ...] = ()  # and the elements of the input it leaves out
 
 
 class ChangeDeclaration(BaseModel):

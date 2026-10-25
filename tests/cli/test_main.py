@@ -126,11 +126,13 @@ def test_fixing_needs_a_description(repo: Path, environ: dict[str, str]) -> None
     assert "Descreva o erro" in talk.text
 
 
-def test_fixing_needs_criteria(repo: Path, environ: dict[str, str]) -> None:
+def test_fixing_without_criteria_leaves_them_to_the_specifier(
+    repo: Path, environ: dict[str, str]
+) -> None:
     talk = Talk()
-    assert go(["corrigir", "page 1 is wrong", "--plano"], talk, environ) == 2
-    assert "Faltam os critérios" in talk.text
-    assert "--criterios" in talk.text
+    assert go(["corrigir", "page 1 is wrong", "--plano"], talk, environ) == 0
+    assert "o agente que especifica os escreve" in talk.text
+    assert "Faltam os critérios" not in talk.text
 
 
 def test_criteria_that_do_not_fit_the_contract_are_named(
@@ -279,6 +281,7 @@ def test_a_saved_fix_is_read_back_from_execucao(tmp_path: Path) -> None:
     saved = Execucao(objetivo="corrigir", descricao="page 1 is wrong", criterios=str(criteria))
     request, description, where = preparation.read_fix(parse(["corrigir"]), saved)
     assert request.description == description == "page 1 is wrong"
+    assert request.criteria is not None
     assert [c.id for c in request.criteria.criteria] == [1, 2]
     assert Path(where) == criteria.resolve()
 

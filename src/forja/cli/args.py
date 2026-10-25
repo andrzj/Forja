@@ -81,7 +81,10 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("-f", "--arquivo", type=Path, help="ler a descrição deste arquivo")
         if verb == "corrigir":
             item.add_argument(
-                "--criterios", type=Path, metavar="ARQUIVO", help="critérios (JSON) do conserto"
+                "--criterios",
+                type=Path,
+                metavar="ARQUIVO",
+                help="critérios (JSON) do conserto; sem eles, um agente os escreve da descrição",
             )
         item.add_argument("--escopo", action="append", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--cli", metavar="NOME", default=argparse.SUPPRESS)

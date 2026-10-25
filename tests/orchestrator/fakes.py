@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from forja.core.adapters.executor import ErrorActivity, ErrorKind
-from forja.core.artifacts.llm_output import Claim, DeclaredTest
-from forja.core.artifacts.models import Executor
+from forja.core.artifacts.llm_output import Claim, Criterion, DeclaredTest, LeftOut, LlmOutput
+from forja.core.artifacts.models import Assumption, Executor
 from forja.core.dependencies import is_dependency
 from forja.core.events import OpenOperation
 from forja.core.gates import (
@@ -168,6 +168,9 @@ class ScriptedAgent:
     meddle: Callable[[], object] | None = None
     reject_diff: str | None = None
     tests: tuple[DeclaredTest, ...] = ()
+    criteria: tuple[Criterion, ...] = ()  # what a specifier declares
+    left_out: tuple[LeftOut, ...] = ()
+    assumptions: tuple[Assumption, ...] = ()
     die_after_the_call: bool = False
     by_feedback: bool = False
     in_process: bool = True  # False starts a real process, as the resume tests need
@@ -269,6 +272,11 @@ class ScriptedAgent:
 
     def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
         return ()
+
+    def declared_output(self, ctx: AttemptContext) -> LlmOutput:
+        return LlmOutput(
+            criteria=self.criteria, left_out=self.left_out, assumptions=self.assumptions
+        )
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload

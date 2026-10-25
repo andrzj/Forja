@@ -11,7 +11,6 @@ from typing import Any
 
 from pydantic import JsonValue
 
-from forja.core.artifacts import ArtifactStore
 from forja.core.artifacts.models import ArtifactType, Producer
 from forja.core.atomic import atomic_write_bytes
 from forja.core.confirmation import Confirmation
@@ -251,7 +250,7 @@ class Orchestrator:
         ctx, journal = self._ctx, self._journal
         final = await ctx.measurer.baseline(ctx.workspace.run_worktree, ctx.sinks)
         self._record_metrics("final", final)
-        store = ArtifactStore(ctx.run_dir / "store")
+        store = ctx.store
         header = store.put(
             artifact_type=ArtifactType.EXECUTION_SUMMARY,
             producer=Producer.FORJA,

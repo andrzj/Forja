@@ -181,6 +181,7 @@ class Scene:
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
             "citations": OBSERVATION,
+            "traceability": OBSERVATION,
             "change_record": OBSERVATION,
             "readme": OBSERVATION,
             "doc_drift": OBSERVATION,

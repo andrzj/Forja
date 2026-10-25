@@ -141,6 +141,7 @@ def test_the_real_cli_writes_the_tests_and_then_fixes_the_defect(
     # stage 1: the test author writes tests that fail on the defect
     info, attempt = stage(planned, Producer.TEST_AUTHOR)
     author, ctx = call(Producer.TEST_AUTHOR, info, attempt)
+    assert fix.criteria is not None
     criteria = frozenset(int(c.id) for c in fix.criteria.criteria)
     red = RedGreenCheck(
         tools(log, tmp_path),

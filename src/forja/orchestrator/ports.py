@@ -13,7 +13,9 @@ from types import TracebackType
 from typing import Protocol
 
 from forja.core.adapters.executor import ErrorActivity
-from forja.core.artifacts.llm_output import Claim, DeclaredTest
+from forja.core.artifacts import ArtifactStore
+from forja.core.artifacts.elements import Element
+from forja.core.artifacts.llm_output import Claim, Criterion, DeclaredTest, LeftOut, LlmOutput
 from forja.core.artifacts.models import Executor, Producer
 from forja.core.events import LogEventSink, OpenOperation
 from forja.core.gates import PipelineOutcome
@@ -82,12 +84,17 @@ class AttemptContext:
 
 @dataclass(frozen=True)
 class Expectations:
-    """What a role owes: the test author, a test for each criterion; the documenter, claims whose
-    citations exist. Both are declared in its answer."""
+    """What a role owes: the test author, a test for each criterion; the documenter and the
+    specifier, claims whose citations exist; the specifier, a criterion for each element of the
+    input. All are declared in its answer."""
 
     criteria: frozenset[int]
     declared: tuple[DeclaredTest, ...]
     claims: tuple[Claim, ...] = ()
+    # the specifier: what the input was cut into and the criteria it made of it
+    elements: tuple[Element, ...] = ()
+    specified: tuple[Criterion, ...] = ()
+    left_out: tuple[LeftOut, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -161,6 +168,8 @@ class AgentRunner(Protocol):
     def declared_tests(self, ctx: AttemptContext) -> tuple[DeclaredTest, ...]: ...
 
     def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]: ...
+
+    def declared_output(self, ctx: AttemptContext) -> LlmOutput: ...
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation: ...
 
@@ -261,6 +270,10 @@ class RunContext:
     test_files: Callable[[Path], Awaitable[Sequence[str]]] = _no_test_files
     test_root: str = TEST_ROOT  # where a test author with no root of its own writes
     notices: tuple[str, ...] = ()  # what the person must be told about this run's checks
+
+    @property
+    def store(self) -> ArtifactStore:
+        return ArtifactStore(self.run_dir / "store")
 
     def runner(self, role: Producer) -> AgentRunner:
         return self.agents.get(role, self.agent)

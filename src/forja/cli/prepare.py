@@ -86,8 +86,9 @@ def read_fix(args: Arguments, saved: Execucao | None) -> tuple[FixRequest, str, 
     """The defect and the criteria of ``forja corrigir``, with where each one came from.
 
     The description is the text on the command line, else the ``-f`` file. The criteria are the
-    ``--criterios`` file, else ``criterios.json`` beside the ``-f`` file. Both come back also
-    as the strings ``execucao.toml`` keeps, so ``--config`` reproduces the run.
+    ``--criterios`` file, else ``criterios.json`` beside the ``-f`` file; with neither, the
+    specifier writes them in the first stage. Both come back also as the strings
+    ``execucao.toml`` keeps, so ``--config`` reproduces the run.
     """
     file = args.file or (Path(saved.arquivo) if saved and saved.arquivo else None)
     description = args.text.strip() or (saved.descricao.strip() if saved else "")
@@ -99,11 +100,7 @@ def read_fix(args: Arguments, saved: Execucao | None) -> tuple[FixRequest, str, 
     if path is None and file is not None and (file.parent / CRITERIA_FILE).is_file():
         path = file.parent / CRITERIA_FILE
     if path is None:
-        raise Refused(
-            "Faltam os critérios do conserto: passe `--criterios arquivo.json` "
-            f"(ou deixe um `{CRITERIA_FILE}` ao lado do arquivo dado em -f). "
-            'Formato: {"criteria": [{"id": 1, "text": "...", "level": "unit", "origin": "..."}]}.'
-        )
+        return FixRequest(description=description), description, ""
     try:
         criteria = CriteriaBody.model_validate_json(_read_text(path, "os critérios"))
     except ValidationError as error:
@@ -328,7 +325,7 @@ def summary_of(
         f"Vou {verb} {detection.repo.name if detection.repo else ''} "
         f"(branch {detection.branch}, commit {detection.head[:7]}).",
         *(
-            (f"  erro: {fix.description}", f"  critérios: {len(fix.criteria.criteria)}")
+            (f"  erro: {fix.description}", _criteria_line(fix))
             if fix
             else ()
         ),
@@ -354,6 +351,15 @@ def summary_of(
         *(("  forja.toml do repositório muda o padrão:", *(f"    {note}" for note in policy_notes))
           if policy_notes else ()),
     )  # fmt: skip
+
+
+def _criteria_line(fix: FixRequest) -> str:
+    if fix.criteria is None:
+        return (
+            "  critérios: o agente que especifica os escreve a partir da descrição "
+            "(o mesmo que implementa, sem comandos e sem alterar arquivos)"
+        )
+    return f"  critérios: {len(fix.criteria.criteria)}"
 
 
 def _agent(executor: ExecutorRef) -> str:

@@ -58,6 +58,7 @@ from forja.checks.secrets import SecretsCheck
 from forja.checks.structure import SUFFIXES as SHAPE_SUFFIXES
 from forja.checks.structure import dialect_of
 from forja.checks.tooling import Tools
+from forja.checks.traceability import TraceabilityCheck
 from forja.checks.voice import VoiceCheck
 from forja.checks.voice_markers import MARKERS, Marker
 from forja.core.adapters import (
@@ -564,6 +565,8 @@ class PipelineMeasurer:
     async def judge(
         self, ctx: AttemptContext, sinks: SinkFactory, expectations: Expectations | None = None
     ) -> PipelineOutcome:
+        if ctx.task.role is Producer.SPECIFIER:
+            return await self._judge_specification(ctx, expectations)
         git = self._git.at(ctx.worktree)
         changes = await read_changes(git)
         own = own_files(self._adapters)
@@ -701,6 +704,24 @@ class PipelineMeasurer:
             )
         data = GateInput(worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, _capabilities(active))
+
+    async def _judge_specification(
+        self, ctx: AttemptContext, expectations: Expectations | None
+    ) -> PipelineOutcome:
+        """The specifier writes no file: only that holds, its claims cite what exists, and its
+        criteria and the elements of the input lead to each other."""
+        git = self._git.at(ctx.worktree)
+        changes = await read_changes(git)
+        spec = expectations or Expectations(frozenset(), ())
+        evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
+        checks: list[Check] = [
+            ScopeCheck(changes, ctx.task, self._classify),
+            CitationCheck(ctx.worktree, spec.claims, evidence),
+            TraceabilityCheck(spec.elements, spec.specified, spec.left_out),
+        ]
+        head = (await git.lines("rev-parse", "HEAD"))[0]
+        data = GateInput(ctx.worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
+        return await self._pipeline(checks).run(data, ())
 
     async def _code_base(self, git: GitAt, stage: str) -> str:
         """The commit before the one that holds the work of ``stage``; ``HEAD`` for no stage."""
