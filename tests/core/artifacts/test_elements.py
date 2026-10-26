@@ -81,3 +81,15 @@ def test_a_criterion_without_an_origin_is_refused() -> None:
         Criterion.model_validate({"id": 1, "text": "t", "level": "unit", "origin": []})
     with pytest.raises(ValidationError):
         Criterion.model_validate({"id": 1, "text": "t", "level": "unit", "origin": " "})
+
+
+def test_a_continuation_line_belongs_to_the_item_before_it() -> None:
+    assert texts("- one\n- two\n  goes on\n- three") == [
+        ("E1", "one"),
+        ("E2", "two goes on"),
+        ("E3", "three"),
+    ]
+
+
+def test_blank_lines_in_any_number_separate_paragraphs_without_adding_any() -> None:
+    assert texts("\n\nFirst.\n\n\n\nSecond.\n\n\n") == [("E1", "First."), ("E2", "Second.")]

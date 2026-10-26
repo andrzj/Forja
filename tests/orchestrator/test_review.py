@@ -1,18 +1,24 @@
 """The review collection says what of a run reached the main branch, and how each role fared."""
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from forja.core.artifacts.llm_output import Criterion, CriterionLevel
 from forja.core.artifacts.models import Producer
 from forja.core.events import EventLog
+from forja.core.events.state import RunState
+from forja.core.states import Level
 from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig, load_config
 from forja.orchestrator.facts import Fact
 from forja.orchestrator.ports import PlannedTask
 from forja.orchestrator.review import (
     NO_GATE,
     Landed,
+    Stage,
+    _by_gate,
+    _by_role,
     cli_of,
     gate_of,
     render_review,
@@ -334,3 +340,82 @@ def test_the_report_says_where_it_read_and_what_it_cannot_see(world: MemoryWorld
     assert f"branch da entrega `forja-run/{RUN}`" in text
     assert "Squash ou rebase que reescreve as mensagens apaga" in text
     assert "O especificador e o arqueólogo não commitam" in text
+
+
+# -- details of the aggregates ------------------------------------------------------------------
+
+
+def stage_of(role: Producer, cli: str, stopped_by: tuple[tuple[str, str], ...] = ()) -> Stage:
+    return Stage("t1", f"t1-{cli}", role, cli, True, False, 1, 0, (), stopped_by)
+
+
+def body(table: list[str]) -> list[str]:
+    return [line[: line.index(" |", 12)] for line in table[2:]]
+
+
+def test_the_table_by_role_is_ordered_by_role_and_then_by_cli() -> None:
+    stages = [
+        stage_of(Producer.DOCUMENTER, "z"),
+        stage_of(Producer.IMPLEMENTER, "b"),
+        stage_of(Producer.DOCUMENTER, "a"),
+        stage_of(Producer.IMPLEMENTER, "a"),
+    ]
+
+    rows = _by_role(stages, NOTHING_LANDED, Objective.REFACTOR)
+
+    assert [(r.split(" | ")[0], r.split(" | ")[1]) for r in rows[2:]] == [
+        ("| documentador", "a"),
+        ("| documentador", "z"),
+        ("| implementador", "a"),
+        ("| implementador", "b"),
+    ]
+
+
+def test_the_table_by_gate_is_ordered_by_gate_number_check_role_and_cli() -> None:
+    stages = [
+        stage_of(Producer.DOCUMENTER, "z", (("5", "zeta"),)),
+        stage_of(Producer.IMPLEMENTER, "b", (("5", "zeta"),)),
+        stage_of(Producer.IMPLEMENTER, "x", (("10", "alpha"),)),
+        stage_of(Producer.IMPLEMENTER, "a", (("5", "zeta"),)),
+        stage_of(Producer.IMPLEMENTER, "q", (("5", "alpha"),)),
+    ]
+
+    rows = _by_gate(stages)
+
+    assert [tuple(r.strip("| ").split(" | ")[:4]) for r in rows[2:]] == [
+        ("5", "alpha", "implementador", "q"),
+        ("5", "zeta", "documentador", "z"),
+        ("5", "zeta", "implementador", "a"),
+        ("5", "zeta", "implementador", "b"),
+        ("10", "alpha", "implementador", "x"),
+    ]
+
+
+def test_a_task_with_no_loose_commit_has_no_line_about_them(world: MemoryWorld) -> None:
+    assert "sem `Stage-Id`" not in render(refactor(world))
+
+
+class WithoutStages:
+    """The state of a log whose task left no list of stages in its first transition."""
+
+    def __init__(self, inner: RunState) -> None:
+        self.inner = inner
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.inner, name)
+
+    def transition_payload(self, level: Level, ident: str, state: object) -> object:
+        if level is Level.TASK:
+            return {}
+        return self.inner.transition_payload(level, ident, state)  # type: ignore[arg-type]
+
+
+def test_stages_without_a_list_of_roles_are_read_as_far_as_the_roles_go(
+    world: MemoryWorld,
+) -> None:
+    log = refactor(world)
+    config = load_config(log.state)
+
+    found = stages_of(cast(RunState, WithoutStages(log.state)), config)
+
+    assert [stage.role for stage in found] == [Producer.IMPLEMENTER]

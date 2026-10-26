@@ -147,3 +147,32 @@ def test_a_setup_that_takes_too_long_is_stopped(
 
     with pytest.raises(ScaffoldError, match="interrompido"):
         make(root)
+
+
+def test_the_program_looked_up_is_the_first_word_of_the_setup(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_setup(monkeypatch, ("python", "-c", "pass"))
+    asked: list[str] = []
+
+    def locate(name: str) -> Path:
+        asked.append(name)
+        return Path(sys.executable)
+
+    monkeypatch.setattr(scaffolding, "locate_in_path", locate)
+
+    make(root)
+
+    assert asked == ["python"]
+
+
+def test_a_failed_setup_shows_the_last_three_lines_of_what_it_said(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = "print('one'); print('two'); print('three'); print('four'); print('five'); exit(1)"
+    with_setup(monkeypatch, ("python", "-c", script))
+
+    with pytest.raises(ScaffoldError) as raised:
+        make(root)
+
+    assert "falhou (1): three | four | five. O projeto" in raised.value.message

@@ -170,3 +170,7 @@ Pendências abertas (nenhuma bloqueia o 3):
 - Quatro testes que falham no Linux estão em `[tool.forja.mutation] deselect`.
 - 1d/1h: falta execução viva completa com o Claude Code real e a aceitação 1h (gitleaks instalado).
 - Aproximações: CRAP do commit pai não é medido; limiares de pass-through e profundidade (razão 1,0; 10 instruções) sem calibração.
+
+## Incremento 6 (feito, 26/10/2026): especificação, engenharia reversa e criação
+
+Plano em `docs/plano-especificador-arqueologo.md`, uso em `docs/especificar-e-investigar.md`, decisões no ADR 0027, andamento passo a passo no Registro do `docs/Plano de execução.md`. Feito: especificador (`corrigir` sem critérios; elementos da entrada, critérios, `traceability`), manifesto de testes, premissas com commits dependentes e fatos do dono (`--fatos`), `forja revisao`, arqueólogo e `forja investigar`, andaime e `forja criar` (Python, Go, TypeScript, C# e Java), gate 13 em qualquer papel que declare claims. Gate de mutação limpo nos 13 arquivos novos. Falta, e é do dono: E2E real e execução viva. Limites: a rastreabilidade só é tão fina quanto a segmentação; o gate 13 não confere se a citação sustenta a afirmação; fatos não são guardados entre execuções; `traceability` e `citations` seguem em observação (promoção na fila 7).

@@ -5,13 +5,15 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from forja.cli.args import parse
 from forja.cli.main import amain
 from forja.cli.prepare import Refused
-from forja.cli.review import REVIEWS_DIR, principal, read_landed
+from forja.cli.review import REVIEWS_DIR, principal, read_comments, read_landed
 from forja.core.artifacts.models import Producer
 from forja.core.idempotency.git import Git
 from forja.orchestrator.ports import PlannedTask
@@ -362,3 +364,50 @@ def test_the_comments_file_feeds_the_report_and_a_bad_one_stops_the_command(
     assert "não servem" in talk.text
     assert missing == 2
     assert "Não consegui ler os comentários" in said.text
+
+
+# -- what a git that answers oddly makes of it --------------------------------------------------
+
+
+class Canned:
+    """A git that gives the same answer to everything, to reach what a real one never says."""
+
+    def __init__(self, code: int = 0, lines: tuple[str, ...] = ()) -> None:
+        self.code, self.said = code, list(lines)
+
+    async def run(self, *args: str) -> SimpleNamespace:
+        return SimpleNamespace(exit_code=self.code, lines=self.said)
+
+    async def succeeds(self, *args: str) -> bool:
+        return True
+
+    async def lines(self, *args: str) -> list[str]:
+        return self.said
+
+
+@pytest.mark.parametrize("given", ["", "main"])
+@pytest.mark.parametrize("answer", [(1, ("abc",)), (0, ())])
+def test_a_git_that_fails_or_says_nothing_gives_no_main_branch(
+    given: str, answer: tuple[int, tuple[str, ...]]
+) -> None:
+    with pytest.raises(Refused):
+        asyncio.run(principal(cast(Git, Canned(*answer)), given))
+
+
+def test_a_log_line_that_is_not_one_commit_of_the_format_is_left_out() -> None:
+    said = ("x@@a@@b", "@@c@@d", "@@@@t", "@@only")
+
+    landed = asyncio.run(read_landed(cast(Git, Canned(lines=said)), "a" * 40, "b" * 40))
+
+    assert landed.stages == frozenset({"c"})
+    assert dict(landed.loose) == {"t": 1}
+
+
+def test_comments_that_are_not_text_are_refused_by_saying_so(tmp_path: Path) -> None:
+    path = tmp_path / "comments.txt"
+    path.write_bytes(b"\xff\xfe\x00bad")
+
+    with pytest.raises(Refused) as refused:
+        read_comments(path)
+
+    assert "não é UTF-8" in refused.value.message

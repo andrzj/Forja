@@ -42,7 +42,7 @@ def elements_of(text: str) -> tuple[Element, ...]:
     for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.strip():
             blocks[-1].append(line)
-        elif blocks[-1]:
+        else:
             blocks.append([])
     found: list[str] = []
     for block in blocks:
