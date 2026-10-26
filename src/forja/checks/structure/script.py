@@ -178,3 +178,15 @@ def imports(root: Node) -> tuple[str, ...]:
 
 def _specifier(node: Node) -> str:
     return "".join(text(c) for c in node.children if c.type == "string_fragment")
+
+
+_TYPE_DECLARATIONS = frozenset(
+    {"class_declaration", "abstract_class_declaration", "interface_declaration", "enum_declaration"}
+)
+_ABSTRACT_DECLARATIONS = frozenset({"abstract_class_declaration", "interface_declaration"})
+
+
+def types(root: Node) -> tuple[int, int]:
+    """The interfaces and abstract classes, and all the types; plain JavaScript has no abstract."""
+    found = [n for n in walk(root) if n.type in _TYPE_DECLARATIONS]
+    return sum(1 for n in found if n.type in _ABSTRACT_DECLARATIONS), len(found)

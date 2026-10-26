@@ -99,3 +99,14 @@ def imports(root: Node) -> tuple[str, ...]:
     """The path of every import, without quotes."""
     paths = (text(field(n, "path")).strip('"`') for n in walk(root) if n.type == "import_spec")
     return tuple(paths)
+
+
+def types(root: Node) -> tuple[int, int]:
+    """The interfaces and all the declared types."""
+    specs = [n for n in walk(root) if n.type == "type_spec"]
+    return sum(1 for s in specs if _is_interface(s)), len(specs)
+
+
+def _is_interface(spec: Node) -> bool:
+    kind = field(spec, "type")
+    return kind is not None and kind.type == "interface_type"

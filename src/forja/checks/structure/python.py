@@ -1,5 +1,7 @@
 """Python: pass-through functions and the size of the public surface."""
 
+import re
+
 from tree_sitter import Node
 
 from forja.checks.structure.nodes import (
@@ -181,3 +183,27 @@ def imports(root: Node) -> tuple[str, ...]:
 
 def _dotted(node: Node) -> str:
     return text(field(node, "name")) if node.type == "aliased_import" else text(node)
+
+
+_ABSTRACT_BASES = re.compile(r"\b(ABC|Protocol)\b")
+_ABSTRACT_METHOD = re.compile(r"\babstractmethod\b")
+
+
+def types(root: Node) -> tuple[int, int]:
+    """The abstract types and all the types: a class built on ``ABC`` or ``Protocol``, or with an
+    abstract method, is abstract."""
+    classes = [n for n in walk(root) if n.type == "class_definition"]
+    return sum(1 for c in classes if _abstract(c)), len(classes)
+
+
+def _abstract(cls: Node) -> bool:
+    if _ABSTRACT_BASES.search(text(field(cls, "superclasses"))):
+        return True
+    body = field(cls, "body")
+    decorators = [
+        d
+        for m in (kids(body) if body is not None else [])
+        if m.type == "decorated_definition"
+        for d in kids(m)
+    ]
+    return any(_ABSTRACT_METHOD.search(text(d)) for d in decorators if d.type == "decorator")

@@ -16,7 +16,7 @@ import tree_sitter_typescript
 from tree_sitter import Language, Node, Parser
 
 from forja.checks.structure import csharp, go, java, python, script
-from forja.checks.structure.nodes import Module, SyntaxProblem
+from forja.checks.structure.nodes import Module, SyntaxProblem, no_declarations
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,8 @@ class Dialect:
     grammar: Callable[[], object]
     read: Callable[[Node], Module]
     imports: Callable[[Node], tuple[str, ...]]
+    types: Callable[[Node], tuple[int, int]]  # the abstract ones and all of them
+    declared: Callable[[Node], tuple[str, ...]]  # package or namespaces; none for other languages
 
 
 DIALECTS = (
@@ -37,11 +39,38 @@ DIALECTS = (
         tree_sitter_python.language,
         python.read,
         python.imports,
+        python.types,
+        no_declarations,
     ),
-    Dialect("go", "go", (".go",), tree_sitter_go.language, go.read, go.imports),
-    Dialect("java", "java", (".java",), tree_sitter_java.language, java.read, java.imports),
     Dialect(
-        "csharp", "csharp", (".cs",), tree_sitter_c_sharp.language, csharp.read, csharp.imports
+        "go",
+        "go",
+        (".go",),
+        tree_sitter_go.language,
+        go.read,
+        go.imports,
+        go.types,
+        no_declarations,
+    ),
+    Dialect(
+        "java",
+        "java",
+        (".java",),
+        tree_sitter_java.language,
+        java.read,
+        java.imports,
+        java.types,
+        java.declared,
+    ),
+    Dialect(
+        "csharp",
+        "csharp",
+        (".cs",),
+        tree_sitter_c_sharp.language,
+        csharp.read,
+        csharp.imports,
+        csharp.types,
+        csharp.declared,
     ),
     Dialect(
         "javascript",
@@ -50,6 +79,8 @@ DIALECTS = (
         tree_sitter_javascript.language,
         script.read,
         script.imports,
+        script.types,
+        no_declarations,
     ),
     Dialect(
         "typescript",
@@ -58,6 +89,8 @@ DIALECTS = (
         tree_sitter_typescript.language_typescript,
         script.read,
         script.imports,
+        script.types,
+        no_declarations,
     ),
     Dialect(
         "tsx",
@@ -66,6 +99,8 @@ DIALECTS = (
         tree_sitter_typescript.language_tsx,
         script.read,
         script.imports,
+        script.types,
+        no_declarations,
     ),
 )
 SUFFIXES = tuple(suffix for dialect in DIALECTS for suffix in dialect.suffixes)

@@ -119,3 +119,43 @@ def imports(root: Node) -> tuple[str, ...]:
     """What every ``using`` names: a namespace, a static type or an alias target."""
     directives = (kids(n) for n in walk(root) if n.type == "using_directive")
     return tuple(text(named[-1]) for named in directives if named)
+
+
+_KINDS = frozenset(
+    {
+        "class_declaration",
+        "interface_declaration",
+        "struct_declaration",
+        "record_declaration",
+        "enum_declaration",
+    }
+)
+
+
+def types(root: Node) -> tuple[int, int]:
+    """The interfaces and abstract classes, and all the types."""
+    found = [n for n in walk(root) if n.type in _KINDS]
+    abstract = sum(1 for n in found if n.type == "interface_declaration" or _abstract(n))
+    return abstract, len(found)
+
+
+def _abstract(node: Node) -> bool:
+    return any(text(c) == "abstract" for c in kids(node) if c.type == "modifier")
+
+
+def declared(root: Node) -> tuple[str, ...]:
+    """The namespaces the file declares, nested ones written in full."""
+    found: list[str] = []
+    _namespaces(root, "", found)
+    return tuple(found)
+
+
+def _namespaces(node: Node, outer: str, found: list[str]) -> None:
+    for child in kids(node):
+        if child.type in {"namespace_declaration", "file_scoped_namespace_declaration"}:
+            name = text(field(child, "name"))
+            full = f"{outer}.{name}" if outer else name
+            found.append(full)
+            _namespaces(field(child, "body") or child, full, found)
+        elif child.type == "declaration_list":
+            _namespaces(child, outer, found)

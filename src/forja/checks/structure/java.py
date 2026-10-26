@@ -104,3 +104,33 @@ def imports(root: Node) -> tuple[str, ...]:
         if names:
             found.append(f"{names[0]}.*" if star else names[0])
     return tuple(found)
+
+
+_DECLARATIONS = frozenset(
+    {
+        "class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+        "record_declaration",
+        "annotation_type_declaration",
+    }
+)
+_INTERFACES = frozenset({"interface_declaration", "annotation_type_declaration"})
+
+
+def types(root: Node) -> tuple[int, int]:
+    """The interfaces and abstract classes, and all the types."""
+    found = [n for n in walk(root) if n.type in _DECLARATIONS]
+    abstract = sum(1 for n in found if n.type in _INTERFACES or _abstract(n))
+    return abstract, len(found)
+
+
+def _abstract(node: Node) -> bool:
+    return any("abstract" in text(c).split() for c in kids(node) if c.type == "modifiers")
+
+
+def declared(root: Node) -> tuple[str, ...]:
+    """The package, then the qualified name of each top-level type."""
+    package = next((text(kids(n)[0]) for n in kids(root) if n.type == "package_declaration"), "")
+    names = (text(field(n, "name")) for n in kids(root) if n.type in _DECLARATIONS)
+    return (package, *(f"{package}.{n}" if package else n for n in names))

@@ -71,3 +71,8 @@ def sole(statements: list[Node], kinds: frozenset[str]) -> Node | None:
         return None
     inner = kids(statements[0])
     return inner[0] if len(inner) == 1 else None
+
+
+def no_declarations(root: Node) -> tuple[str, ...]:
+    """For a language whose imports name files or paths, not packages the files declare."""
+    return ()
