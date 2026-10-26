@@ -245,17 +245,25 @@ def test_a_name_that_could_leave_the_copy_is_refused(name: str, allowed: bool) -
 
 def test_the_notices_say_what_the_security_checks_could_not_do() -> None:
     from forja.cli.security_notes import (  # noqa: PLC0415
+        NO_LAYERS,
         NO_LICENSES,
         NO_SAST,
         UNMEASURED,
         security_notices,
     )
 
-    assert security_notices(rules=False, licenses=False) == (NO_SAST, NO_LICENSES, UNMEASURED)
-    assert security_notices(rules=True, licenses=False) == (NO_LICENSES, UNMEASURED)
-    assert security_notices(rules=False, licenses=True) == (NO_SAST, UNMEASURED)
-    assert security_notices(rules=True, licenses=True) == (UNMEASURED,)
+    none = security_notices(rules=False, licenses=False, layers=False)
+    assert none == (NO_SAST, NO_LICENSES, NO_LAYERS, UNMEASURED)
+    assert security_notices(rules=True, licenses=False, layers=False) == (
+        NO_LICENSES,
+        NO_LAYERS,
+        UNMEASURED,
+    )
+    assert security_notices(rules=False, licenses=True, layers=True) == (NO_SAST, UNMEASURED)
+    assert security_notices(rules=True, licenses=True, layers=False) == (NO_LAYERS, UNMEASURED)
+    assert security_notices(rules=True, licenses=True, layers=True) == (UNMEASURED,)
     assert "PyPI, Go e Maven" in UNMEASURED and "[licenses] forbidden" in NO_LICENSES
+    assert NO_LAYERS == "Camadas NÃO verificadas: sem regras em [architecture]."
 
 
 class NoGit:

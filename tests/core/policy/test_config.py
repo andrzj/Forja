@@ -577,6 +577,78 @@ def test_a_license_list_that_is_not_one_is_refused(text: str) -> None:
         policy(text)
 
 
+# -- architecture layers -----------------------------------------------------------------------
+
+TOP = '[[architecture.layers]]\nname = "cli"\npaths = ["src/cli"]\n'
+BOTTOM = '[[architecture.layers]]\nname = "core"\npaths = ["src/core", "src/shared"]\n'
+
+
+def test_the_layers_add_up_across_layers_in_the_order_they_were_read() -> None:
+    effective = policy(TOP, BOTTOM)
+
+    assert [(layer.name, layer.paths) for layer in effective.architecture] == [
+        ("cli", ("src/cli",)),
+        ("core", ("src/core", "src/shared")),
+    ]
+    assert policy().architecture == ()  # the Forja deduces none
+
+
+def test_the_layers_of_one_file_keep_their_order() -> None:
+    effective = policy(BOTTOM + TOP)
+
+    assert [layer.name for layer in effective.architecture] == ["core", "cli"]
+
+
+def test_a_policy_without_layers_keeps_its_digest_and_one_with_them_changes() -> None:
+    plain = policy()
+    layered = policy(TOP)
+
+    assert "architecture" not in plain.to_dict()
+    assert layered.to_dict()["architecture"] == {"layers": [{"name": "cli", "paths": ["src/cli"]}]}
+    assert layered.digest() != plain.digest()
+    assert policy(TOP + BOTTOM).digest() != policy(BOTTOM + TOP).digest()
+
+
+def test_a_layer_name_used_twice_is_refused_whichever_file_declared_it() -> None:
+    same = '[[architecture.layers]]\nname = "cli"\npaths = ["other"]\n'
+
+    assert "'cli' is used twice" in problems(TOP + same)
+    assert "'cli' is used twice" in problems(TOP, same)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "architecture = 1\n",
+        "[architecture]\nlayer = []\n",
+        '[architecture]\nlayers = "cli"\n',
+        "[architecture]\nlayers = [1]\n",
+        '[[architecture.layers]]\npaths = ["a"]\n',
+        '[[architecture.layers]]\nname = " "\npaths = ["a"]\n',
+        '[[architecture.layers]]\nname = 1\npaths = ["a"]\n',
+        '[[architecture.layers]]\nname = "a"\n',
+        '[[architecture.layers]]\nname = "a"\npaths = []\n',
+        '[[architecture.layers]]\nname = "a"\npaths = "a"\n',
+        '[[architecture.layers]]\nname = "a"\npaths = [1]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["../a"]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["/a"]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["a/"]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["a\\\\b"]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["."]\n',
+        '[[architecture.layers]]\nname = "a"\npaths = ["a"]\nextra = 1\n',
+    ],
+)
+def test_layers_that_are_not_well_formed_are_refused(text: str) -> None:
+    with pytest.raises(PolicyConfigError):
+        policy(text)
+
+
+def test_a_refused_layer_says_where_it_is() -> None:
+    text = problems('[[architecture.layers]]\nname = "a"\npaths = ["../a"]\n')
+
+    assert "architecture.layers[0].paths" in text and "'../a'" in text
+
+
 def test_the_license_list_is_part_of_the_digest_only_when_it_is_set() -> None:
     assert "licenses" not in policy().to_dict()
     assert policy('[licenses]\nforbidden = ["GPL-3.0-only"]\n').to_dict()["licenses"] == {

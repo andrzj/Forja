@@ -16,7 +16,7 @@ from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
 from forja.cli.scaffold import leftovers, template_adapters
-from forja.cli.security_notes import NO_LICENSES, UNMEASURED, e2e_notices
+from forja.cli.security_notes import NO_LAYERS, NO_LICENSES, UNMEASURED, e2e_notices
 from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
     OBJECTIVE_NAMES,
@@ -555,6 +555,7 @@ async def prepare(
     )  # fmt: skip
     security = (
         *(() if policy.forbidden_licenses else (NO_LICENSES,)),
+        *(() if policy.architecture else (NO_LAYERS,)),
         UNMEASURED,
         *e2e_notices(declared=bool(e2e_commands(policy))),
     )

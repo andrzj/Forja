@@ -438,7 +438,11 @@ async def _context(
         test_root=test_root,
         max_network_probes=None if interactive else NETWORK_PROBES_WITHOUT_A_PERSON,
         notices=(
-            *security_notices(rules=rules is not None, licenses=bool(policy.forbidden_licenses)),
+            *security_notices(
+                rules=rules is not None,
+                licenses=bool(policy.forbidden_licenses),
+                layers=bool(policy.architecture),
+            ),
             *e2e_notices(declared=bool(e2e_commands(policy))),
         ),
     )

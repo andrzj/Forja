@@ -52,6 +52,7 @@ def load_frozen_policy(registry: CheckRegistry, run_dir: Path) -> FrozenPolicy:
                 "redaction": frozen["redaction"],
                 **({"licenses": frozen["licenses"]} if "licenses" in frozen else {}),
                 **({"voice": frozen["voice"]} if "voice" in frozen else {}),
+                **({"architecture": frozen["architecture"]} if "architecture" in frozen else {}),
             },
         )
     except (OSError, ValueError, KeyError, TypeError) as error:

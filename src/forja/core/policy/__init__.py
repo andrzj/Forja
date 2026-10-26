@@ -1,5 +1,6 @@
 from forja.core.policy.config import (
     POLICY_SCHEMA_VERSION,
+    ArchitectureLayer,
     EffectiveCheck,
     EffectivePolicy,
     Layer,
@@ -21,6 +22,7 @@ __all__ = [
     "LANGUAGES",
     "POLICY_SCHEMA_VERSION",
     "SNAPSHOT_NAME",
+    "ArchitectureLayer",
     "CheckRegistry",
     "CheckSpec",
     "EffectiveCheck",

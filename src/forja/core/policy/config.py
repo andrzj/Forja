@@ -58,6 +58,14 @@ class Layer:
 
 
 @dataclass(frozen=True)
+class ArchitectureLayer:
+    """One layer the repository declares for gate 9: a name and the directories it holds."""
+
+    name: str
+    paths: tuple[str, ...]  # repository-relative POSIX directories
+
+
+@dataclass(frozen=True)
 class Promotion:
     """The recorded decision that took a check from observation to blocking."""
 
@@ -110,6 +118,7 @@ class EffectivePolicy:
     forbidden_licenses: tuple[str, ...] = ()  # SPDX ids the repository forbids; no default list
     voice_extra: tuple[str, ...] = ()  # regular expressions the repository adds to the voice list
     voice_off: tuple[str, ...] = ()  # ids of the Forja's voice markers the repository turns off
+    architecture: tuple[ArchitectureLayer, ...] = ()  # top to bottom; none, no layer rules
 
     def settings(self) -> dict[str, CheckSettings]:
         return {check_id: check.settings for check_id, check in self.checks.items()}
@@ -127,6 +136,12 @@ class EffectivePolicy:
             data["voice"] = {
                 "markers_extra": list(self.voice_extra),
                 "markers_off": list(self.voice_off),
+            }
+        if self.architecture:
+            data["architecture"] = {
+                "layers": [
+                    {"name": layer.name, "paths": list(layer.paths)} for layer in self.architecture
+                ]
             }
         return data
 
@@ -198,6 +213,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         raise PolicyConfigError(problems)
 
     checks = {spec.id: _merge(spec, layers, problems) for spec in registry}
+    architecture = _merge_architecture(layers, problems)
     if problems:
         raise PolicyConfigError(problems)
     return EffectivePolicy(
@@ -210,6 +226,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         _collect(layers, "licenses", "forbidden"),
         _collect(layers, "voice", "markers_extra"),
         _collect(layers, "voice", "markers_off"),
+        architecture,
     )
 
 
@@ -229,9 +246,11 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         "tests",
         "licenses",
         "voice",
+        "architecture",
     }
     for key in sorted(unknown_top):
         bad(key, "unknown section")
+    _validate_architecture(layer.data.get("architecture"), bad)
     _validate_string_list(layer.data.get("licenses"), "licenses", "forbidden", bad, _check_license)
     _validate_voice(layer.data.get("voice"), bad)
     _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
@@ -260,6 +279,55 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         _validate_thresholds(raw.get("thresholds"), spec, where, bad)
         _validate_commands(raw.get("commands"), spec, where, bad)
         _validate_limits(raw.get("limits"), spec, where, bad)
+
+
+def _merge_architecture(
+    layers: Sequence[Layer], problems: list[str]
+) -> tuple[ArchitectureLayer, ...]:
+    """The layers of every configuration layer, in the order they were read (top to bottom).
+    A name used twice is a problem, whichever file declared it."""
+    found: dict[str, ArchitectureLayer] = {}
+    for layer in layers:
+        for raw in layer.data.get("architecture", {}).get("layers", []):
+            name = raw["name"].strip()
+            if name in found:
+                problems.append(f"architecture.layers: the layer name {name!r} is used twice")
+            found[name] = ArchitectureLayer(name, tuple(raw["paths"]))
+    return tuple(found.values())
+
+
+def _validate_architecture(section: Any, bad: Any) -> None:
+    if section is None:
+        return
+    if not isinstance(section, dict):
+        bad("architecture", "must be a table")
+        return
+    for key in sorted(set(section) - {"layers"}):
+        bad(f"architecture.{key}", "unknown key")
+    layers = section.get("layers")
+    if layers is None:
+        return
+    if not isinstance(layers, list) or not all(isinstance(item, dict) for item in layers):
+        bad("architecture.layers", "must be a list of { name, paths } tables")
+        return
+    for position, item in enumerate(layers):
+        where = f"architecture.layers[{position}]"
+        for key in sorted(set(item) - {"name", "paths"}):
+            bad(f"{where}.{key}", "unknown key")
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            bad(f"{where}.name", "must be a non-empty string")
+        paths = item.get("paths")
+        if not isinstance(paths, list) or not paths or not all(isinstance(p, str) for p in paths):
+            bad(f"{where}.paths", "must be a non-empty list of directories")
+            continue
+        for path in paths:
+            try:
+                check_relative_path(path)
+            except ValueError:
+                bad(
+                    f"{where}.paths", f"{path!r} is not a relative POSIX path inside the repository"
+                )
 
 
 def _merge_test_root(layers: Sequence[Layer]) -> str | None:

@@ -6,6 +6,7 @@ NO_LICENSES = (
     "Licenças não verificadas: a política não lista licenças proibidas "
     "(seção [licenses] forbidden)."
 )
+NO_LAYERS = "Camadas NÃO verificadas: sem regras em [architecture]."
 UNMEASURED = (
     "Dependência nova: o uso (downloads) só é medido em npm e NuGet; em PyPI, Go e Maven não é "
     "medido, e no Go a idade também não (a data que o proxy dá é a do commit do autor)."
@@ -25,11 +26,12 @@ def e2e_notices(*, declared: bool) -> tuple[str, ...]:
     return (FAKES, PROXY_LIMIT) if declared else (NO_E2E,)
 
 
-def security_notices(*, rules: bool, licenses: bool) -> tuple[str, ...]:
-    """The notices of a run: the SAST without rules, the licenses without a list, and what the
-    registries cannot measure."""
+def security_notices(*, rules: bool, licenses: bool, layers: bool) -> tuple[str, ...]:
+    """The notices of a run: the SAST without rules, the licenses without a list, the layers
+    without rules, and what the registries cannot measure."""
     return (
         *(() if rules else (NO_SAST,)),
         *(() if licenses else (NO_LICENSES,)),
+        *(() if layers else (NO_LAYERS,)),
         UNMEASURED,
     )

@@ -172,3 +172,17 @@ def test_the_forbidden_licenses_are_frozen_with_the_rest(tmp_path: Path) -> None
 
     assert frozen.policy == original
     assert frozen.policy.forbidden_licenses == ("GPL-3.0-only",)
+
+
+def test_the_layers_are_frozen_in_their_order_and_come_back_the_same(tmp_path: Path) -> None:
+    original = effective(
+        '[[architecture.layers]]\nname = "cli"\npaths = ["src/cli"]\n'
+        '[[architecture.layers]]\nname = "core"\npaths = ["src/core", "src/shared"]\n'
+    )
+    freeze_policy(original, tmp_path, "1.2.3")
+
+    frozen = load_frozen_policy(make_registry(), tmp_path)
+
+    assert frozen.policy == original
+    assert [layer.name for layer in frozen.policy.architecture] == ["cli", "core"]
+    assert frozen.version == original.version("1.2.3")
