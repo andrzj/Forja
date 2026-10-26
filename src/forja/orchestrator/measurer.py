@@ -684,11 +684,12 @@ class PipelineMeasurer:
             CommentsCheck(worktree, changes, everything, self._classify),
         ]
         head = (await git.lines("rev-parse", "HEAD"))[0]
+        claims = expectations.claims if expectations is not None else ()
+        evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
+        if claims or ctx.task.role is Producer.DOCUMENTER:  # whoever states something cites it
+            checks.append(CitationCheck(worktree, claims, evidence, self._fact_ids))
         if ctx.task.role is Producer.DOCUMENTER:
             files, found, unreadable = await self._task_changes(ctx)
-            claims = expectations.claims if expectations is not None else ()
-            evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
-            checks.append(CitationCheck(worktree, claims, evidence, self._fact_ids))
             name = readme_path(worktree)
             tracked = await git.lines("ls-tree", "--name-only", "HEAD", "--", name) if name else []
             old = "\n".join(await git.lines("show", f"HEAD:{name}")) + "\n" if tracked else None

@@ -605,13 +605,21 @@ class TaskCycle:
                 frozenset(), (), output.claims, elements, output.criteria, output.left_out
             )
         if ctx.task.role is not Producer.TEST_AUTHOR or ctx.task.reviews:
-            return None
+            return self._claims_only(ctx)
         criteria = criteria_of(self._ctx, ctx.task.task_id)
         if criteria is None:
-            return None
+            return self._claims_only(ctx)
         output = self._ctx.runner(ctx.task.role).declared_output(ctx)
         declared = output.tests  # apply_diff already refused tests that make no manifest
-        return Expectations(frozenset(int(c.id) for c in criteria.criteria), declared)
+        return Expectations(
+            frozenset(int(c.id) for c in criteria.criteria), declared, output.claims
+        )
+
+    def _claims_only(self, ctx: AttemptContext) -> Expectations | None:
+        """What the other roles owe: nothing, unless they stated something; then it must be cited
+        (the instructions do not ask for claims, the contract lets any role make them)."""
+        claims = self._ctx.runner(ctx.task.role).declared_claims(ctx)
+        return Expectations(frozenset(), (), claims) if claims else None
 
     def _block(self, info: TaskInfo, attempt: str, detail: str) -> None:
         """A gate could not judge and its policy is to block: not the agent's fault, not counted."""
