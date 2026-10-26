@@ -40,6 +40,7 @@ def default_registry() -> CheckRegistry:
             PREMISE,
             thresholds=frozenset({"max_interface_ratio", "min_statements"}),
         ),
+        CheckSpec("dependency_cycles", 9, Mode.OBSERVATION, BLOCK),
         CheckSpec("sast", 10, Mode.OBSERVATION, BLOCK),
         CheckSpec("dependency_audit", 10, Mode.OBSERVATION, BLOCK),
         CheckSpec(

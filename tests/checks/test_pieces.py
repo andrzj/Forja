@@ -121,6 +121,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "crap": (8, Mode.OBSERVATION, "premise"),
         "pass_through": (8, Mode.OBSERVATION, "premise"),
         "module_depth": (8, Mode.OBSERVATION, "premise"),
+        "dependency_cycles": (9, Mode.OBSERVATION, "block"),
         "sast": (10, Mode.OBSERVATION, "block"),
         "dependency_audit": (10, Mode.OBSERVATION, "block"),
         "new_dependency": (10, Mode.OBSERVATION, "premise"),

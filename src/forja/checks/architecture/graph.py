@@ -50,14 +50,16 @@ class Graph:
         """The groups of directories that depend on each other, directly or through others."""
         return _components(self.nodes, self.edges)
 
-    def path_in(self, group: frozenset[str]) -> list[str]:
-        """One cycle through the directories of ``group``, first directory repeated at the end."""
-        ordered = sorted(group)
+    def path_in(self, group: frozenset[str], through: frozenset[str] = frozenset()) -> list[str]:
+        """One cycle through the directories of ``group``, the first one repeated at the end.
+
+        It starts at the first of ``through`` that ``group`` holds, if any.
+        """
         inside: dict[str, list[str]] = defaultdict(list)
         for importer, imported in sorted(self.edges):
             if importer in group and imported in group:
                 inside[importer].append(imported)
-        start = ordered[0]
+        start = min(group & through or group)
         seen = {start}
         queue: list[list[str]] = [[start]]
         while queue:
@@ -68,7 +70,7 @@ class Graph:
                 if nxt not in seen:
                     seen.add(nxt)
                     queue.append([*path, nxt])
-        return ordered  # unreachable for a real component
+        return sorted(group)  # not reached for a real component
 
 
 _Resolve = Callable[[Mapping[str, FileFacts]], set[tuple[str, str]]]
