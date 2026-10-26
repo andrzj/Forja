@@ -1,4 +1,5 @@
 """``forja criar`` at the door: what it asks, what it refuses, and the scaffold after the yes."""
+# ruff: noqa: F811 - the fixtures of test_main are imported to be used here
 
 import subprocess
 from pathlib import Path

@@ -123,11 +123,21 @@ async def scaffold(root: Path, request: CreateRequest, environ: Mapping[str, str
             log_dir=Path(scratch),
         )
         _write(root, template)
+        # A repository that was already there is the person's, and its hooks and fsmonitor are
+        # code: none of it runs for the scaffold.
+        hooks = Path(scratch) / "no-hooks"
+        hooks.mkdir()
+        safe = ("-c", f"core.hooksPath={hooks}", "-c", "core.fsmonitor=false")
         if not (root / ".git").exists():
-            await git.lines("init", "-q", f"--initial-branch={FIRST_BRANCH}")
-        await git.lines("add", "--all")
+            await git.lines(*safe, "init", "-q", f"--initial-branch={FIRST_BRANCH}")
+        await git.lines(*safe, "add", "--all")
         await git.lines(
-            "commit", "-q", "-m", f"chore: scaffold {request.language} project {request.name}"
+            *safe,
+            "commit",
+            "-q",
+            "--no-verify",
+            "-m",
+            f"chore: scaffold {request.language} project {request.name}",
         )
         head = (await git.lines("rev-parse", "HEAD"))[0].strip()
     for argv in template.setup:

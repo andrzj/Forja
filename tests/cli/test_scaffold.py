@@ -67,6 +67,19 @@ def test_a_repository_with_no_commit_is_used_as_it_is(root: Path) -> None:
     assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == ["trunk"]
 
 
+def test_the_hooks_of_a_repository_that_was_already_there_do_not_run(root: Path) -> None:
+    git(root, "init", "-q")
+    hook = root / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ntouch ../hook-ran\nexit 1\n", encoding="utf-8", newline="\n")
+    hook.chmod(0o755)
+
+    make(root)
+
+    assert git(root, "rev-list", "--count", "HEAD") == ["1"]
+    assert not (root.parent / "hook-ran").exists()
+    assert not (root / ".git" / "hook-ran").exists()
+
+
 def test_a_directory_with_anything_in_it_is_refused_and_left_alone(root: Path) -> None:
     (root / "notes.txt").write_text("mine\n", encoding="utf-8")
 
