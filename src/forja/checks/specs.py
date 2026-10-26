@@ -42,6 +42,13 @@ def default_registry() -> CheckRegistry:
         ),
         CheckSpec("dependency_cycles", 9, Mode.OBSERVATION, BLOCK),
         CheckSpec("layer_rules", 9, Mode.OBSERVATION, BLOCK),
+        CheckSpec(
+            "package_metrics",
+            9,
+            Mode.OBSERVATION,
+            PREMISE,
+            thresholds=frozenset({"max_distance", "min_types"}),
+        ),
         CheckSpec("sast", 10, Mode.OBSERVATION, BLOCK),
         CheckSpec("dependency_audit", 10, Mode.OBSERVATION, BLOCK),
         CheckSpec(

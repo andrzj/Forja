@@ -123,6 +123,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "module_depth": (8, Mode.OBSERVATION, "premise"),
         "dependency_cycles": (9, Mode.OBSERVATION, "block"),
         "layer_rules": (9, Mode.OBSERVATION, "block"),
+        "package_metrics": (9, Mode.OBSERVATION, "premise"),
         "sast": (10, Mode.OBSERVATION, "block"),
         "dependency_audit": (10, Mode.OBSERVATION, "block"),
         "new_dependency": (10, Mode.OBSERVATION, "premise"),
