@@ -10,6 +10,7 @@ from forja.checks.structure.nodes import (
     kids,
     sole,
     text,
+    walk,
 )
 
 _STATEMENTS = frozenset({"function_definition", "class_definition"})
@@ -157,3 +158,26 @@ def _exports(root: Node) -> set[str] | None:
             items = kids(right) if right is not None else []
             return {text(i).strip("'\"") for i in items if i.type == "string"}
     return None
+
+
+def imports(root: Node) -> tuple[str, ...]:
+    """The module every import names, wherever it stands; ``from m import n`` names ``m.n``.
+
+    The resolver falls back to ``m`` when ``m.n`` is not a module of the project. A relative
+    import keeps its dots: ``from ..a import q`` is ``..a.q``.
+    """
+    found: list[str] = []
+    for node in walk(root):
+        if node.type == "import_statement":
+            found.extend(_dotted(n) for n in node.children_by_field_name("name"))
+        elif node.type == "import_from_statement":
+            base = text(field(node, "module_name"))
+            names = [_dotted(n) for n in node.children_by_field_name("name")]
+            found.extend(f"{base}{'' if base.endswith('.') else '.'}{n}" for n in names)
+            if any(c.type == "wildcard_import" for c in node.children):
+                found.append(base)
+    return tuple(found)
+
+
+def _dotted(node: Node) -> str:
+    return text(field(node, "name")) if node.type == "aliased_import" else text(node)

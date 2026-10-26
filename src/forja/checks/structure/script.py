@@ -10,6 +10,7 @@ from forja.checks.structure.nodes import (
     kids,
     sole,
     text,
+    walk,
 )
 
 _STATEMENTS = frozenset(
@@ -148,3 +149,32 @@ def _members(cls: Node) -> int:
         if member.type == "method_definition" and not (hidden or name.startswith(("#", "_"))):
             size += _weight(member)
     return size
+
+
+_LOADERS = frozenset({"import", "require"})
+
+
+def imports(root: Node) -> tuple[str, ...]:
+    """The specifier of each import, re-export, ``import()`` and ``require()`` naming a literal.
+
+    A call whose argument is not a plain string is a path only the running program knows, so it
+    is left out.
+    """
+    found: list[str] = []
+    for node in walk(root):
+        if node.type in {"import_statement", "export_statement"}:
+            source = field(node, "source")
+            if source is not None:
+                found.append(_specifier(source))
+        elif node.type == "import_require_clause":
+            found.extend(_specifier(c) for c in kids(node) if c.type == "string")
+        elif node.type == "call_expression" and text(field(node, "function")) in _LOADERS:
+            call = field(node, "arguments")
+            arguments = kids(call) if call is not None else []
+            if len(arguments) == 1 and arguments[0].type == "string":
+                found.append(_specifier(arguments[0]))
+    return tuple(s for s in found if s)
+
+
+def _specifier(node: Node) -> str:
+    return "".join(text(c) for c in node.children if c.type == "string_fragment")

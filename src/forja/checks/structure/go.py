@@ -93,3 +93,9 @@ def _interface(root: Node) -> int:
         elif child.type == "type_declaration":
             size += sum(1 for spec in kids(child) if _exported(text(field(spec, "name"))))
     return size
+
+
+def imports(root: Node) -> tuple[str, ...]:
+    """The path of every import, without quotes."""
+    paths = (text(field(n, "path")).strip('"`') for n in walk(root) if n.type == "import_spec")
+    return tuple(paths)

@@ -26,19 +26,30 @@ class Dialect:
     suffixes: tuple[str, ...]
     grammar: Callable[[], object]
     read: Callable[[Node], Module]
+    imports: Callable[[Node], tuple[str, ...]]
 
 
 DIALECTS = (
-    Dialect("python", "python", (".py", ".pyi"), tree_sitter_python.language, python.read),
-    Dialect("go", "go", (".go",), tree_sitter_go.language, go.read),
-    Dialect("java", "java", (".java",), tree_sitter_java.language, java.read),
-    Dialect("csharp", "csharp", (".cs",), tree_sitter_c_sharp.language, csharp.read),
+    Dialect(
+        "python",
+        "python",
+        (".py", ".pyi"),
+        tree_sitter_python.language,
+        python.read,
+        python.imports,
+    ),
+    Dialect("go", "go", (".go",), tree_sitter_go.language, go.read, go.imports),
+    Dialect("java", "java", (".java",), tree_sitter_java.language, java.read, java.imports),
+    Dialect(
+        "csharp", "csharp", (".cs",), tree_sitter_c_sharp.language, csharp.read, csharp.imports
+    ),
     Dialect(
         "javascript",
         "javascript",
         (".js", ".mjs", ".cjs", ".jsx"),
         tree_sitter_javascript.language,
         script.read,
+        script.imports,
     ),
     Dialect(
         "typescript",
@@ -46,8 +57,16 @@ DIALECTS = (
         (".ts", ".mts", ".cts"),
         tree_sitter_typescript.language_typescript,
         script.read,
+        script.imports,
     ),
-    Dialect("tsx", "typescript", (".tsx",), tree_sitter_typescript.language_tsx, script.read),
+    Dialect(
+        "tsx",
+        "typescript",
+        (".tsx",),
+        tree_sitter_typescript.language_tsx,
+        script.read,
+        script.imports,
+    ),
 )
 SUFFIXES = tuple(suffix for dialect in DIALECTS for suffix in dialect.suffixes)
 
@@ -59,6 +78,7 @@ __all__ = [
     "SyntaxProblem",
     "analyze",
     "dialect_of",
+    "imports_of",
     "tree_of",
 ]
 
@@ -95,3 +115,12 @@ def analyze(path: str, source: str) -> Module | None:
     """
     tree = tree_of(path, source)
     return None if tree is None else tree[0].read(tree[1])
+
+
+def imports_of(path: str, source: str) -> tuple[str, ...] | None:
+    """What the file imports, as written, or ``None`` for a language Forja does not read.
+
+    Raises ``SyntaxProblem`` when the text does not parse.
+    """
+    tree = tree_of(path, source)
+    return None if tree is None else tree[0].imports(tree[1])

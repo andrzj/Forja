@@ -91,3 +91,16 @@ def _interface(root: Node) -> int:
             ):
                 size += 1 + len([p for p in _params(member) if p is not None])
     return size
+
+
+def imports(root: Node) -> tuple[str, ...]:
+    """The name every import declares: ``a.b.*`` for a wildcard, the member of a static import."""
+    found: list[str] = []
+    for node in walk(root):
+        if node.type != "import_declaration":
+            continue
+        names = [text(c) for c in kids(node) if c.type != "asterisk"]
+        star = any(c.type == "asterisk" for c in kids(node))
+        if names:
+            found.append(f"{names[0]}.*" if star else names[0])
+    return tuple(found)

@@ -113,3 +113,9 @@ def _interface(root: Node) -> int:
             ):
                 size += 1 + len([p for p in _params(member) if p is not None])
     return size
+
+
+def imports(root: Node) -> tuple[str, ...]:
+    """What every ``using`` names: a namespace, a static type or an alias target."""
+    directives = (kids(n) for n in walk(root) if n.type == "using_directive")
+    return tuple(text(named[-1]) for named in directives if named)
