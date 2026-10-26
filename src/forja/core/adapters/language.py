@@ -102,6 +102,35 @@ class OperationRequest:
     check_only: bool = False  # format: verify without rewriting
 
 
+# What a new project may be called: lower-case words joined by hyphens. Every language derives its
+# own identifier from it (a module, a package, a namespace) without having to escape anything.
+PROJECT_NAME = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")
+PROJECT_NAME_LIMIT = 40
+GITATTRIBUTES = "* text=auto eol=lf\n"
+
+
+def valid_project_name(name: str) -> bool:
+    return len(name) <= PROJECT_NAME_LIMIT and PROJECT_NAME.fullmatch(name) is not None
+
+
+def project_words(name: str) -> tuple[str, ...]:
+    """The words of a project name: ``my-tool`` is ``("my", "tool")``."""
+    return tuple(name.split("-"))
+
+
+@dataclass(frozen=True)
+class ProjectTemplate:
+    """What a language needs for an empty directory to become a project that builds and passes.
+
+    ``files`` maps repository-relative paths to their text. ``setup`` is what the environment has to
+    do before the build can run (an installation that fetches packages), one command per entry, run
+    in the project's root: the tools cannot fetch them by themselves.
+    """
+
+    files: Mapping[str, str]
+    setup: tuple[tuple[str, ...], ...] = ()
+
+
 @dataclass(frozen=True)
 class Detection:
     """A language found in the repository, and where."""
@@ -145,6 +174,11 @@ class LanguageAdapter(Protocol):
     def parse(self, operation: Operation, output: ToolOutput) -> ParseResult: ...
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None: ...
+
+    def template(self, name: str) -> ProjectTemplate:
+        """The files of a new project called ``name`` (a valid project name): its manifest, code
+        and tests, one test that passes, and the ignore and attribute files."""
+        ...
 
 
 def plan_with_override(

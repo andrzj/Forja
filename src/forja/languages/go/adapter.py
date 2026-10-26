@@ -20,6 +20,7 @@ from forja.core.adapters import (
     OperationRequest,
     ParseResult,
     ProgressParser,
+    ProjectTemplate,
     ToolInfo,
     ToolOutput,
     Unparseable,
@@ -30,6 +31,7 @@ from forja.core.adapters.ownership import says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.go import parsers
 from forja.languages.go.manifest import declared_dependencies
+from forja.languages.go.template import template
 
 MANIFEST = "go.mod"
 CONFIG_FILES = (
@@ -204,3 +206,6 @@ class GoAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return template(name)

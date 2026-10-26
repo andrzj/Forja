@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from forja.cli.args import VERBS, Arguments
 from forja.cli.console import Console, choose, confirm
 from forja.cli.detect import Detection, installed_clis
+from forja.cli.scaffold import leftovers, template_adapters
 from forja.cli.security_notes import NO_LICENSES, UNMEASURED, e2e_notices
 from forja.cli.semgrep_rules import RulesError, explicit_rules, rules_in_commit
 from forja.cli.session import (
@@ -29,6 +30,7 @@ from forja.cli.session import (
     standard_settings,
 )
 from forja.cli.settings import Execucao, Perfil
+from forja.core.adapters import valid_project_name
 from forja.core.adapters.executor import ExecutorChoice
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.idempotency.git import Git
@@ -36,10 +38,11 @@ from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS
 from forja.executors.probe import executable_version, run_probe, version_problem
-from forja.orchestrator.config import ExecutorRef, FixRequest, RunConfig
+from forja.orchestrator.config import CreateRequest, ExecutorRef, FixRequest, RunConfig
 from forja.orchestrator.facts import Fact, FactsError, parse_facts
 
-AVAILABLE = frozenset({"refatorar", "corrigir", "investigar"})
+AVAILABLE = frozenset({"refatorar", "corrigir", "investigar", "criar"})
+PENDING_BASE = "sem-commit-ainda"  # the base of a new project: the scaffold makes it, after the yes
 CRITERIA_FILE = "criterios.json"
 LOW_DISK_GIB = 2.0
 
@@ -125,6 +128,55 @@ def read_question(args: Arguments, saved: Execucao | None) -> str:
     return question
 
 
+def _project_name_of(directory: Path) -> str:
+    """The name of the directory as a project name, or empty when it cannot be one."""
+    spaced = "".join(c if c.isalnum() else " " for c in directory.name.lower())
+    name = "-".join(word for word in spaced.split() if word.isascii())
+    return name if name[:1].isalpha() and valid_project_name(name) else ""
+
+
+def read_creation(
+    args: Arguments, saved: Execucao | None, console: Console, root: Path
+) -> CreateRequest:
+    """The idea, the language and the name of ``forja criar``.
+
+    The idea is the text on the command line, else the ``-f`` file. The language and the name
+    are what ``execucao.toml`` says, else asked (the language has no default: nothing is there to
+    detect it from). Without a person to ask, they have to be in the file.
+    """
+    file = args.file or (Path(saved.arquivo) if saved and saved.arquivo else None)
+    idea = args.text.strip() or (saved.descricao.strip() if saved else "")
+    if not idea and file is not None:
+        idea = _read_text(file, "a ideia").strip()
+    if not idea:
+        raise Refused('Conte a ideia: `forja criar "texto"` ou `forja criar -f arquivo`.')
+    languages = sorted(template_adapters())
+    language = saved.linguagem if saved else ""
+    if not language:
+        if not console.interactive:
+            raise Refused(
+                "Diga a linguagem do projeto: `linguagem` no execucao.toml "
+                f"({', '.join(languages)}). Não há como detectá-la num diretório vazio."
+            )
+        language = languages[choose(console, "Em que linguagem?", languages)]
+    if language not in languages:
+        raise Refused(f"Não sei criar projeto em `{language}`. As que sei: {', '.join(languages)}.")
+    name = saved.nome if saved else ""
+    if not name:
+        suggestion = _project_name_of(root)
+        name = console.ask(
+            "Nome do projeto (palavras em minúsculas ligadas por hífen)"
+            + (f" [{suggestion}]:" if suggestion else ":"),
+            default=suggestion,
+        )
+    if not valid_project_name(name):
+        raise Refused(
+            f"`{name}` não serve de nome de projeto: palavras em minúsculas e dígitos ligadas por "
+            "hífen (como `meu-projeto`), até 40 caracteres. Dê o nome em `nome` no execucao.toml."
+        )
+    return CreateRequest(description=idea, language=language, name=name)
+
+
 def read_recorded_facts(args: Arguments, saved: Execucao | None) -> tuple[tuple[Fact, ...], str]:
     """The facts the person recorded, from ``--fatos`` or the saved ``fatos``, and the path."""
     path = args.facts or (Path(saved.fatos) if saved and saved.fatos else None)
@@ -136,14 +188,31 @@ def read_recorded_facts(args: Arguments, saved: Execucao | None) -> tuple[tuple[
         raise Refused(f"Os fatos em {path} não servem: {error}.") from None
 
 
+def check_empty_directory(detection: Detection) -> Path:
+    """Where a new project goes: this directory, which has to be empty (or hold only a repository
+    with no commit)."""
+    if not detection.git:
+        raise Refused("O git não está instalado ou não está no PATH. Rode `forja doctor`.")
+    if not detection.greenfield:
+        raise Refused(
+            "`forja criar` pede um diretório vazio (ou um repositório sem commits); este já tem "
+            "projeto. Para mexer no que existe use `forja refatorar`, `corrigir` ou `investigar`."
+        )
+    root = detection.repo or detection.cwd
+    if extra := leftovers(root):
+        raise Refused(
+            f"{root} precisa estar vazio para criar um projeto, mas tem: {', '.join(extra[:5])}."
+        )
+    return root
+
+
 def check_repository(detection: Detection) -> Path:
     if not detection.git:
         raise Refused("O git não está instalado ou não está no PATH. Rode `forja doctor`.")
     if detection.greenfield:
         raise Refused(
-            "Este diretório está vazio ou sem commits. Criar a partir de uma ideia fica "
-            "disponível no incremento 6; por enquanto a Forja trabalha em repositórios "
-            "existentes."
+            "Este diretório está vazio ou sem commits. Para criar um projeto use "
+            "`forja criar`; os outros comandos trabalham em repositório existente."
         )
     if detection.repo is None:
         raise Refused("Rode `forja` dentro de um repositório git.")
@@ -312,6 +381,8 @@ async def semgrep_rules(
         if named:
             path = explicit_rules(named)
             return str(path), f"SAST: Semgrep com as regras em {path}"
+        if not commit:  # a new project has no rules of its own yet
+            return "", NO_RULES
         with tempfile.TemporaryDirectory(prefix="forja-rules-") as scratch:
             git = Git(
                 repo,
@@ -348,8 +419,8 @@ def summary_of(
     fix = config.fix
     verb = OBJECTIVE_NAMES[config.objective]
     return (
-        f"Vou {verb} {detection.repo.name if detection.repo else ''} "
-        f"(branch {detection.branch}, commit {detection.head[:7]}).",
+        _opening(detection, config, verb),
+        *(_creation_lines(config.create) if config.create else ()),
         *(
             (
                 f"  pergunta: {config.question}",
@@ -389,6 +460,29 @@ def summary_of(
     )  # fmt: skip
 
 
+def _opening(detection: Detection, config: RunConfig, verb: str) -> str:
+    if config.create:
+        return f"Vou {verb} o projeto {config.create.name} em {detection.cwd}."
+    return (
+        f"Vou {verb} {detection.repo.name if detection.repo else ''} "
+        f"(branch {detection.branch}, commit {detection.head[:7]})."
+    )
+
+
+def _creation_lines(create: CreateRequest) -> tuple[str, ...]:
+    setup = template_adapters()[create.language].template(create.name).setup
+    return (
+        f"  ideia: {create.description}",
+        f"  linguagem: {create.language}",
+        "  andaime: arquivos do modelo da linguagem, `git init` e um commit inicial, feitos pela "
+        "Forja depois do seu sim, sem agente; a execução parte desse commit e só segue se o "
+        "build e os testes do modelo passarem",
+        *(f"  antes do build, a Forja roda no diretório: {' '.join(argv)}" for argv in setup),
+        "  critérios: o agente que especifica os escreve a partir da ideia "
+        "(o mesmo que implementa, sem comandos e sem alterar arquivos)",
+    )
+
+
 def _criteria_line(fix: FixRequest) -> str:
     if fix.criteria is None:
         return (
@@ -416,7 +510,9 @@ async def prepare(
     verb = objective_of(args, saved, console)
     fixing = read_fix(args, saved) if verb == "corrigir" else None
     question = read_question(args, saved) if verb == "investigar" else ""
-    repo = check_repository(detection)
+    creating = verb == "criar"
+    repo = check_empty_directory(detection) if creating else check_repository(detection)
+    creation = read_creation(args, saved, console, repo) if creating else None
     try:
         policy = repo_policy(repo)
         notes = policy_changes(policy)
@@ -430,7 +526,8 @@ async def prepare(
     model_tests = args.model_tests or (saved.modelo_testes if saved else "")
     author: tuple[str, ExecutorChoice, str] | None = None
     tests_name = args.cli_tests or (saved.cli_testes if saved else "")
-    if fixing and tests_name and tests_name != name:
+    writes_tests = bool(fixing or creation)
+    if writes_tests and tests_name and tests_name != name:
         author_name, author_choice, _ = choose_cli(
             args, saved, profile, environ, console, tests=True
         )
@@ -438,20 +535,21 @@ async def prepare(
             author_name, author_choice, environ, probe_cache(profile_dir), console
         )
         author = (author_name, author_choice, author_version)
-    elif fixing and model_tests:  # the same CLI, another model
+    elif writes_tests and model_tests:  # the same CLI, another model
         author = (name, choice, version)
     scope = args.scope or tuple(saved.escopo if saved else ())
+    base_commit = detection.head or PENDING_BASE
     rules, sast = await semgrep_rules(args, saved, repo, detection.head, environ)
     recorded, facts_path = read_recorded_facts(args, saved)
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
     tasks = saved.tarefas if saved else 5
     config = new_config(
-        repo=repo, base_commit=detection.head, executor_name=name, executor_path=choice.path,
+        repo=repo, base_commit=base_commit, executor_name=name, executor_path=choice.path,
         executor_version=version, executor_model=model, tokens=tokens, scope=scope,
         agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
         policy_version=policy_digest(policy), facts=recorded,
-        fix=fixing[0] if fixing else None, question=question,
+        fix=fixing[0] if fixing else None, question=question, create=creation,
         test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
         if author else None,
     )  # fmt: skip
@@ -462,8 +560,16 @@ async def prepare(
     )
     lines = summary_of(detection, config, scope, tokens, notes, sast, security)
     execucao = Execucao(
-        objetivo="investigar" if question else "corrigir" if fixing else "refatorar",
-        descricao=fixing[1] if fixing else question,
+        objetivo="criar"
+        if creation
+        else "investigar"
+        if question
+        else "corrigir"
+        if fixing
+        else "refatorar",
+        descricao=creation.description if creation else fixing[1] if fixing else question,
+        linguagem=creation.language if creation else "",
+        nome=creation.name if creation else "",
         criterios=fixing[2] if fixing else "",
         cli=name,
         executavel=str(choice.path),

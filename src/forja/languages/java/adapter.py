@@ -24,6 +24,7 @@ from forja.core.adapters import (
     OperationRequest,
     ParseResult,
     ProgressParser,
+    ProjectTemplate,
     ToolInfo,
     ToolOutput,
     Unparseable,
@@ -34,6 +35,7 @@ from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.java import gradle, parsers
 from forja.languages.java.manifest import declared_dependencies
+from forja.languages.java.template import template
 
 MANIFEST = "pom.xml"
 CONFIG_FILES = (
@@ -300,3 +302,6 @@ class JavaAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return template(name)

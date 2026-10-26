@@ -23,6 +23,7 @@ from forja.core.adapters import (
     OperationRequest,
     ParseResult,
     ProgressParser,
+    ProjectTemplate,
     ToolInfo,
     ToolOutput,
     Unparseable,
@@ -32,6 +33,7 @@ from forja.core.adapters.ownership import dotted_names, says
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.csharp import parsers
 from forja.languages.csharp.manifest import declared_dependencies
+from forja.languages.csharp.template import template
 
 SOLUTIONS = ("*.sln", "*.slnx")
 PROJECTS = ("*.csproj",)
@@ -217,3 +219,6 @@ class CSharpAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return template(name)

@@ -7,8 +7,17 @@ The isolation levels keep living in the core's ``Confirmation``; this adds the r
 from enum import StrEnum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
+from forja.core.adapters import valid_project_name
 from forja.core.artifacts.models import NonEmpty
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import Confirmation, ConfirmationError, confirmation_payload
@@ -21,6 +30,7 @@ class Objective(StrEnum):
     REFACTOR = "refactor"
     FIX = "fix"
     INVESTIGATE = "investigate"
+    CREATE = "create"
 
 
 class ExecutorRef(BaseModel):
@@ -47,6 +57,25 @@ class FixRequest(BaseModel):
     criteria: CriteriaBody | None = None
 
 
+class CreateRequest(BaseModel):
+    """A new project: the idea in words, and the language and name it is scaffolded with.
+
+    The scaffold is made before the run starts; the specifier writes the criteria from the idea."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    description: NonEmpty
+    language: NonEmpty
+    name: NonEmpty
+
+    @field_validator("name")
+    @classmethod
+    def _name_is_a_project_name(cls, name: str) -> str:
+        if not valid_project_name(name):
+            raise ValueError("a project name is lower-case words joined by hyphens, up to 40")
+        return name
+
+
 class Budget(BaseModel):
     """Limits that end an execution or a task. Defaults are the ones agreed for increment 1."""
 
@@ -70,6 +99,7 @@ class RunConfig(BaseModel):
     test_author: ExecutorRef | None = None  # None: the implementer's executor writes the tests too
     fix: FixRequest | None = None  # what to fix; present exactly when the objective is FIX
     question: str = ""  # what to find out; present exactly when the objective is INVESTIGATE
+    create: CreateRequest | None = None  # present exactly when the objective is CREATE
     budget: Budget = Budget()
     forja_version: NonEmpty
     policy_version: NonEmpty
@@ -84,6 +114,8 @@ class RunConfig(BaseModel):
             raise ValueError("a fix request is required for, and only for, the fix objective")
         if (self.objective is Objective.INVESTIGATE) != bool(self.question):
             raise ValueError("a question is required for, and only for, the investigate objective")
+        if (self.objective is Objective.CREATE) != (self.create is not None):
+            raise ValueError("a project request is required for, and only for, create")
         return self
 
 

@@ -44,6 +44,7 @@ from forja.core.adapters.executor import (
 )
 from forja.core.adapters.language import (
     CAPABILITY_OPERATION,
+    GITATTRIBUTES,
     REQUIRED_OPERATIONS,
     Detection,
     FileClass,
@@ -51,7 +52,10 @@ from forja.core.adapters.language import (
     LanguageCapability,
     Operation,
     OperationRequest,
+    ProjectTemplate,
     plan_with_override,
+    project_words,
+    valid_project_name,
 )
 from forja.core.adapters.registry import AdapterRegistry, AdapterRejected
 
@@ -59,6 +63,7 @@ __all__ = [
     "AGENT_DIR",
     "CAPABILITY_OPERATION",
     "CONTRACT_VERSION",
+    "GITATTRIBUTES",
     "REQUIRED_OPERATIONS",
     "AdapterRegistry",
     "AdapterRejected",
@@ -88,6 +93,7 @@ __all__ = [
     "ProbeTask",
     "Progress",
     "ProgressParser",
+    "ProjectTemplate",
     "RolePermissions",
     "Source",
     "TemplateExecutorAdapter",
@@ -105,6 +111,8 @@ __all__ = [
     "find_executors",
     "meets_minimum",
     "plan_with_override",
+    "project_words",
     "read_output_lines",
+    "valid_project_name",
     "version_tuple",
 ]

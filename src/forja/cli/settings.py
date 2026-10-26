@@ -36,8 +36,8 @@ class Execucao(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    objetivo: Literal["refatorar", "corrigir", "investigar"] = "refatorar"
-    descricao: str = ""  # corrigir: the defect; investigar: the question
+    objetivo: Literal["refatorar", "corrigir", "investigar", "criar"] = "refatorar"
+    descricao: str = ""  # corrigir: the defect; investigar: the question; criar: the idea
     arquivo: str = ""
     criterios: str = ""  # corrigir: the criteria file (CriteriaBody as JSON)
     cli: str = ""
@@ -52,6 +52,8 @@ class Execucao(BaseModel):
     tarefas: int = Field(default=5, ge=1)  # how many of the worst functions one run takes on
     base: str = ""
     semgrep_config: str = ""  # the user's Semgrep rules (a file or directory); empty: none named
+    linguagem: str = ""  # criar: the language of the new project
+    nome: str = ""  # criar: its name (lower-case words joined by hyphens)
     fatos: str = ""  # the facts file the person keeps (see ``orchestrator.facts``); empty: none
     interface: Interface = Field(default_factory=Interface)
 

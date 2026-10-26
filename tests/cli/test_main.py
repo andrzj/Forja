@@ -104,15 +104,6 @@ def test_unsaved_changes_stop_it_before_anything(repo: Path, environ: dict[str, 
     assert "commit ou stash" in talk.text
 
 
-def test_a_verb_that_does_not_exist_yet_says_when_it_will(
-    repo: Path, environ: dict[str, str]
-) -> None:
-    talk = Talk()
-    assert go(["criar"], talk, environ) == 2
-    assert "ainda não está disponível" in talk.text
-    assert "incremento 6" in talk.text
-
-
 CRITERIA = (
     '{"criteria": [{"id": 1, "text": "page 1 is the first items", "level": "unit",'
     ' "origin": "task description"}, {"id": 2, "text": "all pages are the list",'

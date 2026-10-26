@@ -1,6 +1,6 @@
 # Plano: incremento 6, especificador, arqueólogo, andaime e fatos
 
-Estado: plano escrito em 25/10/2026; passos 0 a 5 concluídos em 25/10/2026 (correções do passo 0 na seção “Correções do passo 0”, que mandam sobre o texto abaixo onde divergirem); passo 6 a fazer; sem perguntas abertas. Faz parte da fila obrigatória de `docs\Plano de execução.md` (item 3). **Sem E2E real em nenhuma parte** (é do dono); os testes são de unidade e de integração com agentes roteirizados e ferramentas falsas, como nos gates anteriores.
+Estado: plano escrito em 25/10/2026; passos 0 a 6 concluídos em 25 e 26/10/2026 (correções do passo 0 na seção “Correções do passo 0”, que mandam sobre o texto abaixo onde divergirem); passo 7 a fazer; sem perguntas abertas. Faz parte da fila obrigatória de `docs\Plano de execução.md` (item 3). **Sem E2E real em nenhuma parte** (é do dono); os testes são de unidade e de integração com agentes roteirizados e ferramentas falsas, como nos gates anteriores.
 
 ## O que a Especificação e o Plano de execução mandam
 

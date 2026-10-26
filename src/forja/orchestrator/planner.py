@@ -9,7 +9,7 @@ from pathlib import Path
 
 from forja.checks.complexity import DEFAULT_MAX_CCN
 from forja.core.artifacts.models import Producer
-from forja.orchestrator.config import Budget, FixRequest
+from forja.orchestrator.config import Budget, CreateRequest, FixRequest
 from forja.orchestrator.criteria import with_criteria
 from forja.orchestrator.ports import TEST_ROOT, Baseline, PlannedTask
 
@@ -76,6 +76,19 @@ class FixPlanner:
                 test_root=self._test_root,
             )
         ]
+
+
+class CreationPlanner(FixPlanner):
+    """The plan of a new project: one task from the idea, like a fix with no criteria.
+
+    The scaffold already built, tested and committed the project, so this is a feature on top of
+    it: the specifier writes the criteria, the test author writes tests that fail without the
+    feature, the implementer makes them pass and the documenter writes it up."""
+
+    def __init__(
+        self, request: CreateRequest, scope: Sequence[str], test_root: str = TEST_ROOT
+    ) -> None:
+        super().__init__(FixRequest(description=request.description), scope, test_root)
 
 
 class InvestigationPlanner:

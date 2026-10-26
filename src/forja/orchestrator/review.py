@@ -35,6 +35,7 @@ OBJECTIVE_TEXT = {
     Objective.REFACTOR: "refatorar",
     Objective.FIX: "corrigir",
     Objective.INVESTIGATE: "investigar",
+    Objective.CREATE: "criar",
 }
 INTENT_LIMIT = 80
 

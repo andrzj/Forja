@@ -26,6 +26,7 @@ from forja.core.adapters.language import (
     LanguageCapability,
     Operation,
     OperationRequest,
+    ProjectTemplate,
 )
 from forja.core.evidence.models import Target, TargetKind
 
@@ -128,6 +129,9 @@ class ScopedAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return self._adapter.progress_parser(operation)
+
+    def template(self, name: str) -> ProjectTemplate:
+        return self._adapter.template(name)
 
     # -- reading what they print ---------------------------------------------------------------
 

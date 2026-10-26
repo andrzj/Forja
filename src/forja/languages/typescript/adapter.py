@@ -22,6 +22,7 @@ from forja.core.adapters import (
     OperationRequest,
     ParseResult,
     ProgressParser,
+    ProjectTemplate,
     ToolInfo,
     ToolOutput,
     Unparseable,
@@ -30,6 +31,7 @@ from forja.core.adapters import (
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.typescript import parsers
 from forja.languages.typescript.manifest import declared_dependencies
+from forja.languages.typescript.template import template
 
 MANIFEST = "package.json"
 TSCONFIG = "tsconfig.json"
@@ -234,3 +236,6 @@ class TypeScriptAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return template(name)

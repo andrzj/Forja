@@ -645,6 +645,8 @@ class TaskCycle:
             if author
             else "fix"
             if run.config.objective is Objective.FIX
+            else "feat"
+            if run.config.objective is Objective.CREATE
             else "refactor"
         )
         return CommitMessage.of(

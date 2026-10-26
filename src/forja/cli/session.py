@@ -45,12 +45,24 @@ from forja.languages import (
 from forja.languages.go.adapter import find_golangci_lint
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
-from forja.orchestrator.config import ExecutorRef, FixRequest, Objective, RunConfig, load_config
+from forja.orchestrator.config import (
+    CreateRequest,
+    ExecutorRef,
+    FixRequest,
+    Objective,
+    RunConfig,
+    load_config,
+)
 from forja.orchestrator.facts import Fact
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
 from forja.orchestrator.phases import confirm_run
-from forja.orchestrator.planner import ComplexityPlanner, FixPlanner, InvestigationPlanner
+from forja.orchestrator.planner import (
+    ComplexityPlanner,
+    CreationPlanner,
+    FixPlanner,
+    InvestigationPlanner,
+)
 from forja.orchestrator.ports import AgentRunner, Planner, RunContext
 from forja.orchestrator.workspace_git import (
     GitWorkspace,
@@ -204,6 +216,7 @@ def new_config(
     semgrep_config: str = "",
     facts: tuple[Fact, ...] = (),
     question: str = "",
+    create: CreateRequest | None = None,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget  # noqa: PLC0415
 
@@ -213,11 +226,14 @@ def new_config(
         objective=(
             Objective.INVESTIGATE
             if question
+            else Objective.CREATE
+            if create is not None
             else Objective.REFACTOR
             if fix is None
             else Objective.FIX
         ),
         fix=fix,
+        create=create,
         question=question,
         implementer=executor_ref(executor_name, executor_path, executor_version, executor_model),
         test_author=test_author,
@@ -235,6 +251,7 @@ OBJECTIVE_NAMES = {
     Objective.REFACTOR: "refatorar",
     Objective.FIX: "corrigir",
     Objective.INVESTIGATE: "investigar",
+    Objective.CREATE: "criar",
 }
 
 
@@ -398,6 +415,12 @@ async def _context(
         planner = FixPlanner(config.fix, config.scope, test_root)
         if config.fix.criteria is None:
             agents[Producer.SPECIFIER] = runner(config.implementer, Producer.SPECIFIER)
+    if config.create is not None:
+        agents[Producer.TEST_AUTHOR] = runner(
+            config.test_author or config.implementer, Producer.TEST_AUTHOR
+        )
+        agents[Producer.SPECIFIER] = runner(config.implementer, Producer.SPECIFIER)
+        planner = CreationPlanner(config.create, config.scope, test_root)
     if config.objective is Objective.INVESTIGATE:
         agents[Producer.ARCHAEOLOGIST] = runner(config.implementer, Producer.ARCHAEOLOGIST)
         planner = InvestigationPlanner(config.question, config.scope)

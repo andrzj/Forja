@@ -21,6 +21,7 @@ from forja.core.adapters import (
     OperationRequest,
     ParseResult,
     ProgressParser,
+    ProjectTemplate,
     ToolInfo,
     ToolOutput,
     Unparseable,
@@ -29,6 +30,7 @@ from forja.core.adapters import (
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.python import parsers
 from forja.languages.python.manifest import declared_dependencies
+from forja.languages.python.template import template
 
 MANIFEST = "pyproject.toml"
 CONFIG_FILES = (MANIFEST, "ruff.toml", ".ruff.toml", "setup.cfg", "pytest.ini", "tox.ini")
@@ -237,3 +239,6 @@ class PythonAdapter:
 
     def progress_parser(self, operation: Operation) -> ProgressParser | None:
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return template(name)

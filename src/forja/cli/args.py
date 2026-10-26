@@ -17,7 +17,7 @@ from forja.executors import KNOWN_CLIS
 VERBS = {
     "refatorar": "melhora o código sem mudar o comportamento",
     "corrigir": "corrige um erro descrito por você (incremento 3)",
-    "criar": "cria um projeto a partir de uma ideia (incremento 6)",
+    "criar": "cria um projeto, num diretório vazio, a partir de uma ideia",
     "investigar": "entende o código a partir de uma pergunta e escreve a documentação",
 }
 AGENT_COMMANDS = ("testar", "medir", "lint")

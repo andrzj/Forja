@@ -20,6 +20,7 @@ from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
 from forja.cli.review import revisao
 from forja.cli.run import Ended, ForcedExit, Renderer, closing_lines, execute, exit_code
+from forja.cli.scaffold import ScaffoldError, scaffold
 from forja.cli.session import PolicyChanged, Session, open_session
 from forja.cli.settings import (
     Execucao,
@@ -154,7 +155,15 @@ async def start(
         console.say("Cancelado. Nada foi alterado.")
         return 0
     _remember(prepared, profile, console, home)
-    session = await open_session(prepared.config, environ=environ, interactive=not automatic)
+    config = prepared.config
+    if config.create is not None:
+        try:
+            head = await scaffold(Path(config.repo), config.create, environ)
+        except ScaffoldError as error:
+            raise Refused(error.message) from None
+        console.say(f"Projeto {config.create.name} criado e comitado ({head[:7]}).")
+        config = config.model_copy(update={"base_commit": head})
+    session = await open_session(config, environ=environ, interactive=not automatic)
     save_execucao(session.directory / "execucao.toml", prepared.execucao)
     return await _run(session, renderer_for(profile, saved, console), console)
 
