@@ -277,3 +277,90 @@ def test_a_text_that_does_not_parse_raises_for_the_reader():
     with pytest.raises(SyntaxProblem):
         read_file("a.py", "def (:\n")
     assert read_file("a.rb", "puts 1") is None
+
+
+def test_python_relative_import_from_a_module_counts_from_its_package_not_from_itself():
+    files = {
+        "a/__init__.py": "",
+        "a/b/__init__.py": "",
+        "a/b/m.py": "from .. import q\n",
+        "a/q.py": "",
+        "a/n.py": "from .. import top\n",
+        "top.py": "",
+    }
+    assert edges("python", files) == {("a/b", "a"), ("a", ".")}
+
+
+def test_a_metric_of_a_directory_with_no_type_entry_has_no_types():
+    graph = build("python", {"a/__init__.py": ""})
+    assert graph.metrics("nowhere").types == 0
+    assert graph.metrics("nowhere").abstractness == 0.0
+
+
+def test_the_path_of_a_cycle_stays_inside_the_group():
+    files = {
+        "a/__init__.py": "import _out\nimport b\n",
+        "_out/__init__.py": "import a\n",
+        "b/__init__.py": "import a\n",
+    }
+    graph = build("python", files)
+    assert graph.path_in(frozenset({"a", "b"})) == ["a", "b", "a"]
+
+
+def test_java_import_of_a_missing_type_in_a_known_package_is_no_edge():
+    files = {
+        "a/A.java": "package p;\nclass A {}",
+        "b/B.java": "package q;\nimport p.Missing;\nclass B {}",
+    }
+    assert edges("java", files) == set()
+
+
+def test_java_import_of_everything_in_a_type_is_the_directory_of_the_type():
+    files = {
+        "a/A.java": "package p;\npublic class Outer { public static class In {} }",
+        "b/B.java": "package q;\nimport p.Outer.*;\nclass B {}",
+    }
+    assert edges("java", files) == {("b", "a")}
+
+
+def test_java_reaches_a_type_of_the_default_package_by_its_bare_name():
+    files = {
+        "c/C.java": "class C { static class In {} }",
+        "d/D.java": "package d;\nimport C.In;\nclass D {}",
+    }
+    assert edges("java", files) == {("d", "c")}
+
+
+def test_script_never_resolves_a_specifier_to_a_file_outside_the_project():
+    files = {
+        "../x.ts": "export {}\n",
+        "..ts": "export {}\n",
+        "a.ts": 'import "../x";\nimport "..";\n',
+    }
+    assert edges("typescript", files) == set()
+
+
+def test_a_change_to_a_file_that_is_gone_judges_nothing():
+    from forja.checks.architecture.compare import Snapshot, compare
+    from forja.core.gates.models import Approved
+
+    snap = Snapshot("python", {"a/__init__.py": ""})
+    assert isinstance(compare(snap, snap, ("gone.py",)), Approved)
+
+
+def test_abstractness_is_the_share_of_abstract_types_in_the_directory():
+    files = {"a/__init__.py": "from abc import ABC\nclass P(ABC): ...\nclass C: ...\n"}
+    assert build("python", files).metrics("a").abstractness == 0.5
+
+
+def test_go_counts_only_the_interfaces_among_the_declared_types():
+    files = {
+        "a/a.go": "package a\ntype I interface{ F() }\ntype J interface{ G() }\ntype S struct{}\n"
+    }
+    assert build("go", files, "module m\n").types["a"] == (2, 3)
+
+
+def test_a_directory_with_files_but_no_type_has_zero_abstractness():
+    graph = build("python", {"a/__init__.py": "x = 1\n"})
+    assert graph.metrics("a").abstractness == 0.0
+    assert graph.metrics("a").types == 0

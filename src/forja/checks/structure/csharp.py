@@ -157,5 +157,3 @@ def _namespaces(node: Node, outer: str, found: list[str]) -> None:
             full = f"{outer}.{name}" if outer else name
             found.append(full)
             _namespaces(field(child, "body") or child, full, found)
-        elif child.type == "declaration_list":
-            _namespaces(child, outer, found)

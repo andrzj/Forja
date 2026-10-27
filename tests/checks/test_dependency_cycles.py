@@ -172,3 +172,14 @@ def test_a_new_cycle_is_found_in_the_other_languages(language, files) -> None:
     result = asyncio.run(check.evaluate(data))
 
     assert isinstance(result, Rejected)
+
+
+def test_the_finding_counts_the_directories_of_the_cycle_against_a_limit_of_one() -> None:
+    result = judge(
+        tree(a="", b="", c=""),
+        tree(a="import b\n", b="import c\n", c="import a\n"),
+        ("c/__init__.py",),
+    )
+
+    assert isinstance(result, Rejected)
+    assert (result.findings[0].measured, result.findings[0].limit) == (3, 1)

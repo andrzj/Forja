@@ -40,9 +40,10 @@ class Graph:
     def metrics(self, folder: str) -> PackageMetrics:
         afferent = sum(1 for _, imported in self.edges if imported == folder)
         efferent = sum(1 for importer, _ in self.edges if importer == folder)
-        abstract, total = self.types.get(folder, (0, 0))
+        counts = self.types.get(folder)
+        total = counts[1] if counts else 0
         instability = efferent / (afferent + efferent) if afferent + efferent else 0.0
-        abstractness = abstract / total if total else 0.0
+        abstractness = counts[0] / max(counts[1], 1) if counts else 0.0
         distance = abs(abstractness + instability - 1)
         return PackageMetrics(afferent, efferent, instability, abstractness, distance, total)
 

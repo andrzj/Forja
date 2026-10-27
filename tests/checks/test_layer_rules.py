@@ -186,3 +186,34 @@ def test_a_changed_file_that_does_not_parse_is_inconclusive() -> None:
 
     assert isinstance(result, Inconclusive)
     assert result.reason is InconclusiveReason.UNSUPPORTED_CONSTRUCT
+
+
+def test_a_directory_belongs_to_the_deepest_layer_path_whatever_the_position() -> None:
+    layers = (
+        ArchitectureLayer("high", ("zz",)),
+        ArchitectureLayer("mid", ("yy",)),
+        ArchitectureLayer("core", ("src/core",)),
+        ArchitectureLayer("all", ("src",)),
+    )
+    before = {"zz/__init__.py": "", "src/core/z/__init__.py": ""}
+    after = {"zz/__init__.py": "", "src/core/z/__init__.py": "import zz\n"}
+
+    result = judge(before, after, ("src/core/z/__init__.py",), layers=layers)
+
+    assert isinstance(result, Rejected)
+    assert result.findings[0].message == "layer core depends on high, a layer above it"
+
+
+def test_two_layers_with_the_same_path_leave_the_directory_to_the_upper_one() -> None:
+    layers = (
+        ArchitectureLayer("top", ("app",)),
+        ArchitectureLayer("first", ("lib",)),
+        ArchitectureLayer("second", ("lib",)),
+    )
+    before = tree(app="", lib="")
+    after = tree(app="", lib="import app\n")
+
+    result = judge(before, after, ("lib/__init__.py",), layers=layers)
+
+    assert isinstance(result, Rejected)
+    assert result.findings[0].message == "layer first depends on top, a layer above it"
