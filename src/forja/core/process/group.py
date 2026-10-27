@@ -21,6 +21,13 @@ class ProcessGroup(Protocol):
         """Kill every process in the group. Safe to call repeatedly."""
         ...
 
+    def peak_memory(self) -> int | None:
+        """Peak bytes held at once by the whole tree, or ``None`` where it cannot be measured.
+
+        Meant to be read after ``kill`` and before ``close``. Never zero for "unknown".
+        """
+        ...
+
     def close(self) -> None: ...
 
 

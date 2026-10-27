@@ -89,3 +89,4 @@ class ProcessResult:
     exit_code: int | None
     duration: float
     log_path: Path
+    peak_memory: int | None = None  # bytes, whole tree; None when the platform cannot measure

@@ -125,7 +125,14 @@ class ProcessRunner:
                 await self._reap(proc, group)
                 raise
             await self._reap(proc, group)
-            result = self._finish(operation_id, outcome, proc.returncode, start, log_path)
+            result = self._finish(
+                operation_id,
+                outcome,
+                proc.returncode,
+                start,
+                log_path,
+                peak_memory=group.peak_memory(),
+            )
             if cancelled:
                 raise asyncio.CancelledError
             return result
@@ -216,6 +223,7 @@ class ProcessRunner:
         start: float,
         log_path: Path,
         error: str | None = None,
+        peak_memory: int | None = None,
     ) -> ProcessResult:
         duration = self._clock() - start
         details: dict[str, object] = {
@@ -227,4 +235,4 @@ class ProcessRunner:
         if error is not None:
             details["error"] = error
         self._sink.effect(operation_id, details)
-        return ProcessResult(outcome, exit_code, duration, log_path)
+        return ProcessResult(outcome, exit_code, duration, log_path, peak_memory)

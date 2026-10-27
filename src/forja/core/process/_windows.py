@@ -84,6 +84,14 @@ if sys.platform == "win32":
         wintypes.DWORD,
     ]
     _k32.SetInformationJobObject.restype = wintypes.BOOL
+    _k32.QueryInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    ]
+    _k32.QueryInformationJobObject.restype = wintypes.BOOL
     _k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     _k32.AssignProcessToJobObject.restype = wintypes.BOOL
     _k32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
@@ -155,6 +163,27 @@ if sys.platform == "win32":
         def kill(self) -> None:
             if self._job is not None:
                 _k32.TerminateJobObject(self._job, 1)
+
+        def peak_memory(self) -> int | None:
+            """``PeakJobMemoryUsed``: the most the processes of the job held at the same time.
+
+            Measured with children that allocate known sizes: it is the concurrent sum across
+            the tree (150 MB parent + 200 MB child read about 380 MB), and it stays readable
+            after ``TerminateJobObject``. ``PeakProcessMemoryUsed`` is only the largest single
+            process, so it misses a tree that spreads its memory over several.
+            """
+            if self._job is None:
+                return None
+            limits = _ExtendedLimits()
+            if not _k32.QueryInformationJobObject(
+                self._job,
+                _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                ctypes.byref(limits),
+                ctypes.sizeof(limits),
+                None,
+            ):
+                return None
+            return int(limits.PeakJobMemoryUsed) or None
 
         def close(self) -> None:
             if self._job is not None:

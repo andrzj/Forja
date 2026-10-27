@@ -28,6 +28,9 @@ if sys.platform != "win32":
         def kill(self) -> None:
             self._signal(signal.SIGKILL)
 
+        def peak_memory(self) -> int | None:
+            return None  # no per-run measure: RUSAGE_CHILDREN is the whole Forja process's
+
         def close(self) -> None:
             self._pid = None
 
