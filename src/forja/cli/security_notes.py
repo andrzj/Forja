@@ -26,6 +26,20 @@ def e2e_notices(*, declared: bool) -> tuple[str, ...]:
     return (FAKES, PROXY_LIMIT) if declared else (NO_E2E,)
 
 
+NO_DIFFERENTIAL = "Teste diferencial não executado: sem casos (seção [[differential.cases]])."
+DIFFERENTIAL_LIMIT = (
+    "Teste diferencial: I/O não é medido; só tempo e memória, e só onde a plataforma mede."
+)
+
+
+def differential_notices(*, refactoring: bool, declared: bool) -> tuple[str, ...]:
+    """What the person is told of gate 11, which only judges a refactoring: that it did not run,
+    or what its run does not measure."""
+    if not refactoring:
+        return ()
+    return (DIFFERENTIAL_LIMIT,) if declared else (NO_DIFFERENTIAL,)
+
+
 def security_notices(*, rules: bool, licenses: bool, layers: bool) -> tuple[str, ...]:
     """The notices of a run: the SAST without rules, the licenses without a list, the layers
     without rules, and what the registries cannot measure."""

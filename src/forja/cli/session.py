@@ -14,7 +14,7 @@ from pathlib import Path
 
 from forja.checks.specs import default_registry
 from forja.checks.voice_markers import build_markers
-from forja.cli.security_notes import e2e_notices, security_notices
+from forja.cli.security_notes import differential_notices, e2e_notices, security_notices
 from forja.cli.semgrep_rules import export_rules
 from forja.core.adapters import AdapterRegistry
 from forja.core.adapters.executor import RolePermissions, locate_in_path
@@ -445,5 +445,9 @@ async def _context(
                 layers=bool(policy.architecture),
             ),
             *e2e_notices(declared=bool(e2e_commands(policy))),
+            *differential_notices(
+                refactoring=config.objective is Objective.REFACTOR,
+                declared=bool(policy.differential),
+            ),
         ),
     )

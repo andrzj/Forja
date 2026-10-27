@@ -10,6 +10,7 @@ from forja.core.policy.config import (
     load_policy,
     parse_layer,
 )
+from forja.core.policy.differential import DifferentialCase, DifferentialOutput
 from forja.core.policy.registry import LANGUAGES, CheckRegistry, CheckSpec
 from forja.core.policy.snapshot import (
     SNAPSHOT_NAME,
@@ -25,6 +26,8 @@ __all__ = [
     "ArchitectureLayer",
     "CheckRegistry",
     "CheckSpec",
+    "DifferentialCase",
+    "DifferentialOutput",
     "EffectiveCheck",
     "EffectivePolicy",
     "FrozenPolicy",

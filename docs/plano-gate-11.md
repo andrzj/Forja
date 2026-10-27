@@ -1,6 +1,6 @@
 # Plano: gate 11, teste diferencial
 
-Estado: passo 0 feito em 27/10/2026 (ver “Correções do passo 0”, que mandam sobre o texto abaixo); próximo, passo 1; **sem perguntas abertas**. **Adiado pelo dono (23/10): a construção só começa depois do gate 6 (E2E com fakes e rede desligada) e do autor de testes com o `manifesto-testes.json`**, porque os casos vêm dos geradores e fakes dos E2E, como a Especificação manda. Regra do dono: gates grandes só com plano escrito antes.
+Estado: passos 0 e 1 feitos em 27/10/2026 (ver “Correções do passo 0”, que mandam sobre o texto abaixo; formato dos casos no ADR 0029 e no Registro do Plano de execução); próximo, passo 2; **sem perguntas abertas**. **Adiado pelo dono (23/10): a construção só começa depois do gate 6 (E2E com fakes e rede desligada) e do autor de testes com o `manifesto-testes.json`**, porque os casos vêm dos geradores e fakes dos E2E, como a Especificação manda. Regra do dono: gates grandes só com plano escrito antes.
 
 ## O que a Especificação diz
 

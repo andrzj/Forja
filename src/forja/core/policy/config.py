@@ -22,6 +22,11 @@ from forja.core.events.models import canonical_json
 from forja.core.gates.effects import CheckSettings, InvalidCheckSettings
 from forja.core.gates.models import InconclusivePolicy, Mode
 from forja.core.isolation.sensitive import compile_pattern
+from forja.core.policy.differential import (
+    DifferentialCase,
+    merge_differential,
+    validate_differential,
+)
 from forja.core.policy.registry import LANGUAGES, CheckRegistry, CheckSpec
 from forja.core.redaction.settings import (
     PiiKind,
@@ -119,6 +124,7 @@ class EffectivePolicy:
     voice_extra: tuple[str, ...] = ()  # regular expressions the repository adds to the voice list
     voice_off: tuple[str, ...] = ()  # ids of the Forja's voice markers the repository turns off
     architecture: tuple[ArchitectureLayer, ...] = ()  # top to bottom; none, no layer rules
+    differential: tuple[DifferentialCase, ...] = ()  # none, gate 11 does not run
 
     def settings(self) -> dict[str, CheckSettings]:
         return {check_id: check.settings for check_id, check in self.checks.items()}
@@ -143,6 +149,8 @@ class EffectivePolicy:
                     {"name": layer.name, "paths": list(layer.paths)} for layer in self.architecture
                 ]
             }
+        if self.differential:
+            data["differential"] = {"cases": [case.to_dict() for case in self.differential]}
         return data
 
     def _to_dict(self) -> dict[str, Any]:
@@ -214,6 +222,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
 
     checks = {spec.id: _merge(spec, layers, problems) for spec in registry}
     architecture = _merge_architecture(layers, problems)
+    differential = merge_differential([layer.data for layer in layers], problems)
     if problems:
         raise PolicyConfigError(problems)
     return EffectivePolicy(
@@ -227,6 +236,7 @@ def build_policy(registry: CheckRegistry, layers: Sequence[Layer]) -> EffectiveP
         _collect(layers, "voice", "markers_extra"),
         _collect(layers, "voice", "markers_off"),
         architecture,
+        differential,
     )
 
 
@@ -247,10 +257,12 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         "licenses",
         "voice",
         "architecture",
+        "differential",
     }
     for key in sorted(unknown_top):
         bad(key, "unknown section")
     _validate_architecture(layer.data.get("architecture"), bad)
+    validate_differential(layer.data.get("differential"), bad)
     _validate_string_list(layer.data.get("licenses"), "licenses", "forbidden", bad, _check_license)
     _validate_voice(layer.data.get("voice"), bad)
     _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
