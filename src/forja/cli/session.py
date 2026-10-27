@@ -373,6 +373,7 @@ async def _context(
         e2e_commands=e2e_commands(policy),
         markers=build_markers(policy.voice_extra, policy.voice_off),
         fact_ids=frozenset(fact.id for fact in config.facts),
+        differential_cases=policy.differential if config.objective is Objective.REFACTOR else (),
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:

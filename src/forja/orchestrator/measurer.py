@@ -36,6 +36,9 @@ from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
 from forja.checks.dependency_cycles import DependencyCyclesCheck
+from forja.checks.differential_base import load as load_differential_base
+from forja.checks.differential_base import measure_base as measure_differential_base
+from forja.checks.differential_inputs import MissingInput
 from forja.checks.doc_drift_gate import Base, DocDriftCheck, read_repository
 from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
@@ -91,7 +94,7 @@ from forja.core.gates import (
     PipelineOutcome,
 )
 from forja.core.idempotency import Decision, Reconciliation
-from forja.core.policy import ArchitectureLayer
+from forja.core.policy import ArchitectureLayer, DifferentialCase
 from forja.core.states import Level
 from forja.orchestrator.ports import (
     NO_COMMIT,
@@ -104,6 +107,7 @@ from forja.orchestrator.ports import (
 
 BASE_FILE = "base.json"
 BASE_METRICS_FILE = "base-metrics.json"
+DIFFERENTIAL_DIRECTORY = "differential"
 STATIC_METRICS = (
     "lint_violations",
     "max_ccn",
@@ -158,6 +162,7 @@ class PipelineMeasurer:
         e2e_commands: Mapping[str, tuple[str, ...]] | None = None,
         markers: Sequence[Marker] = MARKERS,
         fact_ids: frozenset[str] = frozenset(),
+        differential_cases: Iterable[DifferentialCase] = (),
     ) -> None:
         self._adapters = adapters
         self._git = git
@@ -178,6 +183,7 @@ class PipelineMeasurer:
         self._e2e = e2e_commands or {}
         self._markers = markers
         self._fact_ids = fact_ids
+        self._differential_cases = tuple(differential_cases)
 
     # -- helpers -------------------------------------------------------------------------------
 
@@ -259,6 +265,7 @@ class PipelineMeasurer:
             first = await self._outcomes(tools, worktree, active)
             second = await self._outcomes(tools, worktree, active)
             e2e = await self._base_e2e(tools, worktree, active)
+            problems += await self._base_differential(tools, worktree)
         except Undecided as stop:
             return Baseline(False, (_describe(stop),))
         failing = {t for t, o in first.items() if o in FAILED} & {
@@ -318,6 +325,24 @@ class PipelineMeasurer:
             destinations=tuple(dict.fromkeys((*first.destinations, *second.destinations))),
             ran=True,
         )
+
+    @property
+    def differential_directory(self) -> Path:
+        return self._workdir / DIFFERENTIAL_DIRECTORY
+
+    async def _base_differential(self, tools: Tools, worktree: Path) -> list[str]:
+        """The differential cases run twice on the base, once per execution: a base already
+        measured (a resumed execution) is read back, so every attempt meets the same one."""
+        cases = self._differential_cases
+        if not cases or load_differential_base(self.differential_directory, cases) is not None:
+            return []
+        try:
+            await measure_differential_base(
+                tools, cases, worktree, self.differential_directory, self._env
+            )
+        except MissingInput as missing:
+            return [f"differential: {missing}"]
+        return []
 
     def _save_base(
         self, unstable: list[str], passing: list[str], e2e: BaseE2E | None = None
