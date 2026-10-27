@@ -369,6 +369,7 @@ async def _context(
         semgrep_config=rules,
         osv_scanner=(missing_tool("osv-scanner"),),
         forbidden_licenses=policy.forbidden_licenses,
+        layers=policy.architecture,
         e2e_commands=e2e_commands(policy),
         markers=build_markers(policy.voice_extra, policy.voice_off),
         fact_ids=frozenset(fact.id for fact in config.facts),

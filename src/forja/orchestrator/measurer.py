@@ -13,6 +13,8 @@ from typing import Protocol
 from pydantic import JsonValue
 
 from forja.checks.adr_trigger import ADR_DIR, AdrCheck, Trigger, new_modules, report
+from forja.checks.architecture import Unavailable, build
+from forja.checks.architecture.compare import Snapshot
 from forja.checks.base import Undecided, measure, overrides_from
 from forja.checks.build_and_tests import FAILED, BuildCheck, TestsCheck, outcomes_of
 from forja.checks.change_record import (
@@ -33,10 +35,12 @@ from forja.checks.complexity import ComplexityCheck, lizard_plan, parse_function
 from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
+from forja.checks.dependency_cycles import DependencyCyclesCheck
 from forja.checks.doc_drift_gate import Base, DocDriftCheck, read_repository
 from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
+from forja.checks.layer_rules import LayerRulesCheck
 from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
@@ -46,6 +50,7 @@ from forja.checks.new_dependency import (
     is_manifest,
     manifests_of,
 )
+from forja.checks.package_metrics import PackageMetricsCheck
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.personal_data import PersonalDataCheck
 from forja.checks.readme import Signature, evaluate, signature
@@ -86,6 +91,7 @@ from forja.core.gates import (
     PipelineOutcome,
 )
 from forja.core.idempotency import Decision, Reconciliation
+from forja.core.policy import ArchitectureLayer
 from forja.core.states import Level
 from forja.orchestrator.ports import (
     NO_COMMIT,
@@ -146,6 +152,7 @@ class PipelineMeasurer:
         semgrep_config: Path | None = None,
         osv_scanner: tuple[str, ...] = ("osv-scanner",),
         forbidden_licenses: Iterable[str] = (),
+        layers: Iterable[ArchitectureLayer] = (),
         registry_get: HttpGet = urllib_get,
         timeouts: Mapping[str, float] | None = None,
         e2e_commands: Mapping[str, tuple[str, ...]] | None = None,
@@ -165,6 +172,7 @@ class PipelineMeasurer:
         self._semgrep_config = semgrep_config
         self._osv_scanner = osv_scanner
         self._forbidden = frozenset(name.lower() for name in forbidden_licenses)
+        self._layers = tuple(layers)
         self._registry_get = registry_get
         self._timeouts = timeouts or {}
         self._e2e = e2e_commands or {}
@@ -527,6 +535,7 @@ class PipelineMeasurer:
             metrics["lint_violations"] = float(found)
         except Undecided:
             pass  # a metric that could not be taken is left out, not made up
+        metrics |= await self._architecture_metrics(worktree, active)
         files = await self._production_files(worktree)
         if files:
             try:
@@ -651,6 +660,7 @@ class PipelineMeasurer:
             crap,
             PassThroughCheck(worktree, code, production, before_shapes),
             ModuleDepthCheck(worktree, code, production, before_shapes),
+            *await self._architecture(git, worktree, changes, everything, active),
             SastCheck(
                 tools,
                 worktree,
@@ -733,6 +743,103 @@ class PipelineMeasurer:
         head = (await git.lines("rev-parse", "HEAD"))[0]
         data = GateInput(ctx.worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id)
         return await self._pipeline(checks).run(data, ())
+
+    async def _architecture(
+        self,
+        git: GitAt,
+        worktree: Path,
+        changes: Changes,
+        was: dict[str, str],
+        active: tuple[ScopedAdapter, ...],
+    ) -> list[Check]:
+        """The checks of gate 9, each answering for every project: the graph of its production
+        files in the parent commit and in the attempt, with no copy of the worktree."""
+        tracked = await git.lines("ls-files")
+        states = {
+            id(a): self._project_states(worktree, changes, was, tracked, active, a) for a in active
+        }
+        return [
+            self._each(active, lambda a: DependencyCyclesCheck(*states[id(a)])),
+            self._each(
+                active,
+                lambda a: LayerRulesCheck(
+                    *states[id(a)], self._layers, "" if a.base == "." else a.base
+                ),
+            ),
+            self._each(active, lambda a: PackageMetricsCheck(*states[id(a)])),
+        ]
+
+    def _project_states(
+        self,
+        worktree: Path,
+        changes: Changes,
+        was: dict[str, str],
+        tracked: list[str],
+        active: tuple[ScopedAdapter, ...],
+        project: ScopedAdapter,
+    ) -> tuple[Snapshot, Snapshot, tuple[str, ...]]:
+        """The project's production files before and after the attempt, by path inside the project,
+        and the ones the attempt changed. A project the attempt left alone has nothing to read."""
+
+        def mine(path: str) -> bool:
+            return (
+                dialect_of(path) is not None
+                and self._classify(path) is FileClass.PRODUCTION
+                and owner_of(active, path) is project
+            )
+
+        changed = tuple(project.local(p) for p in changes.current() if mine(p))
+        if not changed:
+            return Snapshot(project.language, {}), Snapshot(project.language, {}), ()
+        moved = {c.path for c in changes.files}
+        after: dict[str, str] = {}
+        before: dict[str, str] = {}
+        for path in filter(mine, tracked):
+            text = _text_of(worktree / path)
+            if text is not None:
+                after[project.local(path)] = text
+                if path not in moved:
+                    before[project.local(path)] = text
+        for change in changes.files:
+            old = change.before
+            if old is not None and old in was and mine(old):
+                before[project.local(old)] = was[old]
+        manifest = project.repository("go.mod") if project.language == "go" else None
+        now = _text_of(worktree / manifest) if manifest else None
+        old_manifest = was.get(manifest, now) if manifest else None
+        return (
+            Snapshot(project.language, before, old_manifest),
+            Snapshot(project.language, after, now),
+            changed,
+        )
+
+    async def _architecture_metrics(
+        self, worktree: Path, active: tuple[ScopedAdapter, ...]
+    ) -> dict[str, float]:
+        """Cycles, edges and the largest distance from the main sequence of each project's graph.
+        A project whose files cannot be read is left out, not made up."""
+        found: dict[str, float] = {}
+        tracked = [p for p in await self._production_files(worktree) if dialect_of(p) is not None]
+        for project in active:
+            files = {
+                project.local(p): text
+                for p in tracked
+                if owner_of(active, p) is project and (text := _text_of(worktree / p)) is not None
+            }
+            manifest = project.repository("go.mod") if project.language == "go" else None
+            try:
+                graph = build(
+                    project.language, files, _text_of(worktree / manifest) if manifest else None
+                )
+            except Unavailable:
+                continue
+            where = "" if project.base == "." else f"[{project.base}]"
+            found[f"dependency_cycles{where}"] = float(len(graph.cycles()))
+            found[f"dependency_edges{where}"] = float(len(graph.edges))
+            found[f"max_distance{where}"] = round(
+                max(graph.metrics(folder).distance for folder in graph.nodes), 2
+            )
+        return found
 
     async def _code_base(self, git: GitAt, stage: str) -> str:
         """The commit before the one that holds the work of ``stage``; ``HEAD`` for no stage."""

@@ -23,6 +23,7 @@ from forja.orchestrator.ports import Baseline
 from tests.checks.support import BLOCKING, RUN, SAMPLE, Scene, deep
 from tests.core.idempotency.conftest import Repo
 
+GRAPH = {"dependency_cycles": 0.0, "dependency_edges": 0.0, "max_distance": 1.0}
 MOD = SAMPLE["src/sample/mod.py"]
 OTHER = SAMPLE["src/sample/other.py"]
 EVERY_GATE = [
@@ -39,6 +40,9 @@ EVERY_GATE = [
     "crap",
     "pass_through",
     "module_depth",
+    "dependency_cycles",
+    "layer_rules",
+    "package_metrics",
     "sast",
     "dependency_audit",
     "new_dependency",
@@ -320,6 +324,9 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "crap",
             "pass_through",
             "module_depth",
+            "dependency_cycles",
+            "layer_rules",
+            "package_metrics",
             "sast",
             "dependency_audit",
             "new_dependency",
@@ -408,7 +415,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == EVERY_GATE[:-8]  # the gates after the one that stopped it do not run
+    assert ran(outcome) == EVERY_GATE[:-11]  # the gates after the one that stopped it do not run
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]
@@ -503,6 +510,7 @@ def test_a_green_base_is_measured_for_the_numbers_the_summary_will_show(scene: S
         "lint_violations": 0.0,
         "max_ccn": 1.0,
         "functions": 2.0,
+        **GRAPH,
     }
 
 
@@ -516,6 +524,7 @@ def test_the_numbers_count_what_is_there(scene: Scene) -> None:
         "lint_violations": 1.0,
         "max_ccn": 7.0,
         "functions": 3.0,
+        **GRAPH,
     }
 
 
@@ -786,4 +795,4 @@ def test_the_numbers_that_need_no_test_run_can_be_taken_on_their_own(scene: Scen
 
     taken = asyncio.run(scene.measurer.metrics(scene.repo.path, scene.recorder.sinks))
 
-    assert taken == {"lint_violations": 1.0, "max_ccn": 7.0, "functions": 3.0}
+    assert taken == {"lint_violations": 1.0, "max_ccn": 7.0, "functions": 3.0, **GRAPH}
