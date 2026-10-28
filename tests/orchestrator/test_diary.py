@@ -16,10 +16,15 @@ from forja.core.states import (
 )
 from forja.orchestrator.diary import (
     BLOCKED,
+    DIARY_LIMIT,
     EXHAUSTED,
+    LINE_CUT,
+    SAID_CUT,
     Decision,
     Entry,
     Outcome,
+    diary_text,
+    stage_diary,
     stage_entries,
     task_decisions,
     task_entries,
@@ -187,3 +192,94 @@ def test_a_log_cut_in_the_last_line_gives_the_entries_before_it(
     assert task_entries(read_state(path, RUN), "t1") == [
         Entry("t1", "t1-a1", "one", Outcome.REJECTED, "r")
     ]
+
+
+def rejected(n: int, said: str = "", why: str = "gate 8 (complexity): too complex") -> Entry:
+    return Entry("t1", f"t1-a{n}", said, Outcome.REJECTED, why)
+
+
+def test_no_earlier_attempt_gives_no_text() -> None:
+    assert diary_text([]) == ""
+
+
+def test_a_rejected_attempt_is_shown_with_what_the_agent_said_and_why() -> None:
+    text = diary_text([rejected(1, "split f in two")])
+
+    assert text == (
+        "### Attempt `t1-a1`: rejected\n"
+        "You said: split f in two\n"
+        "Why: gate 8 (complexity): too complex\n"
+    )
+
+
+def test_the_three_latest_are_in_full_and_the_older_ones_in_one_line() -> None:
+    text = diary_text([rejected(n, f"said {n}") for n in range(1, 6)])
+
+    assert "- `t1-a1`: rejected: gate 8 (complexity): too complex" in text
+    assert "- `t1-a2`: rejected: gate 8 (complexity): too complex" in text
+    assert "You said: said 1" not in text
+    for n in (3, 4, 5):
+        assert f"### Attempt `t1-a{n}`: rejected\nYou said: said {n}\n" in text
+
+
+def test_a_discard_is_one_line_and_does_not_take_a_place_among_the_full_ones() -> None:
+    discard = Entry("t1", "t1-a2", "", Outcome.DISCARDED, "network", infrastructure=True)
+
+    text = diary_text([rejected(1, "one"), discard, rejected(3, "three")])
+
+    assert "- `t1-a2`: discarded (infrastructure): network" in text
+    assert "### Attempt `t1-a1`: rejected" in text and "### Attempt `t1-a3`: rejected" in text
+
+
+def test_an_attempt_that_did_not_finish_says_so() -> None:
+    assert "### Attempt `t1-a1`: did not finish" in diary_text(
+        [Entry("t1", "t1-a1", "", Outcome.OPEN)]
+    )
+
+
+def test_what_the_agent_said_is_cut_and_flattened() -> None:
+    text = diary_text([rejected(1, "a\n" + "b" * 400)])
+
+    said = next(line for line in text.splitlines() if line.startswith("You said: "))
+    assert len(said) == len("You said: ") + SAID_CUT
+    assert said.endswith("...") and "\n" not in said
+
+
+def test_the_line_of_an_older_attempt_is_cut() -> None:
+    text = diary_text([rejected(1, why="x" * 400), *(rejected(n) for n in range(2, 5))])
+
+    line = next(line for line in text.splitlines() if line.startswith("- `t1-a1`"))
+    assert len(line) == len("- `t1-a1`: rejected: ") + LINE_CUT and line.endswith("...")
+
+
+def test_past_the_limit_the_oldest_lines_go_first_and_the_text_says_so() -> None:
+    entries = [rejected(n, why="y" * 150) for n in range(1, 60)]
+
+    text = diary_text(entries)
+
+    assert len(text) <= DIARY_LIMIT + 100
+    assert text.splitlines()[0] == "25 earlier attempt(s) left out to keep this short."
+    assert "### Attempt `t1-a59`: rejected" in text and "`t1-a1`" not in text
+
+
+def test_when_only_full_entries_are_left_the_oldest_of_them_go() -> None:
+    big = [rejected(n, "s" * 300, why="z" * 1500) for n in range(1, 5)]
+
+    text = diary_text(big)
+
+    assert "### Attempt `t1-a4`: rejected" in text
+
+
+def test_the_text_for_the_attempt_about_to_run_leaves_that_attempt_out(log: EventLog) -> None:
+    attempt(log, "t1-a1", said="one", end=S.REJECTED, payload={"reason": "r"})
+    attempt(log, "t1-a2", said="two")
+
+    assert "t1-a2" not in stage_diary(log.state, "t1", "t1-a2")
+    assert "t1-a1" in stage_diary(log.state, "t1", "t1-a2")
+    assert stage_diary(log.state, "t1", "t1-a1").count("Attempt") == 1
+
+
+def test_a_first_attempt_has_no_diary(log: EventLog) -> None:
+    attempt(log, "t1-a1")
+
+    assert stage_diary(log.state, "t1", "t1-a1") == ""

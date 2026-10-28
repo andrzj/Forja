@@ -102,3 +102,65 @@ def _entry(state: RunState, stage: str, attempt: str) -> Entry:
 
 def _text(value: object) -> str:
     return "" if value is None else str(value)
+
+
+FULL_ENTRIES = 3  # the latest attempts of a stage that are shown in full
+SAID_CUT = 300
+LINE_CUT = 160
+DIARY_LIMIT = 6000
+
+
+def diary_text(entries: list[Entry]) -> str:
+    """The earlier attempts of a stage, as the agent is shown them; empty when there are none.
+
+    The latest ``FULL_ENTRIES`` rejected or unfinished attempts keep what the agent said and why
+    the work was turned down; the older ones, and every discard, are one line. Past
+    ``DIARY_LIMIT`` characters the oldest lines go first, then the oldest full entries, and the
+    text says how many attempts it left out. The rule is fixed: the same entries give the same text.
+    """
+    judged = [e for e in entries if e.outcome not in (Outcome.DISCARDED, Outcome.APPROVED)]
+    full = {id(e) for e in judged[-FULL_ENTRIES:]}
+    blocks = [(id(e) in full, _full(e) if id(e) in full else _line(e)) for e in entries]
+    left_out = 0
+    while sum(len(text) + 1 for _, text in blocks) > DIARY_LIMIT and blocks:
+        lines = [i for i, (is_full, _) in enumerate(blocks) if not is_full]
+        del blocks[lines[0] if lines else 0]
+        left_out += 1
+    if not blocks:
+        return ""
+    head = [f"{left_out} earlier attempt(s) left out to keep this short."] if left_out else []
+    return "\n".join([*head, *(text for _, text in blocks)])
+
+
+def _cut(text: str, size: int) -> str:
+    flat = " ".join(text.split())
+    return flat if len(flat) <= size else flat[: size - 3] + "..."
+
+
+def _full(entry: Entry) -> str:
+    lines = [f"### Attempt `{entry.attempt}`: {_verdict(entry)}"]
+    if entry.said:
+        lines.append(f"You said: {_cut(entry.said, SAID_CUT)}")
+    if entry.detail:
+        lines.append(f"Why: {entry.detail}")
+    return "\n".join(lines) + "\n"
+
+
+def _line(entry: Entry) -> str:
+    why = f": {_cut(entry.detail, LINE_CUT)}" if entry.detail else ""
+    return f"- `{entry.attempt}`: {_verdict(entry)}{why}"
+
+
+def _verdict(entry: Entry) -> str:
+    if entry.outcome is Outcome.DISCARDED:
+        return "discarded (infrastructure)" if entry.infrastructure else "discarded"
+    return {
+        Outcome.REJECTED: "rejected",
+        Outcome.APPROVED: "approved",
+        Outcome.OPEN: "did not finish",
+    }[entry.outcome]
+
+
+def stage_diary(state: RunState, stage: str, current: str) -> str:
+    """The text for ``current``, the attempt about to run: what the stage's earlier ones did."""
+    return diary_text([e for e in stage_entries(state, stage) if e.attempt != current])

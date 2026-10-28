@@ -1,5 +1,6 @@
 """What the agent is told: the task, the rules, the files it may change, and why it was rejected."""
 
+from dataclasses import replace
 from pathlib import Path
 
 from forja.core.artifacts.models import Producer
@@ -162,3 +163,24 @@ def test_a_refactoring_package_keeps_its_own_instructions(tmp_path: Path) -> Non
 
     assert "You are refactoring existing code" in text
     assert "frozen" not in text and "must FAIL" not in text
+
+
+def test_earlier_attempts_come_before_the_last_verdict_and_only_when_there_are_some(
+    tmp_path: Path,
+) -> None:
+    assert "Earlier attempts" not in package(tmp_path, rejection="lint: no")
+
+    ctx = replace(
+        context(tmp_path, ("src/a.py",), "lint: no"),
+        diary="### Attempt `t1-a1`: rejected\nYou said: split f\n",
+    )
+    text = build_package(ctx, Redactor())
+
+    assert "## Earlier attempts of this stage\n\n### Attempt `t1-a1`: rejected" in text
+    assert text.index("## Earlier attempts") < text.index("## The previous attempt was rejected")
+
+
+def test_a_secret_in_the_earlier_attempts_never_reaches_the_package(tmp_path: Path) -> None:
+    ctx = replace(context(tmp_path, ("src/a.py",)), diary=f"You said: key {TOKEN}\n")
+
+    assert TOKEN not in build_package(ctx, Redactor())

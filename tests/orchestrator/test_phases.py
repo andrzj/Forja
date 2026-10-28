@@ -464,3 +464,13 @@ def test_results_lost_again_and_again_pause_the_run_like_any_infrastructure_fail
 
     assert (outcome.state, outcome.exit_code) == (ExecutionState.PAUSED, ExitCode.PAUSED)
     assert outcome.message == "3 infrastructure failures in a row on t1"
+
+
+def test_the_second_attempt_is_shown_what_the_first_one_did(world: MemoryWorld) -> None:
+    agent = ScriptedAgent()
+
+    world.run(measurer=ScriptedMeasurer(verdicts=(REJECTED, PASSED)), agent=agent)
+
+    first, second = agent.seen
+    assert first.diary == ""
+    assert "rejected" in second.diary and "gate 8 (complexity): too complex" in second.diary
