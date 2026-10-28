@@ -33,3 +33,6 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0025](0025-a-rede-do-e2e-e-desligada-por-armadilha-de-proxy-sem-sandbox.md) | A rede do E2E é desligada por armadilha de proxy, sem sandbox | Aceito |
 | [0026](0026-o-registro-de-mudanca-e-escrito-pela-forja-e-a-documentacao-tem-commits-proprios.md) | O registro de mudança é escrito pela Forja e a documentação tem commits próprios | Aceito |
 | [0027](0027-a-entrada-vira-elementos-os-fatos-sao-do-dono-e-o-andaime-e-dado-do-adaptador.md) | A entrada vira elementos, os fatos são do dono e o andaime é dado do adaptador | Aceito |
+| [0028](0028-a-unidade-do-grafo-e-o-diretorio-e-as-camadas-sao-declaradas-pelo-usuario.md) | A unidade do grafo é o diretório e as camadas são declaradas pelo usuário | Aceito |
+| [0029](0029-o-teste-diferencial-so-executa-com-casos-declarados-no-repositorio.md) | O teste diferencial só executa com casos declarados no repositório | Aceito |
+| [0030](0030-o-teste-diferencial-compara-medianas-e-poe-o-caso-instavel-em-quarentena.md) | O teste diferencial compara medianas e põe o caso instável em quarentena | Aceito |
