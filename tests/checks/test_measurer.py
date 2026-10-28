@@ -46,6 +46,7 @@ EVERY_GATE = [
     "sast",
     "dependency_audit",
     "new_dependency",
+    "differential",
     "voice",
     "comments",
 ]
@@ -330,6 +331,7 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "sast",
             "dependency_audit",
             "new_dependency",
+            "differential",
             "e2e",
             "test_data",
             "voice",
@@ -415,7 +417,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == EVERY_GATE[:-11]  # the gates after the one that stopped it do not run
+    assert ran(outcome) == EVERY_GATE[:-12]  # the gates after the one that stopped it do not run
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]

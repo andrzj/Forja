@@ -12,7 +12,8 @@ from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-export
 GATES = (
     "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
     "pass_through", "module_depth", "dependency_cycles", "layer_rules", "package_metrics",
-    "sast", "dependency_audit", "new_dependency", "e2e", "test_data", "voice", "comments",
+    "sast", "dependency_audit", "new_dependency", "differential", "e2e", "test_data", "voice",
+    "comments",
 )  # fmt: skip
 
 

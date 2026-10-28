@@ -47,6 +47,7 @@ def extra_stage(scene: Scene) -> list[str]:
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
+            "differential": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,

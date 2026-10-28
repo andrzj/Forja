@@ -33,6 +33,7 @@ def blocking(scene: Scene, *checks: str) -> Scene:
             "sast",
             "dependency_audit",
             "new_dependency",
+            "differential",
             "e2e",
             "test_data",
             "voice",

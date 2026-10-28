@@ -83,6 +83,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
+            "differential": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,

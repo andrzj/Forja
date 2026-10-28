@@ -36,6 +36,8 @@ from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
 from forja.checks.dependency_cycles import DependencyCyclesCheck
+from forja.checks.differential import DifferentialCheck
+from forja.checks.differential_base import DifferentialBase
 from forja.checks.differential_base import load as load_differential_base
 from forja.checks.differential_base import measure_base as measure_differential_base
 from forja.checks.differential_inputs import MissingInput
@@ -104,6 +106,7 @@ from forja.orchestrator.ports import (
     RecordFile,
     SinkFactory,
 )
+from forja.orchestrator.summary import DIFFERENTIAL, differential_note
 
 BASE_FILE = "base.json"
 BASE_METRICS_FILE = "base-metrics.json"
@@ -334,15 +337,27 @@ class PipelineMeasurer:
         """The differential cases run twice on the base, once per execution: a base already
         measured (a resumed execution) is read back, so every attempt meets the same one."""
         cases = self._differential_cases
-        if not cases or load_differential_base(self.differential_directory, cases) is not None:
+        if not cases:
             return []
-        try:
-            await measure_differential_base(
-                tools, cases, worktree, self.differential_directory, self._env
-            )
-        except MissingInput as missing:
-            return [f"differential: {missing}"]
+        base = load_differential_base(self.differential_directory, cases)
+        if base is None:
+            try:
+                base = await measure_differential_base(
+                    tools, cases, worktree, self.differential_directory, self._env
+                )
+            except MissingInput as missing:
+                return [f"differential: {missing}"]
+        # said again on a resumed run, so the summary has it even if the first note was lost
+        self._log.append_progress(
+            Level.EXECUTION, self._run_id, DIFFERENTIAL, payload=differential_note(base)
+        )
         return []
+
+    def _differential_base(self) -> DifferentialBase:
+        """The base the attempts are judged against; with none, each case says it has no measure."""
+        cases = self._differential_cases
+        found = load_differential_base(self.differential_directory, cases) if cases else None
+        return DifferentialBase() if found is None else found
 
     def _save_base(
         self, unstable: list[str], passing: list[str], e2e: BaseE2E | None = None
@@ -705,6 +720,14 @@ class PipelineMeasurer:
                 self._osv_scanner,
             ),
             NewDependencyCheck(worktree, changes, declared, manifests, self._registry_get),
+            DifferentialCheck(
+                tools,
+                self._differential_cases,
+                self._differential_base(),
+                worktree,
+                self._env,
+                tuple(dict.fromkeys(a.language for a in active)),
+            ),
             E2ECheck(
                 tools,
                 active,

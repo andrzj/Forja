@@ -190,6 +190,7 @@ class Scene:
             "doc_drift": OBSERVATION,
             "adr": OBSERVATION,
             "e2e": OBSERVATION,
+            "differential": OBSERVATION,
             "test_data": OBSERVATION,
             "voice": OBSERVATION,
             "comments": OBSERVATION,

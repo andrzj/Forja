@@ -9,6 +9,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import JsonValue
+
+from forja.checks.differential_base import DifferentialBase
 from forja.checks.readme import README_NAMES
 from forja.core.artifacts.schemas import ExecutionSummaryBody, TaskOutcome, TaskOutcomeKind
 from forja.core.confirmation import ConfirmationError, load_confirmation
@@ -19,6 +22,7 @@ from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.config import Objective, RunConfig
 
 METRICS = "metrics"
+DIFFERENTIAL = "differential"
 PREMISE = "premise"
 DOCUMENTATION = "documentation"
 TRACE = "trace"
@@ -76,6 +80,24 @@ class Facts:
     traced: dict[str, tuple[Traced, ...]] = field(default_factory=dict)
     baseline: dict[str, float] = field(default_factory=dict)
     final: dict[str, float] = field(default_factory=dict)
+    differential: dict[str, JsonValue] = field(default_factory=dict)
+
+
+NOTE_NAMES = 10  # a note holds at most this many case names, each cut: events are small
+NAME_CUT = 40
+
+
+def differential_note(base: DifferentialBase) -> dict[str, JsonValue]:
+    """What the base showed that the person must be told: the cases it put in quarantine and the
+    ones whose memory it could not measure. Names are cut, the counts are not."""
+    held = sorted(name for name, case in base.cases.items() if case.quarantined)
+    unmeasured = sorted(name for name, case in base.cases.items() if not case.memories)
+    return {
+        "quarantined": [name[:NAME_CUT] for name in held[:NOTE_NAMES]],
+        "quarantined_count": len(held),
+        "unmeasured": [name[:NAME_CUT] for name in unmeasured[:NOTE_NAMES]],
+        "unmeasured_count": len(unmeasured),
+    }
 
 
 def read_facts(log_path: Path) -> Facts:
@@ -114,6 +136,8 @@ def read_facts(log_path: Path) -> Facts:
                 facts.traced[str(payload.get("task"))] = tuple(
                     _traced(row) for row in rows if isinstance(row, dict)
                 )
+        elif kind == DIFFERENTIAL:
+            facts.differential = {k: v for k, v in payload.items() if k != "kind"}
         elif kind == METRICS:
             values = payload.get("values")
             if isinstance(values, dict):
@@ -221,7 +245,7 @@ def render_summary(
         "",
         *_environment(state, config),
         *_agents(config),
-        *(f"- **{notice}**" for notice in notices),
+        *(f"- **{notice}**" for notice in (*notices, *_differential(facts))),
         "",
         "## Para publicar",
         "",
@@ -230,6 +254,24 @@ def render_summary(
         "",
     ]
     return "\n".join(lines)
+
+
+_DIFFERENTIAL_SAYS = (
+    ("quarantined", "ficaram em quarentena (saídas instáveis na base) e não foram julgados"),
+    ("unmeasured", "ficaram sem medida de memória (a plataforma não mede); só saídas e tempo"),
+)
+
+
+def _differential(facts: Facts) -> list[str]:
+    """What the base of the differential test showed about its cases, for the notices."""
+    lines = []
+    for key, text in _DIFFERENTIAL_SAYS:
+        names, count = facts.differential.get(key), facts.differential.get(f"{key}_count")
+        if isinstance(names, list) and names and isinstance(count, int):
+            shown = ", ".join(f"`{name}`" for name in names)
+            more = f" e mais {count - len(names)}" if count > len(names) else ""
+            lines.append(f"Teste diferencial: os casos {shown}{more} {text}.")
+    return lines
 
 
 GUARANTEE_TEXT = {

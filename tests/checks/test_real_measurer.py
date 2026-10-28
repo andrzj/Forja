@@ -247,6 +247,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
             "sast",
             "dependency_audit",
             "new_dependency",
+            "differential",
             "e2e",
             "test_data",
             "voice",

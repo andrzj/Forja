@@ -310,7 +310,7 @@ def test_the_pipeline_gets_the_attempt_the_commit_and_what_the_adapter_can_do(
     assert [c.id for c in spy.checks] == [
         "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
         "pass_through", "module_depth", "dependency_cycles", "layer_rules",
-    "package_metrics", "sast", "dependency_audit", "new_dependency",
+    "package_metrics", "sast", "dependency_audit", "new_dependency", "differential",
         "e2e", "test_data", "voice", "comments",
     ]  # fmt: skip
 

@@ -15,7 +15,7 @@ from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-export
 EVERY_CHECK = (
     "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
     "pass_through", "module_depth", "dependency_cycles", "layer_rules",
-    "package_metrics", "sast", "dependency_audit", "new_dependency", "e2e",
+    "package_metrics", "sast", "dependency_audit", "new_dependency", "e2e", "differential",
     "test_data",
     "voice",
     "comments",
