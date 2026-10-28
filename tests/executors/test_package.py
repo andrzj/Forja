@@ -180,6 +180,30 @@ def test_earlier_attempts_come_before_the_last_verdict_and_only_when_there_are_s
     assert text.index("## Earlier attempts") < text.index("## The previous attempt was rejected")
 
 
+def test_the_hypothesis_request_comes_after_the_earlier_attempts_and_only_when_asked(
+    tmp_path: Path,
+) -> None:
+    assert "hypothesis" not in package(tmp_path, rejection="lint: no")
+
+    ctx = replace(
+        context(tmp_path, ("src/a.py",), "lint: no"),
+        diary="- `t1-a1`: rejected\n",
+        hypothesis="State the hypothesis.",
+    )
+    text = build_package(ctx, Redactor())
+
+    assert "## Attack the hypothesis\n\nState the hypothesis." in text
+    order = [
+        text.index(title)
+        for title in (
+            "## Earlier attempts",
+            "## Attack the hypothesis",
+            "## The previous attempt was rejected",
+        )
+    ]
+    assert order == sorted(order)
+
+
 def test_a_secret_in_the_earlier_attempts_never_reaches_the_package(tmp_path: Path) -> None:
     ctx = replace(context(tmp_path, ("src/a.py",)), diary=f"You said: key {TOKEN}\n")
 

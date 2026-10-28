@@ -87,6 +87,7 @@ class AttemptContext:
     facts: tuple[Fact, ...] = ()  # what a person recorded, offered to every role as evidence
     findings: str = ""  # what the archaeologist found, for the documenter of an investigation
     diary: str = ""  # what the earlier attempts of this stage did and how they ended
+    hypothesis: str = ""  # the request to state the hypothesis, after repeated rejections
 
 
 @dataclass(frozen=True)

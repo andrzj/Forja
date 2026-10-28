@@ -373,6 +373,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         parts.append(f"## Decision record owed\n\n{adr}\n")
     if earlier:
         parts.append(f"## Earlier attempts of this stage\n\n{earlier}\n")
+    if ctx.hypothesis:  # fixed text of the Forja: nothing to redact
+        parts.append(f"## Attack the hypothesis\n\n{ctx.hypothesis}\n")
     if ctx.previous_rejection:
         parts.append(f"## The previous attempt was rejected\n\n{ctx.previous_rejection}\n")
     return "\n".join(parts) + "\n"

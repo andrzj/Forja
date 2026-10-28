@@ -10,6 +10,7 @@ from forja.core.events import EventLog
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
 from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.config import Budget
+from forja.orchestrator.diary import HYPOTHESIS_REQUEST
 from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
 from forja.orchestrator.summary import Premise
@@ -474,3 +475,15 @@ def test_the_second_attempt_is_shown_what_the_first_one_did(world: MemoryWorld) 
     first, second = agent.seen
     assert first.diary == ""
     assert "rejected" in second.diary and "gate 8 (complexity): too complex" in second.diary
+
+
+def test_the_hypothesis_is_asked_after_two_rejections_at_the_same_gate(
+    world: MemoryWorld,
+) -> None:
+    agent = ScriptedAgent()
+
+    world.run(measurer=ScriptedMeasurer(verdicts=(REJECTED, REJECTED, PASSED)), agent=agent)
+
+    first, second, third = agent.seen
+    assert (first.hypothesis, second.hypothesis) == ("", "")
+    assert third.hypothesis == HYPOTHESIS_REQUEST

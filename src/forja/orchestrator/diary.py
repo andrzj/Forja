@@ -5,6 +5,8 @@ short, gives the same entries as a run that was never interrupted. The agent's o
 the cycle kept when it moved the attempt to validating; the outcome is the transition that ended it.
 """
 
+import re
+from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -163,4 +165,38 @@ def _verdict(entry: Entry) -> str:
 
 def stage_diary(state: RunState, stage: str, current: str) -> str:
     """The text for ``current``, the attempt about to run: what the stage's earlier ones did."""
-    return diary_text([e for e in stage_entries(state, stage) if e.attempt != current])
+    return diary_text(_earlier(state, stage, current))
+
+
+# "Attack the Premise" of unclebob/ub-mode (SKILL.md), with "hypothesis" for "premise": the
+# Forja already uses Assumption and PREMISE for something else.
+HYPOTHESIS_REQUEST = (
+    "When two fixes that share one hypothesis fail the same gate, write that hypothesis in one "
+    "sentence and count which actors hold the imbalance.\n"
+    "Remove the assignment.\n"
+    "Do not start another fix until you have done that.\n\n"
+    "Write the hypothesis in one sentence in the `reason` of your action."
+)
+REPEATS = 2  # rejections at the same gate that call for the hypothesis
+_WHERE = re.compile(r"gate \S+ \([^)]*\)")
+
+
+def hypothesis_request(entries: list[Entry]) -> str:
+    """The request to state the hypothesis, when two attempts were rejected at the same gate.
+
+    A discard for infrastructure is not a rejection by a gate and does not count. Empty otherwise.
+    """
+    gates = Counter(
+        found.group()
+        for e in entries
+        if e.outcome is Outcome.REJECTED and (found := _WHERE.match(e.detail))
+    )
+    return HYPOTHESIS_REQUEST if any(n >= REPEATS for n in gates.values()) else ""
+
+
+def stage_hypothesis(state: RunState, stage: str, current: str) -> str:
+    return hypothesis_request(_earlier(state, stage, current))
+
+
+def _earlier(state: RunState, stage: str, current: str) -> list[Entry]:
+    return [e for e in stage_entries(state, stage) if e.attempt != current]

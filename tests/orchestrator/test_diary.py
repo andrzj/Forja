@@ -18,14 +18,17 @@ from forja.orchestrator.diary import (
     BLOCKED,
     DIARY_LIMIT,
     EXHAUSTED,
+    HYPOTHESIS_REQUEST,
     LINE_CUT,
     SAID_CUT,
     Decision,
     Entry,
     Outcome,
     diary_text,
+    hypothesis_request,
     stage_diary,
     stage_entries,
+    stage_hypothesis,
     task_decisions,
     task_entries,
 )
@@ -283,3 +286,54 @@ def test_a_first_attempt_has_no_diary(log: EventLog) -> None:
     attempt(log, "t1-a1")
 
     assert stage_diary(log.state, "t1", "t1-a1") == ""
+
+
+def test_one_rejection_does_not_ask_for_the_hypothesis() -> None:
+    assert hypothesis_request([rejected(1)]) == ""
+
+
+def test_two_rejections_at_the_same_gate_ask_for_the_hypothesis() -> None:
+    text = hypothesis_request([rejected(1), rejected(2)])
+
+    assert text == HYPOTHESIS_REQUEST
+    assert "share one hypothesis fail the same gate" in text and "`reason`" in text
+    assert "premise" not in text.lower()
+
+
+def test_rejections_at_different_gates_do_not_ask_for_the_hypothesis() -> None:
+    other = rejected(2, why="gate 7 (crap): too risky")
+
+    assert hypothesis_request([rejected(1), other]) == ""
+
+
+def test_the_same_gate_with_another_check_is_not_the_same_place() -> None:
+    other = rejected(2, why="gate 8 (coverage): thin")
+
+    assert hypothesis_request([rejected(1), other]) == ""
+
+
+def test_the_rejections_need_not_follow_each_other() -> None:
+    other = rejected(2, why="gate 7 (crap): too risky")
+
+    assert hypothesis_request([rejected(1), other, rejected(3)]) == HYPOTHESIS_REQUEST
+
+
+def test_a_discard_or_an_approval_never_counts_as_a_rejection() -> None:
+    why = "gate 8 (complexity): too complex"
+    discarded = Entry("t1", "t1-a2", "", Outcome.DISCARDED, why, infrastructure=True)
+    approved = Entry("t1", "t1-a3", "", Outcome.APPROVED, why)
+
+    assert hypothesis_request([rejected(1), discarded, approved]) == ""
+
+
+def test_a_reason_that_is_not_about_a_gate_does_not_count() -> None:
+    assert hypothesis_request([rejected(1, why="no commit"), rejected(2, why="no commit")]) == ""
+
+
+def test_the_hypothesis_is_asked_for_the_attempt_about_to_run_from_the_log(log: EventLog) -> None:
+    for n in (1, 2):
+        attempt(log, f"t1-a{n}", end=S.REJECTED, payload={"reason": "gate 8 (complexity): x"})
+    attempt(log, "t1-a3")
+
+    assert stage_hypothesis(log.state, "t1", "t1-a3") == HYPOTHESIS_REQUEST
+    assert stage_hypothesis(log.state, "t1", "t1-a2") == ""
