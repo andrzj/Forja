@@ -41,7 +41,7 @@ Um passo por commit. Cada commit atualiza o Registro de andamento do Plano de ex
 
 **Passo 5. Cópia no ramo.** `docs/mudancas/<tarefa>-diario.md`, escrito pela Forja junto com o registro, no commit `docs:` do documentador. Texto montado pela Forja a partir de campos do log, com o dito pelo agente truncado, para não depender do gate de voz. Muda: `ScopeCheck._documenter` (aceita o arquivo do diário da própria tarefa) e a Especificação (linha 531, "tentativas rejeitadas nunca viram commit", e linha 580, resumo fora do histórico): o diário registra as rejeitadas como texto, sem commit de código delas. Checar que voz, deriva e `change_record` continuam verdes com o arquivo.
 
-**Passo 6. Fecho.** `docs\diario-de-bordo.md` (o que o diário contém, onde fica, limites), ADR 0030, gate de mutação (`scripts\mutate.py`) nos arquivos novos e alterados, suíte rápida, `ruff` e `mypy src`.
+**Passo 6. Fecho.** `docs\diario-de-bordo.md` (o que o diário contém, onde fica, limites), ADR 0031, gate de mutação (`scripts\mutate.py`) nos arquivos novos e alterados, suíte rápida, `ruff` e `mypy src`.
 
 ## Fora de escopo
 
@@ -55,3 +55,16 @@ Um passo por commit. Cada commit atualiza o Registro de andamento do Plano de ex
 
 - Divergência entre a Especificação (marcadores de voz bloqueantes por padrão) e `specs.py:61` (`voice` em observação). Decidir no passo 0 ou na fila 7.
 - Se skills ou `CLAUDE.md` do usuário entram na chamada do Claude Code: só uma chamada real responde (item 8, do dono). Até lá, o efeito medido do diário pode se misturar com o de instruções do perfil.
+
+## Correções do passo 0 (28/10/2026)
+
+Lido: `orchestrator\phases.py` inteiro, `agent_runner.py::build_package` (linhas 335 a 372), `task_cycle.py` (limites de texto), `executors\claude_code.py::plan_invocation`, `checks\specs.py`, `ui\view.py` (consumo de `kind`), Especificação (linhas 287 a 292, 531 e 580).
+
+1. **ADR.** O ADR do diário é o **0031**; o 0030 é do gate 11. O passo 6 diz 0030: corrigido para 0031.
+2. **Onde o diário entra.** `Orchestrator._close` já chama `read_facts(log.path)` e `render_summary` (`phases.py:276`); o passo 4 acrescenta a seção dentro de `render_summary`, sem tocar em `phases.py`. O diário é projeção do log, como o resumo: não precisa de caminho novo de escrita e dá o mesmo texto após retomada. Nenhuma mudança em `phases.py`.
+3. **Pacote.** `build_package` monta o pacote em seções e a rejeição anterior é a última (`agent_runner.py:370`). A seção nova "Earlier attempts of this stage" entra logo **antes** dela, para a rejeição mais recente continuar sendo a última coisa que o agente lê. O texto existente não muda.
+4. **UI.** `ui\view.py` trata `kind` por `if/elif` e ignora o que não conhece (`premise` e `trace` já passam assim). O diário não grava `kind` novo: é projeção do log existente (passos 1 a 4). Só o passo 5 grava arquivo, e não é nota.
+5. **Skills e `CLAUDE.md` do usuário.** A chamada usa `--setting-sources user` e `--disable-slash-commands`. O segundo desliga os comandos de barra e as skills invocadas por eles; o primeiro lê a configuração do usuário, e se o `CLAUDE.md` global entra na chamada só uma chamada real diz. **Limite registrado** (item 8, do dono): o efeito medido do diário pode se misturar com o de instruções do perfil.
+6. **Voz.** A Especificação (linha 292) diz que a lista de marcadores é bloqueante por padrão; `specs.py` põe `voice` em `OBSERVATION` com `PREMISE`, sob a regra da linha 288 (check novo começa em observação). **Decisão:** não muda aqui. Fica para a fila 7 (promoção de gates), onde a Especificação ou a política se emenda. Consequência para o passo 5: o arquivo do diário passa pelo `VoiceCheck` só em observação.
+7. **Limites do trecho do diário no pacote (decisão minha, reversível; só para este trecho, não fecha a questão 7 da Especificação).** Entram só tentativas da **mesma etapa**, anteriores à atual. As **3 últimas** vão completas: papel, tentativa, o que o agente disse (cortado em 300 caracteres), desfecho (rejeição com gate e achados, cortada em `REASON_LIMIT`, 1500). As **anteriores** vão em uma linha de até 160 caracteres (tentativa, gate, motivo curto). O trecho inteiro tem teto de **6000 caracteres**: passando disso, caem primeiro as linhas das mais antigas, depois as completas mais antigas, nunca a rejeição anterior (que tem seção própria). Corte por regra, sem LLM.
+8. **Tentativa descartada por infraestrutura** (`infra_failure`) entra no diário em uma linha e não conta como tentativa para o gatilho do passo 3.
