@@ -32,6 +32,7 @@ from forja.orchestrator.diary import (
     task_decisions,
     task_entries,
 )
+from forja.orchestrator.summary import DIARY_CUT, diary_lines
 from tests.core.events.support import FakeClock
 from tests.orchestrator.harness import RUN
 
@@ -337,3 +338,45 @@ def test_the_hypothesis_is_asked_for_the_attempt_about_to_run_from_the_log(log: 
 
     assert stage_hypothesis(log.state, "t1", "t1-a3") == HYPOTHESIS_REQUEST
     assert stage_hypothesis(log.state, "t1", "t1-a2") == ""
+
+
+def test_the_summary_section_says_nothing_happened_when_no_task_ran(log: EventLog) -> None:
+    empty = EventLog.open(log.path.with_name("other.jsonl"), RUN, clock=FakeClock())
+
+    assert diary_lines(empty.state) == ["Nenhuma tentativa."]
+
+
+def test_the_summary_section_lists_each_attempt_and_the_decisions_of_the_forja(
+    log: EventLog,
+) -> None:
+    log.append_transition(Level.TASK, "t1", TaskState.PENDING, TaskState.IN_PROGRESS)
+    attempt(log, "t1-a1", said="split f", end=S.REJECTED, payload={"reason": "gate 8 (x): no"})
+    attempt(log, "t1-a2", end=S.DISCARDED, payload={"reason": "network", "infra_failure": True})
+    attempt(log, "t1-a3")
+    log.append_transition(Level.STAGE, "t1", StageState.PENDING, StageState.IN_PROGRESS)
+    log.append_transition(Level.STAGE, "t1", StageState.IN_PROGRESS, StageState.EXHAUSTED)
+    log.append_transition(Level.TASK, "t1", TaskState.IN_PROGRESS, TaskState.BLOCKED)
+
+    assert diary_lines(log.state) == [
+        "- `t1` ():",
+        "  - `t1-a1` rejeitada; disse: split f; motivo: gate 8 (x): no",
+        "  - `t1-a2` descartada (infraestrutura); motivo: network",
+        "  - `t1-a3` não terminou",
+        "  - decisão da Forja: etapa esgotada `t1`",
+        "  - decisão da Forja: tarefa bloqueada `t1`",
+    ]
+
+
+def test_an_approved_attempt_does_not_list_its_gates_in_the_summary(log: EventLog) -> None:
+    attempt(log, "t1-a1", end=S.APPROVED, payload={"gates_passed": ["scope", "lint"]})
+
+    assert diary_lines(log.state) == ["- `t1` ():", "  - `t1-a1` aprovada"]
+
+
+def test_the_summary_cuts_what_the_agent_said_and_the_reason(log: EventLog) -> None:
+    long = "w " * 400
+    attempt(log, "t1-a1", said=long, end=S.REJECTED, payload={"reason": long})
+
+    line = diary_lines(log.state)[1]
+
+    assert line.count("...") == 2 and len(line) < 2 * DIARY_CUT + 60

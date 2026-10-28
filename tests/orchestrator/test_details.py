@@ -401,6 +401,20 @@ def test_the_summary_says_everything_in_this_order(world: MemoryWorld) -> None:
             "  - tentativa `t2-a1` rejeitada: gate 8 (complexity): too complex [src/a.py::f]",
             "  - tentativa `t2-a2` rejeitada: gate 8 (complexity): too complex [src/a.py::f]",
             "",
+            "## Diário de bordo",
+            "",
+            "- `t1` (reduce the complexity of f):",
+            "  - `t1-a1` aprovada; disse: Split the long function in two.",
+            "- `t2` (reduce the complexity of g):",
+            "  - `t2-a1` rejeitada; disse: Split the long function in two.; "
+            "motivo: gate 8 (complexity): too complex [src/a.py::f]",
+            "  - `t2-a2` rejeitada; disse: Split the long function in two.; "
+            "motivo: gate 8 (complexity): too complex [src/a.py::f]",
+            "  - decisão da Forja: etapa esgotada `t2-s`: attempts_exhausted",
+            "  - decisão da Forja: tarefa bloqueada `t2`: attempts_exhausted",
+            "- `t3` (reduce the complexity of h):",
+            "  - `t3-a1` aprovada; disse: Split the long function in two.",
+            "",
             "## Mudanças de comportamento",
             "",
             "Não se aplica nesta versão.",
@@ -463,6 +477,7 @@ def test_an_empty_run_has_nothing_to_list(world: MemoryWorld) -> None:
     text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
     assert "## Premissas assumidas\n\nNenhuma.\n" in text
     assert "## Tarefas bloqueadas\n\nNenhuma.\n" in text
+    assert "## Diário de bordo\n\nNenhuma tentativa.\n" in text
     assert "## Refatorações\n\nNenhuma.\n" in text
     assert "## Métricas antes e depois\n\nSem medições registradas.\n" in text
 

@@ -20,6 +20,15 @@ from forja.core.events.versioning import BadLine, parse_line
 from forja.core.isolation import Context, Guarantee, Status
 from forja.core.states import AttemptState, Level, StageState, TaskState
 from forja.orchestrator.config import Objective, RunConfig
+from forja.orchestrator.diary import (
+    BLOCKED,
+    EXHAUSTED,
+    Entry,
+    Outcome,
+    cut,
+    task_decisions,
+    task_entries,
+)
 
 METRICS = "metrics"
 DIFFERENTIAL = "differential"
@@ -221,6 +230,10 @@ def render_summary(
         "",
         *_blocked(state),
         "",
+        "## Diário de bordo",
+        "",
+        *diary_lines(state),
+        "",
         "## Mudanças de comportamento",
         "",
         NOT_APPLICABLE,
@@ -411,6 +424,45 @@ def _rejections(state: RunState, task: str) -> list[str]:
             if payload is not None:
                 lines.append(f"  - tentativa `{attempt}` rejeitada: {payload['reason']}")
     return lines
+
+
+_VERDICTS = {
+    Outcome.REJECTED: "rejeitada",
+    Outcome.APPROVED: "aprovada",
+    Outcome.DISCARDED: "descartada",
+    Outcome.OPEN: "não terminou",
+}
+_DECISIONS = {EXHAUSTED: "etapa esgotada", BLOCKED: "tarefa bloqueada"}
+DIARY_CUT = 300  # the agent's words and the reasons, each, in the summary
+
+
+def diary_lines(state: RunState) -> list[str]:
+    """Per task: what each attempt said and how it ended, and what the Forja decided."""
+    lines = []
+    for task in state.children_of(Level.TASK, state.run_id):
+        entries, decisions = task_entries(state, task), task_decisions(state, task)
+        if not entries and not decisions:
+            continue
+        lines.append(f"- `{task}` ({_intent(state, task)}):")
+        lines.extend(f"  - {_diary_line(entry)}" for entry in entries)
+        lines.extend(
+            f"  - decisão da Forja: {_DECISIONS[d.what]} `{d.target}`"
+            + (f": {cut(d.reason, DIARY_CUT)}" if d.reason else "")
+            for d in decisions
+        )
+    return lines or ["Nenhuma tentativa."]
+
+
+def _diary_line(entry: Entry) -> str:
+    verdict = _VERDICTS[entry.outcome]
+    if entry.infrastructure:
+        verdict += " (infraestrutura)"
+    parts = [f"`{entry.attempt}` {verdict}"]
+    if entry.said:
+        parts.append(f"disse: {cut(entry.said, DIARY_CUT)}")
+    if entry.detail and entry.outcome is not Outcome.APPROVED:
+        parts.append(f"motivo: {cut(entry.detail, DIARY_CUT)}")
+    return "; ".join(parts)
 
 
 def _refactorings(state: RunState, config: RunConfig) -> list[str]:

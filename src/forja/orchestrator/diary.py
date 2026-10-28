@@ -134,7 +134,7 @@ def diary_text(entries: list[Entry]) -> str:
     return "\n".join([*head, *(text for _, text in blocks)])
 
 
-def _cut(text: str, size: int) -> str:
+def cut(text: str, size: int) -> str:
     flat = " ".join(text.split())
     return flat if len(flat) <= size else flat[: size - 3] + "..."
 
@@ -142,14 +142,14 @@ def _cut(text: str, size: int) -> str:
 def _full(entry: Entry) -> str:
     lines = [f"### Attempt `{entry.attempt}`: {_verdict(entry)}"]
     if entry.said:
-        lines.append(f"You said: {_cut(entry.said, SAID_CUT)}")
+        lines.append(f"You said: {cut(entry.said, SAID_CUT)}")
     if entry.detail:
         lines.append(f"Why: {entry.detail}")
     return "\n".join(lines) + "\n"
 
 
 def _line(entry: Entry) -> str:
-    why = f": {_cut(entry.detail, LINE_CUT)}" if entry.detail else ""
+    why = f": {cut(entry.detail, LINE_CUT)}" if entry.detail else ""
     return f"- `{entry.attempt}`: {_verdict(entry)}{why}"
 
 
