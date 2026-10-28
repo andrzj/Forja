@@ -58,6 +58,13 @@ def default_registry() -> CheckRegistry:
             PREMISE,
             thresholds=frozenset({"min_age_days", "min_downloads"}),
         ),
+        CheckSpec(
+            "differential",
+            11,
+            Mode.OBSERVATION,
+            PREMISE,
+            thresholds=frozenset({"max_time_ratio", "max_memory_ratio", "runs"}),
+        ),
         CheckSpec("voice", 12, Mode.OBSERVATION, PREMISE, limits=frozenset({"max_dashes"})),
         CheckSpec("comments", 12, Mode.OBSERVATION, PREMISE),
         CheckSpec("citations", 13, Mode.OBSERVATION, BLOCK),
