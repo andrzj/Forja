@@ -60,3 +60,15 @@ def test_an_input_reached_through_a_link_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(MissingInput):
         freeze_inputs([case("report", "link.txt")], worktree, tmp_path / "kept")
+
+
+def test_inputs_of_several_cases_share_one_directory(tmp_path: Path) -> None:
+    worktree, kept = tmp_path / "work", tmp_path / "kept"
+    worktree.mkdir()
+    (worktree / "a.in").write_bytes(b"a")
+    (worktree / "b.in").write_bytes(b"b")
+
+    frozen = freeze_inputs([case("one", "a.in"), case("two", "b.in")], worktree, kept)
+
+    assert frozen["one"].read_bytes() == b"a"
+    assert frozen["two"].read_bytes() == b"b"

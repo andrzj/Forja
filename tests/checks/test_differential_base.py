@@ -194,3 +194,11 @@ def test_memory_peaks_are_kept_only_when_measured(tmp_path: Path) -> None:
 
     assert loaded is not None
     assert loaded.cases == {"a": case, "b": bare}
+
+
+def test_the_index_lists_the_cases_in_name_order(log: EventLog, tmp_path: Path) -> None:
+    _, directory = measure(log, tmp_path, steady("b"), steady("a"))
+
+    text = (directory / INDEX).read_text(encoding="utf-8")
+
+    assert text.index('"a"') < text.index('"b"')

@@ -64,7 +64,7 @@ def judge(
     was: str = "same",
     now: str = "same",
     values: Mapping[str, JsonValue] | None = None,
-    languages: tuple[str, ...] = (),
+    languages: tuple[str, ...] = ("python",),
     alter: Callable[[DifferentialBase], DifferentialBase] = lambda base: base,
 ) -> GateResult:
     old, new = tmp_path / "old", tmp_path / "new"
@@ -310,3 +310,16 @@ def test_the_frozen_input_of_the_base_is_what_the_new_version_reads(
     result = judge(log, tmp_path, (with_input,), was="from-base", now="from-new", values=LOOSE)
 
     assert isinstance(result, Approved)  # both read the copy the base froze, not their own file
+
+
+def test_a_ratio_exactly_at_the_limit_passes_and_just_above_it_does_not() -> None:
+    from forja.checks.differential import _ratio
+
+    assert _ratio("c", "slower", [125.0], [100.0], 1.25) == []
+    assert len(_ratio("c", "slower", [126.0], [100.0], 1.25)) == 1
+
+
+def test_a_base_median_of_zero_is_not_judged() -> None:
+    from forja.checks.differential import _ratio
+
+    assert _ratio("c", "slower", [5.0], [0.0], 1.25) == []

@@ -110,3 +110,9 @@ def test_a_name_for_each_kind_of_output() -> None:
     assert describe(EXACT) == "stdout"
     assert describe(DifferentialOutput(EXIT_CODE)) == "exit_code"
     assert describe(DifferentialOutput(FILE, BYTES, "out/r.txt")) == "file out/r.txt"
+
+
+def test_a_newline_in_the_first_byte_counts_as_a_line() -> None:
+    assert compare_output(EXACT, b"\nx", b"\ny") == (
+        "differs at byte 1 (line 2); the base has 2 bytes, the new version 2"
+    )
