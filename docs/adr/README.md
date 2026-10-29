@@ -36,3 +36,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0028](0028-a-unidade-do-grafo-e-o-diretorio-e-as-camadas-sao-declaradas-pelo-usuario.md) | A unidade do grafo é o diretório e as camadas são declaradas pelo usuário | Aceito |
 | [0029](0029-o-teste-diferencial-so-executa-com-casos-declarados-no-repositorio.md) | O teste diferencial só executa com casos declarados no repositório | Aceito |
 | [0030](0030-o-teste-diferencial-compara-medianas-e-poe-o-caso-instavel-em-quarentena.md) | O teste diferencial compara medianas e põe o caso instável em quarentena | Aceito |
+| [0031](0031-o-diario-e-uma-projecao-do-log-fiel-ao-que-foi-escrito.md) | O diário é uma projeção do log, fiel ao que foi escrito | Aceito |

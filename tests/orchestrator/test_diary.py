@@ -23,6 +23,7 @@ from forja.orchestrator.diary import (
     Decision,
     Entry,
     Outcome,
+    cut,
     diary_text,
     hypothesis_request,
     stage_diary,
@@ -450,3 +451,43 @@ def test_the_log_book_is_the_same_after_the_log_is_read_again(
     assert task_diary(read_state(tmp_path / "events.jsonl", RUN), "t1", "t1-a2") == task_diary(
         log.state, "t1", "t1-a2"
     )
+
+
+def discarded(count: int, detail_size: int) -> list[Entry]:
+    """``count`` discards whose one-line texts are all ``21 + detail_size`` characters long."""
+    return [
+        Entry("t1", f"a{i:03d}", "", Outcome.DISCARDED, "d" * detail_size) for i in range(count)
+    ]
+
+
+def test_a_diary_exactly_at_the_limit_keeps_every_attempt() -> None:
+    text = diary_text(discarded(100, 38))  # 100 lines of 59 characters and a break each: 6000
+
+    assert len(text.splitlines()) == 100
+    assert "left out" not in text
+
+
+def test_a_diary_one_line_over_the_limit_drops_the_oldest_line_and_says_so() -> None:
+    text = diary_text(discarded(101, 38))
+
+    lines = text.splitlines()
+    assert lines[0] == "1 earlier attempt(s) left out to keep this short."
+    assert "`a000`" not in text
+    assert "`a001`" in lines[1]
+    assert len(lines) == 101
+
+
+def test_when_only_full_entries_are_left_the_oldest_of_them_goes_first() -> None:
+    entries = [Entry("t1", f"t1-a{n}", "s" * 1000, Outcome.REJECTED, "d" * 1000) for n in (1, 2, 3)]
+
+    text = diary_text(entries)
+
+    assert text.splitlines()[0] == "1 earlier attempt(s) left out to keep this short."
+    assert "`t1-a1`" not in text
+    assert "`t1-a2`" in text
+    assert "`t1-a3`" in text
+
+
+def test_a_text_as_long_as_the_cut_is_kept_whole() -> None:
+    assert cut("a" * 160, 160) == "a" * 160
+    assert cut("a" * 161, 160) == "a" * 157 + "..."
