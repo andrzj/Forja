@@ -18,3 +18,5 @@ A chave é o SHA-256 de: commit, ferramenta e versão, `config_hash`, toolchain 
 - Uma ferramenta nova de versão diferente gera chave diferente, sem lógica especial.
 
 Ver a especificação, seção "Contrato 5: gate", parágrafo "Chave de cache".
+
+Nota de 29/10/2026: a decisão da chave segue valendo, mas o reaproveitamento de medições (3e) não foi construído e foi suprimido por ordem do dono, até a Forja em uso mostrar que é necessário. A chave e o índice existem em `core`, sem consumidor.

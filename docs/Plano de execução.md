@@ -184,7 +184,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 
 ### 3. Prova forte
 
-**Escopo:** papel de autor de testes; gate vermelho/verde; congelamento de testes; mutação e CRAP; métricas opostas (*pass-through*, profundidade de módulo); segunda CLI com diversidade de autor; adaptador de TypeScript; cache de medições pela chave completa do contrato 5.
+**Escopo:** papel de autor de testes; gate vermelho/verde; congelamento de testes; mutação e CRAP; métricas opostas (*pass-through*, profundidade de módulo); segunda CLI com diversidade de autor; adaptador de TypeScript; cache de medições pela chave completa do contrato 5 (3e: suprimido por ordem do dono em 29/10/2026).
 
 **Pronto quando:** num conjunto de tarefas com defeitos plantados, testes que não verificam nada são rejeitados pelo gate; uma refatoração que cria métodos rasos é rejeitada mesmo com CRAP melhor.
 
@@ -228,7 +228,7 @@ São oito incrementos, de 0 a 7. O incremento 2 é um ponto de decisão: os segu
 | Envio de código sensível ao provedor do modelo | Exposição de dados | Redação obrigatória do pacote; exclusões por configuração; auditoria do pacote enviado |
 | Agente altera o git (commit, reset, refs compartilhadas pelo worktree) | Estado da execução inconsistente; retomada incorreta | Agente em cópia sem .git; verificação de HEAD, índice e refs antes e depois de cada chamada, desde o incremento 1 |
 | Ferramenta de medição falha ou não suporta o código | Aprovação silenciosa ou culpa indevida do agente | Resultado inconclusivo com política por gate (contrato 5) |
-| Evidência reaproveitada de outro contexto de medição | Gate decide com dado desatualizado | Chave de cache com commit, ferramenta, configuração, toolchain, plataforma e escopo |
+| Evidência reaproveitada de outro contexto de medição | Gate decide com dado desatualizado | Chave de cache com commit, ferramenta, configuração, toolchain, plataforma e escopo (a chave existe em `core`; o reaproveitamento não foi construído, 3e suprimido em 29/10/2026: cada medição é refeita) |
 | CLI lê arquivos que não estavam no pacote | Dados sensíveis expostos ao provedor do modelo | Cópia de trabalho sem arquivos sensíveis; ferramentas de arquivo da CLI confinadas à cópia; o resto é declarado como do ambiente |
 | Falhas de infraestrutura repetem chamadas à CLI | Custo sem limite | Consumo por chamada; limite de falhas consecutivas por etapa; pausa da execução |
 | Evolução do formato de eventos e artefatos | Execuções antigas não retomam ou retomam errado | Versão de esquema; conversão na leitura; recusa explícita de versão desconhecida |

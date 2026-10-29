@@ -36,5 +36,5 @@ Origem: decisão do dono em 19/10 (não é opcional). Pendências em `NOTAS.md`,
 
 ## Risco e limite
 
-- Repositório com duas linguagens roda as ferramentas das duas a cada tentativa: mais lento. Aceito; o cache de medições é o 3d.
+- Repositório com duas linguagens roda as ferramentas das duas a cada tentativa: mais lento. Aceito; o cache de medições (3e) foi suprimido por ordem do dono em 29/10/2026; o custo real se vê com a Forja em uso.
 - Dois arquivos de teste de linguagens diferentes com o mesmo id: a quarentena os trata como o mesmo teste. Improvável (id leva o caminho); registrado, não tratado.

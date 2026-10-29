@@ -93,6 +93,8 @@ Escrito em 12/10/2026. Estado: fatiamento, ordem e **plano detalhado do 3a aprov
 
 ## 3e — Cache de medições pela chave completa
 
+**Suprimido por ordem do dono em 29/10/2026** (superestimado; reavaliar com a Forja em uso). Não construir. Ver `plano-medicoes-e-calibracao.md`, parte A, para o que se leu e as notas de desenho.
+
 **Objetivo.** Não refazer medição quando a chave inteira do contrato 5 coincide.
 
 **Passos.**
