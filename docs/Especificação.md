@@ -528,7 +528,7 @@ Uma tarefa equivale a uma intenção; cada etapa aprovada equivale a um commit, 
 - **Tipos não se misturam:** `test:` só toca testes e os testes novos passam no código atual; `refactor:` não toca testes e a suíte mantém o resultado; `feat:`/`fix:` exigem critério de aceite associado; `style:` só formatação; `docs:` só documentação.
 - **O "porquê" é escrito pelo LLM; os fatos vêm da ferramenta em trailers:** `Task-Id`, `Evidence-Id`, métricas antes e depois, `Agent`, `Policy-Version` e, quando houver, `Assumption`.
 - **Métricas detalhadas em `git notes`**, presas ao commit sem poluir a mensagem.
-- **Tentativas rejeitadas nunca viram commit**; ficam registradas apenas no JSONL.
+- **Tentativas rejeitadas nunca viram commit de código**; ficam registradas no JSONL. A Forja copia o diário da tarefa (o que cada tentativa disse e como terminou, rejeitadas inclusive) como texto em `docs/mudancas/<tarefa>-diario.md`, no commit `docs:` do documentador.
 
 Todo commit carrega também `Stage-Id` e `Attempt-Id`, usados na reconciliação (contrato 2).
 

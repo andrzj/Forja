@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from forja.checks.base import rejected
-from forja.checks.change_record import CHANGES_DIR, record_path
+from forja.checks.change_record import CHANGES_DIR, diary_path, record_path
 from forja.checks.changes import Changes, added_lines
 from forja.core.adapters import FileClass
 from forja.core.artifacts.models import Producer
@@ -129,9 +129,11 @@ class ScopeCheck:
             message = f"the documenter may change only documentation (this is {kind.value})"
             return Finding(message=message, target=path)
         key = _same_file(path)
-        if key.startswith(f"{_same_file(CHANGES_DIR)}/") and key != _same_file(
-            record_path(self.task.task_id)
-        ):
+        own = {
+            _same_file(record_path(self.task.task_id)),
+            _same_file(diary_path(self.task.task_id)),
+        }
+        if key.startswith(f"{_same_file(CHANGES_DIR)}/") and key not in own:
             return Finding(
                 message="a change record is the Forja's, not the documenter's", target=path
             )

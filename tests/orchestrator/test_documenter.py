@@ -114,3 +114,26 @@ def test_a_documenter_rejected_by_a_gate_is_tried_again_without_touching_the_cod
     assert log.state.children_of(Level.ATTEMPT, "t1-d") == ["t1-da1", "t1-da2"]
     assert log.state.state_of(Level.ATTEMPT, "t1-da1") is AttemptState.REJECTED
     assert log.state.state_of(Level.ATTEMPT, "t1-da2") is AttemptState.COMMITTED
+
+
+def test_the_log_book_of_the_task_goes_in_the_documenter_commit_beside_the_record(
+    world: MemoryWorld,
+) -> None:
+    world.run(
+        measurer=ScriptedMeasurer(verdicts=(REJECTED, PASSED, PASSED)),
+        agent=ScriptedAgent(edits=[CODE, CODE]),
+        agents={Producer.DOCUMENTER: ScriptedAgent(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    memory = world.memory
+    tip = memory.branches[world.workspace.run_branch]
+    docs = [
+        c for c in map(memory.commits.get, memory.ancestors(tip)) if c and c.subject[:5] == "docs:"
+    ]
+    diary = docs[0].tree["docs/mudancas/t1-diario.md"]
+    assert diary.startswith("# Diário de bordo: t1\n")
+    assert "## Tentativa `t1-a1` da etapa `t1-s`: rejeitada" in diary
+    assert "> Split the long function in two." in diary
+    assert "## Tentativa `t1-a2` da etapa `t1-s`: aprovada" in diary
+    assert "t1-da1" not in diary

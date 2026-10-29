@@ -16,7 +16,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from forja.checks.change_record import record_path
+from forja.checks.change_record import diary_path, record_path
 from forja.checks.freeze import frozen_digest_of
 from forja.checks.readme import README_NAMES
 from forja.core.adapters.executor import ErrorKind
@@ -35,7 +35,7 @@ from forja.orchestrator.criteria import (
     manifest_of,
     with_criteria,
 )
-from forja.orchestrator.diary import stage_diary, stage_hypothesis
+from forja.orchestrator.diary import stage_diary, stage_hypothesis, task_diary
 from forja.orchestrator.findings import findings_artifact_id, findings_of, findings_report
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
@@ -569,9 +569,11 @@ class TaskCycle:
             self._gates_passed(ctx.task.task_id),
             self._executors(),
         )
-        target = ctx.worktree / record.path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(record.text, encoding="utf-8", newline="\n")
+        diary = task_diary(self._state, ctx.task.task_id, ctx.attempt_id)
+        for path, text in ((record.path, record.text), (diary_path(ctx.task.task_id), diary)):
+            target = ctx.worktree / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8", newline="\n")
 
     def _gates_passed(self, task_id: str) -> list[str]:
         """The gates the task's committed attempts passed, in the order they first passed."""

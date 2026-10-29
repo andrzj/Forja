@@ -21,6 +21,7 @@ from forja.checks.change_record import (
     CHANGES_DIR,
     RecordFacts,
     SymbolChange,
+    diary_path,
     file_changes,
     record_path,
     render_changed,
@@ -459,11 +460,13 @@ class PipelineMeasurer:
         """The documents the task has changed besides its own change record, for the summary."""
         git = self._git.at(ctx.worktree)
         read = await read_changes(git, await self._task_base(git, ctx.task.task_id))
-        own = record_path(ctx.task.task_id)
+        own = {record_path(ctx.task.task_id), diary_path(ctx.task.task_id)}
         return sorted(
             c.path
             for c in read.files
-            if c.exists_now and c.path != own and self._classify(c.path) is FileClass.DOCUMENTATION
+            if c.exists_now
+            and c.path not in own
+            and self._classify(c.path) is FileClass.DOCUMENTATION
         )
 
     async def _adr_triggers(self, ctx: AttemptContext) -> list[Trigger]:

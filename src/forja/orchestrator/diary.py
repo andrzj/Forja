@@ -205,5 +205,52 @@ def stage_hypothesis(state: RunState, stage: str, current: str) -> str:
     return hypothesis_request(_earlier(state, stage, current))
 
 
+_RECORD_VERDICTS = {
+    Outcome.REJECTED: "rejeitada",
+    Outcome.APPROVED: "aprovada",
+    Outcome.DISCARDED: "descartada",
+    Outcome.OPEN: "não terminou",
+}
+_RECORD_DECISIONS = {EXHAUSTED: "etapa esgotada", BLOCKED: "tarefa bloqueada"}
+
+
+def task_diary(state: RunState, task: str, current: str) -> str:
+    """The log book of a task as the Forja commits it beside the change record, in Markdown.
+
+    Every attempt of every stage of the task except ``current``, the one being judged, with what the
+    agent said and the reason of the rejection as they were kept, quoted and not cut here (the cycle
+    already limited both), then what the Forja decided. Built from the log only, so a resumed run
+    writes the same text.
+    """
+    entries = [e for e in task_entries(state, task) if e.attempt != current]
+    decisions = task_decisions(state, task)
+    lines = [f"# Diário de bordo: {task}", ""]
+    if not entries and not decisions:
+        return "\n".join([*lines, "Nenhuma tentativa anterior.", ""])
+    for entry in entries:
+        verdict = _RECORD_VERDICTS[entry.outcome]
+        if entry.infrastructure:
+            verdict += " (infraestrutura)"
+        lines += [f"## Tentativa `{entry.attempt}` da etapa `{entry.stage}`: {verdict}", ""]
+        if entry.said:
+            lines += _record_quote("Disse", entry.said)
+        if entry.detail:
+            lines += _record_quote(
+                "Gates aprovados" if entry.outcome is Outcome.APPROVED else "Motivo", entry.detail
+            )
+    for decision in decisions:
+        lines += [
+            f"## Decisão da Forja: {_RECORD_DECISIONS[decision.what]} `{decision.target}`",
+            "",
+        ]
+        if decision.reason:
+            lines += _record_quote("Motivo", decision.reason)
+    return "\n".join(lines)
+
+
+def _record_quote(label: str, text: str) -> list[str]:
+    return [f"{label}:", "", *(f"> {line}".rstrip() for line in text.strip().splitlines()), ""]
+
+
 def _earlier(state: RunState, stage: str, current: str) -> list[Entry]:
     return [e for e in stage_entries(state, stage) if e.attempt != current]

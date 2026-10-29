@@ -29,6 +29,7 @@ from forja.orchestrator.diary import (
     stage_entries,
     stage_hypothesis,
     task_decisions,
+    task_diary,
     task_entries,
 )
 from forja.orchestrator.summary import DIARY_CUT, diary_lines
@@ -386,3 +387,66 @@ def test_the_summary_cuts_what_the_agent_said_and_the_reason(log: EventLog) -> N
     line = diary_lines(log.state)[1]
 
     assert line.count("...") == 2 and len(line) < 2 * DIARY_CUT + 60
+
+
+def test_the_log_book_of_a_task_quotes_every_attempt_but_the_one_being_judged(
+    log: EventLog,
+) -> None:
+    attempt(log, "t1-a1", said="first\nsecond", end=S.REJECTED, payload={"reason": "gate 4 (x)"})
+    attempt(log, "t1-a2", said="third", end=S.APPROVED, payload={"gates_passed": ["scope", "lint"]})
+    attempt(log, "t1-a3", said="the commit message")
+
+    text = task_diary(log.state, "t1", "t1-a3")
+
+    assert text == (
+        "# Diário de bordo: t1\n\n"
+        "## Tentativa `t1-a1` da etapa `t1`: rejeitada\n\n"
+        "Disse:\n\n> first\n> second\n\n"
+        "Motivo:\n\n> gate 4 (x)\n\n"
+        "## Tentativa `t1-a2` da etapa `t1`: aprovada\n\n"
+        "Disse:\n\n> third\n\n"
+        "Gates aprovados:\n\n> scope, lint\n"
+    )
+
+
+def test_the_log_book_keeps_a_long_reason_whole(log: EventLog) -> None:
+    reason = "gate 4 (x): " + "w " * 700
+    attempt(log, "t1-a1", said="s", end=S.REJECTED, payload={"reason": reason})
+
+    assert f"> {reason.strip()}\n" in task_diary(log.state, "t1", "t1-a2")
+
+
+def test_the_log_book_marks_a_discard_for_infrastructure_and_says_what_the_forja_decided(
+    log: EventLog,
+) -> None:
+    attempt(log, "t1-a1", end=S.DISCARDED, payload={"reason": "network", "infra_failure": True})
+    log.append_transition(Level.STAGE, "t1", StageState.PENDING, StageState.IN_PROGRESS)
+    log.append_transition(
+        Level.STAGE,
+        "t1",
+        StageState.IN_PROGRESS,
+        StageState.EXHAUSTED,
+        payload={"reason": "no more tries"},
+    )
+
+    text = task_diary(log.state, "t1", "t1-a9")
+
+    assert "## Tentativa `t1-a1` da etapa `t1`: descartada (infraestrutura)" in text
+    assert "## Decisão da Forja: etapa esgotada `t1`\n\nMotivo:\n\n> no more tries\n" in text
+
+
+def test_the_log_book_of_a_task_without_attempts_says_so(log: EventLog) -> None:
+    assert (
+        task_diary(log.state, "t1", "t1-a1")
+        == "# Diário de bordo: t1\n\nNenhuma tentativa anterior.\n"
+    )
+
+
+def test_the_log_book_is_the_same_after_the_log_is_read_again(
+    log: EventLog, tmp_path: Path
+) -> None:
+    attempt(log, "t1-a1", said="x", end=S.REJECTED, payload={"reason": "gate 4 (x)"})
+
+    assert task_diary(read_state(tmp_path / "events.jsonl", RUN), "t1", "t1-a2") == task_diary(
+        log.state, "t1", "t1-a2"
+    )

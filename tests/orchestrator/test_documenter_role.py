@@ -152,3 +152,13 @@ def test_the_package_of_the_documenter_says_what_it_may_do_and_how_to_answer(
     assert '"claims"' in text
     assert "### `src/a.py`" in text
     assert "You are refactoring" not in text
+
+
+def test_the_documenter_may_write_the_log_book_of_its_own_task_and_no_other() -> None:
+    assert isinstance(judge("docs/mudancas/t1-diario.md"), Approved)
+    result = judge("docs/mudancas/t0-diario.md", "docs/mudancas/t1-diario.md.md")
+    assert isinstance(result, Rejected)
+    assert [f.target for f in result.findings] == [
+        "docs/mudancas/t0-diario.md",
+        "docs/mudancas/t1-diario.md.md",
+    ]

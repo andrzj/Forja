@@ -77,6 +77,11 @@ def record_path(task_id: str) -> str:
     return f"{CHANGES_DIR}/{task_id}.md"
 
 
+def diary_path(task_id: str) -> str:
+    """Where the log book of a task lives in the repository, beside its record."""
+    return f"{CHANGES_DIR}/{task_id}-diario.md"
+
+
 def file_changes(changes: Changes) -> tuple[RecordedFile, ...]:
     """Every file the task touched, as the record lists them."""
     recorded = []
