@@ -20,7 +20,6 @@ from forja.orchestrator.diary import (
     EXHAUSTED,
     HYPOTHESIS_REQUEST,
     LINE_CUT,
-    SAID_CUT,
     Decision,
     Entry,
     Outcome,
@@ -241,12 +240,19 @@ def test_an_attempt_that_did_not_finish_says_so() -> None:
     )
 
 
-def test_what_the_agent_said_is_cut_and_flattened() -> None:
-    text = diary_text([rejected(1, "a\n" + "b" * 400)])
+def test_what_the_agent_said_is_shown_whole_and_as_it_was_written() -> None:
+    said = "first line\n\n## Not a section\n" + "b" * 1400
 
-    said = next(line for line in text.splitlines() if line.startswith("You said: "))
-    assert len(said) == len("You said: ") + SAID_CUT
-    assert said.endswith("...") and "\n" not in said
+    text = diary_text([rejected(1, said)])
+
+    assert "You said:\n> first line\n> \n> ## Not a section\n> " + "b" * 1400 + "\n" in text
+    assert "..." not in text
+
+
+def test_a_reason_of_several_lines_is_quoted_too() -> None:
+    text = diary_text([rejected(1, "ok", why="gate 8 (x): one\ntwo")])
+
+    assert "Why:\n> gate 8 (x): one\n> two\n" in text
 
 
 def test_the_line_of_an_older_attempt_is_cut() -> None:
@@ -374,7 +380,7 @@ def test_an_approved_attempt_does_not_list_its_gates_in_the_summary(log: EventLo
 
 
 def test_the_summary_cuts_what_the_agent_said_and_the_reason(log: EventLog) -> None:
-    long = "w " * 400
+    long = "w " * 1000
     attempt(log, "t1-a1", said=long, end=S.REJECTED, payload={"reason": long})
 
     line = diary_lines(log.state)[1]

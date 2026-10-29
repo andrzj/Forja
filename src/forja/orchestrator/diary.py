@@ -107,7 +107,6 @@ def _text(value: object) -> str:
 
 
 FULL_ENTRIES = 3  # the latest attempts of a stage that are shown in full
-SAID_CUT = 300
 LINE_CUT = 160
 DIARY_LIMIT = 6000
 
@@ -142,10 +141,18 @@ def cut(text: str, size: int) -> str:
 def _full(entry: Entry) -> str:
     lines = [f"### Attempt `{entry.attempt}`: {_verdict(entry)}"]
     if entry.said:
-        lines.append(f"You said: {cut(entry.said, SAID_CUT)}")
+        lines.append(_quoted("You said", entry.said))
     if entry.detail:
-        lines.append(f"Why: {entry.detail}")
+        lines.append(_quoted("Why", entry.detail))
     return "\n".join(lines) + "\n"
+
+
+def _quoted(label: str, text: str) -> str:
+    """The words as they were. Several lines are quoted, so they cannot pass for structure."""
+    lines = text.strip().splitlines()
+    if len(lines) <= 1:
+        return f"{label}: {text.strip()}"
+    return f"{label}:\n" + "\n".join(f"> {line}" for line in lines)
 
 
 def _line(entry: Entry) -> str:

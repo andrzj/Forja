@@ -433,7 +433,7 @@ _VERDICTS = {
     Outcome.OPEN: "não terminou",
 }
 _DECISIONS = {EXHAUSTED: "etapa esgotada", BLOCKED: "tarefa bloqueada"}
-DIARY_CUT = 300  # the agent's words and the reasons, each, in the summary
+DIARY_CUT = 1500  # the limit of the agent's reason and of a rejection: nothing is cut in practice
 
 
 def diary_lines(state: RunState) -> list[str]:
