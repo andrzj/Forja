@@ -24,13 +24,15 @@ Ordem fixa. O próximo trabalho é sempre o primeiro item não concluído. Cada 
 | 4 | Incremento 5, restante: gate 9 (arquitetura) | `docs\plano-gate-9.md` | **concluído** (27/10): passos 0 a 8; falta só o E2E real, que é do dono |
 | 5 | Incremento 5, restante: gate 11 (teste diferencial); depende do item 3 | `docs\plano-gate-11.md` | **concluído** (28/10): passos 0 a 9; falta só o E2E real, que é do dono |
 | 5A | Diário de bordo: o agente vê o histórico das tentativas, gatilho da hipótese comum a rejeições repetidas, seção no resumo e cópia no ramo (origem: skill `ub-mode`). Depende do item 5 | `docs\plano-diario-de-bordo.md` | **concluído** (29/10): passos 0 a 6; falta só o E2E real, que é do dono. Ordem do dono: depois do item 5 |
-| 6 | Incremento 3, restante: 3e (cache de medições pela chave completa), os 4 sobreviventes de `mutation\executor.py` (zero no gate de 29/10: nada a fazer), calibração dos limiares com dados de revisão (dados do dono) | `docs\plano-medicoes-e-calibracao.md` | **em andamento**: passo 0 feito (29/10); próximo, parte A, passo A1 |
+| 6 | Incremento 3, restante: ~~3e (cache de medições)~~ **suprimido por ordem do dono (29/10), a reavaliar com a Forja em uso**; os 4 sobreviventes de `mutation\executor.py` (zero no gate de 29/10: nada a fazer); calibração dos limiares com dados de revisão (dados do dono) | `docs\plano-medicoes-e-calibracao.md` | **em andamento**: passo 0 feito (29/10); próximo, parte C, passo C1 (`docs\limiares.md`) |
 | 7 | Incremento 7: endurecimento (paralelismo, mutação incremental, modo CI, adaptador genérico, promoção de gates, documentação de uso, inclusive a sugestão de CLIs diferentes entre papéis) | plano a escrever | a fazer |
 | 8 | Fecho: 3f (aceitação e repetição do experimento com duas CLIs reais), execução viva com o Claude Code, E2E real, fixtures e testes `live` | | do dono, por último |
 
 ## Registro de andamento
 
 Mais recente primeiro. Cada linha: data, o que mudou, commits.
+
+- **29/10/2026 (fila alterada por ordem expressa do dono: 3e suprimido):** o dono avaliou que o cache de medições pela chave completa (3e) foi superestimado e mandou suprimi-lo; com a Forja pronta e em uso, os dados dizem se ele é necessário. Fila 6 fica com a parte B (nada a fazer, zero sobreviventes) e a parte C (calibração: C1, `docs\limiares.md`, depois C2 parado até o dono ter relatórios de `forja revisao`). **Divergência com a Especificação, apontada (regra 7):** a linha 663 manda não refazer medição em cache com a chave igual; ficou como está, com nota de adiamento. `cache_key` e `EvidenceCache` seguem em `core`, sem consumidor. Plano da fila 6 emendado. Próximo: fila 6, parte C, passo C1.
 
 - **29/10/2026 (fila 6, passo 0):** leitura e plano, só docs. `docs\plano-medicoes-e-calibracao.md` (partes A, B e C). **Achados:** (1) `EvidenceCache` e `cache_key` existem em `core`, mas nada fora de `core` produz `Evidence` ou `MeasurementContext`; os checks rodam por `Tools.run`, que sempre cria processo, então o 3e é construir a ligação inteira, não completar uma. (2) Os “4 sobreviventes de `mutation\executor.py`” **não existem**: o gate de mutação rodou no arquivo em 29/10 e deu zero sobreviventes (um arquivo de teste o exercita); não achei em nenhum documento de onde veio a contagem. A parte B se reduz a registrar isso. (3) A calibração depende de relatórios de `forja revisao` de execuções reais, que são do dono; a Forja só pode listar os limiares e sua fonte (`docs\limiares.md`, sem mudar valor) e a promoção de gates segue na fila 7. **Dúvida a resolver no A1 lendo o código, não perguntando:** o `judge` mede a worktree antes do commit, então “commit” na chave pode ter de ser o hash do conteúdo medido. Nenhum código alterado. Próximo: fila 6, parte A, passo A1.
 
@@ -128,7 +130,7 @@ eadme.py` (`evaluate`, `chunks`, `signature`, `cited_commands`, `touched_chunks`
 | Inc. | Estado |
 | --- | --- |
 | 0, 1, 2 | concluídos |
-| 3 | 3a, 3b, 3c e 3d concluídos; 3e e 3f pendentes (fila 6 e 8) |
+| 3 | 3a, 3b, 3c e 3d concluídos; 3e suprimido (ordem do dono, 29/10); 3f pendente (fila 8) |
 | 4 | concluído (fila 2) |
 | 5 | adaptadores, E2E (gate 6) e segurança (gate 10) feitos ou em andamento; gates 9 e 11 pendentes (fila 4 e 5) |
 | 6 | concluído (fila 3); falta só o E2E real, do dono |

@@ -660,7 +660,7 @@ Falhas de infraestrutura repetidas numa mesma etapa atingem um limite próprio d
 - Lock por repositório com PID, máquina e horário; lock órfão é detectado e assumido com segurança. Há uma sessão da Forja por repositório: a segunda recebe recusa imediata ou espera com limite, conforme a política.
 - Configuração congelada no arquivo da execução; atualização de CLI dispara nova prova de vida, registrada como evidência.
 - Orçamento consumido persiste entre retomadas.
-- Medições em cache não são refeitas quando a chave completa do contrato 5 coincide.
+- Medições em cache não são refeitas quando a chave completa do contrato 5 coincide. (Adiado por decisão do dono em 29/10/2026: não construído até a Forja em uso mostrar que é necessário.)
 
 ### Prova de resiliência
 
