@@ -418,6 +418,24 @@ async def semgrep_rules(
     return "", NO_RULES
 
 
+def suggest_author(name: str, environ: Mapping[str, str], profile: Perfil) -> str:
+    """A line suggesting another installed CLI for the test author; empty when none is installed.
+
+    Only a suggestion: it names the options that change nothing about the choice already made.
+    """
+    others = [
+        other
+        for other in KNOWN_CLIS
+        if other != name and installed_clis(other, environ, profile.executaveis)
+    ]
+    if not others:
+        return ""
+    return (
+        f"sugestão: {', '.join(others)} também está instalada; um agente de outra CLI nos testes "
+        "dá mais diversidade de autor (`--cli-testes` ou `cli_testes` no execucao.toml)"
+    )
+
+
 def summary_of(
     detection: Detection,
     config: RunConfig,
@@ -426,6 +444,7 @@ def summary_of(
     policy_notes: tuple[str, ...] = (),
     sast: str = "",
     security: tuple[str, ...] = (),
+    suggestion: str = "",
 ) -> tuple[str, ...]:
     where = ", ".join(scope) if scope else "todo o código"
     limit = format(tokens, ",").replace(",", ".")
@@ -462,6 +481,7 @@ def summary_of(
             if config.test_author
             else (f"  agente: {_agent(config.implementer)}",)
         ),
+        *((f"  {suggestion}",) if suggestion else ()),
         "  agente que documenta: o mesmo que implementa, sem comandos, só em documentação",
         *((f"  fatos registrados por você: {len(config.facts)}",) if config.facts else ()),
         f"  onde: {where}",
@@ -581,7 +601,11 @@ async def prepare(
             refactoring=not (creation or question or fixing), declared=bool(policy.differential)
         ),
     )
-    lines = summary_of(detection, config, scope, tokens, notes, sast, security)
+    different_author = bool(author and author[0] != name)
+    suggestion = (
+        suggest_author(name, environ, profile) if writes_tests and not different_author else ""
+    )
+    lines = summary_of(detection, config, scope, tokens, notes, sast, security, suggestion)
     execucao = Execucao(
         objetivo="criar"
         if creation
