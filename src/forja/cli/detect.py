@@ -11,10 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forja.cli.session import git_base_environment, git_executable
-from forja.core.adapters.executor import ExecutorChoice, find_executors, locate_in_path
+from forja.core.adapters.executor import (
+    CommandTemplate,
+    ExecutorChoice,
+    find_executors,
+    locate_in_path,
+)
 from forja.core.adapters.projects import project_directories
 from forja.core.idempotency.git import Git
-from forja.executors import KNOWN_CLIS
+from forja.executors import adapter_for
 from forja.languages.java.gradle import MANIFESTS as GRADLE_MANIFESTS
 
 LOW_DISK_GIB = 2.0
@@ -101,7 +106,8 @@ def installed_clis(
     environ: Mapping[str, str],
     configured: Mapping[str, str],
     explicit: Path | None = None,
+    template: CommandTemplate | None = None,
 ) -> list[ExecutorChoice]:
     """The installations of a CLI the user could mean, in order of precedence."""
-    adapter = KNOWN_CLIS[name]()
+    adapter = adapter_for(name, template)
     return find_executors(adapter, explicit=explicit, environ=environ, user_config=configured)

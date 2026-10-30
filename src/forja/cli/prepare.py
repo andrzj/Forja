@@ -35,14 +35,14 @@ from forja.cli.session import (
     repo_policy,
     standard_settings,
 )
-from forja.cli.settings import Execucao, Perfil
+from forja.cli.settings import Execucao, ModeloCli, Perfil
 from forja.core.adapters import valid_project_name
-from forja.core.adapters.executor import ExecutorChoice
+from forja.core.adapters.executor import CommandTemplate, ExecutorChoice
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.idempotency.git import Git
 from forja.core.policy.config import EffectivePolicy, PolicyConfigError
 from forja.core.redaction import RedactionSettings
-from forja.executors import DEFAULT_CLI, KNOWN_CLIS
+from forja.executors import DEFAULT_CLI, KNOWN_CLIS, adapter_for
 from forja.executors.probe import executable_version, run_probe, version_problem
 from forja.orchestrator.config import CreateRequest, ExecutorRef, FixRequest, RunConfig
 from forja.orchestrator.facts import Fact, FactsError, parse_facts
@@ -255,22 +255,27 @@ def choose_cli(
     console: Console,
     *,
     tests: bool = False,
+    templates: Mapping[str, CommandTemplate] | None = None,
 ) -> tuple[str, ExecutorChoice, bool]:
     """The CLI by name and where it is; whether the choice is worth offering to keep.
 
     ``tests`` asks for the CLI of the test author, which has no default of its own: the caller
-    only asks when ``--cli-testes`` or the saved ``cli_testes`` names one.
+    only asks when ``--cli-testes`` or the saved ``cli_testes`` names one. ``templates`` are the
+    generic CLIs the user described, which are known besides the Forja's own.
     """
+    generic = templates or {}
     if tests:
         name = args.cli_tests or (saved.cli_testes if saved else "")
         path = saved.executavel_testes if saved else ""
     else:
         name = args.cli or (saved.cli if saved else "") or profile.cli or DEFAULT_CLI
         path = saved.executavel if saved else ""
-    if name not in KNOWN_CLIS:
-        raise Refused(f"Não conheço a CLI `{name}`. As que conheço: {', '.join(KNOWN_CLIS)}.")
+    if name not in KNOWN_CLIS and name not in generic:
+        raise Refused(
+            f"Não conheço a CLI `{name}`. As que conheço: {', '.join((*KNOWN_CLIS, *generic))}."
+        )
     explicit = Path(path) if path else None
-    found = installed_clis(name, environ, profile.executaveis, explicit)
+    found = installed_clis(name, environ, profile.executaveis, explicit, generic.get(name))
     if not found:
         raise Refused(
             f"Não encontrei `{name}` instalado. Instale e entre na sua conta antes de usar a "
@@ -298,11 +303,32 @@ def probe_cache(directory: Path) -> Path:
     return directory / "provas.json"
 
 
+def cli_templates(profile: Perfil, saved: Execucao | None) -> dict[str, CommandTemplate]:
+    """The generic CLIs the user described, the execution file's over the profile's.
+
+    A name the Forja already knows is refused: the known adapter reads that CLI's own events and
+    permissions, and a template would silently replace it.
+    """
+    described = {**profile.clis, **(saved.clis if saved else {})}
+    taken = sorted(set(described) & set(KNOWN_CLIS))
+    if taken:
+        raise Refused(
+            f"`clis.{taken[0]}` usa o nome de uma CLI que a Forja já conhece "
+            f"({', '.join(KNOWN_CLIS)}); escolha outro nome."
+        )
+    return {name: model.template() for name, model in described.items()}
+
+
 async def prove(
-    name: str, choice: ExecutorChoice, environ: Mapping[str, str], cache: Path, console: Console
+    name: str,
+    choice: ExecutorChoice,
+    environ: Mapping[str, str],
+    cache: Path,
+    console: Console,
+    template: CommandTemplate | None = None,
 ) -> str:
     """The version of the CLI, after proving it works; remembered per path and version."""
-    adapter = KNOWN_CLIS[name]()
+    adapter = adapter_for(name, template)
     version = await executable_version(adapter, choice.path)
     if problem := version_problem(adapter, version):
         raise Refused(f"{choice.path}: {problem}.")
@@ -559,8 +585,11 @@ async def prepare(
         raise Refused(f"O forja.toml deste repositório tem erros:\n{error}") from None
     if detection.disk_free_gib < LOW_DISK_GIB:
         raise Refused(f"Só há {detection.disk_free_gib:.1f} GiB livres; a Forja pede ao menos 2.")
-    name, choice, offer = choose_cli(args, saved, profile, environ, console)
-    version = await prove(name, choice, environ, probe_cache(profile_dir), console)
+    templates = cli_templates(profile, saved)
+    name, choice, offer = choose_cli(args, saved, profile, environ, console, templates=templates)
+    version = await prove(
+        name, choice, environ, probe_cache(profile_dir), console, templates.get(name)
+    )
     model = args.model or (saved.modelo if saved else "")
     model_tests = args.model_tests or (saved.modelo_testes if saved else "")
     author: tuple[str, ExecutorChoice, str] | None = None
@@ -568,10 +597,15 @@ async def prepare(
     writes_tests = bool(fixing or creation)
     if writes_tests and tests_name and tests_name != name:
         author_name, author_choice, _ = choose_cli(
-            args, saved, profile, environ, console, tests=True
+            args, saved, profile, environ, console, tests=True, templates=templates
         )
         author_version = await prove(
-            author_name, author_choice, environ, probe_cache(profile_dir), console
+            author_name,
+            author_choice,
+            environ,
+            probe_cache(profile_dir),
+            console,
+            templates.get(author_name),
         )
         author = (author_name, author_choice, author_version)
     elif writes_tests and model_tests:  # the same CLI, another model
@@ -589,8 +623,11 @@ async def prepare(
         agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
         policy_version=policy_digest(policy), facts=recorded,
         fix=fixing[0] if fixing else None, question=question, create=creation,
-        test_author=executor_ref(author[0], author[1].path, author[2], model_tests)
+        test_author=executor_ref(
+            author[0], author[1].path, author[2], model_tests, templates.get(author[0])
+        )
         if author else None,
+        executor_template=templates.get(name),
     )  # fmt: skip
     security = (
         *(() if policy.forbidden_licenses else (NO_LICENSES,)),
@@ -630,9 +667,16 @@ async def prepare(
         tarefas=tasks,
         semgrep_config=rules,
         fatos=facts_path,
+        clis=_used_models(profile, saved, name, author[0] if author else ""),
         interface=saved.interface if saved else profile.interface,
     )
     return Prepared(config, execucao, lines, (name, str(choice.path)) if offer else None)
+
+
+def _used_models(profile: Perfil, saved: Execucao | None, *names: str) -> dict[str, ModeloCli]:
+    """The descriptions of the generic CLIs this run uses, so ``--config`` carries them along."""
+    described = {**profile.clis, **(saved.clis if saved else {})}
+    return {name: described[name] for name in dict.fromkeys(names) if name in described}
 
 
 def confirmed(console: Console, prepared: Prepared, *, automatic: bool) -> bool:

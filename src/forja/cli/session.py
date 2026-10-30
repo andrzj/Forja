@@ -17,7 +17,7 @@ from forja.checks.voice_markers import build_markers
 from forja.cli.security_notes import differential_notices, e2e_notices, security_notices
 from forja.cli.semgrep_rules import export_rules
 from forja.core.adapters import AdapterRegistry
-from forja.core.adapters.executor import RolePermissions, locate_in_path
+from forja.core.adapters.executor import CommandTemplate, RolePermissions, locate_in_path
 from forja.core.artifacts.models import Producer
 from forja.core.authorization import ProtectedBranches
 from forja.core.confirmation import Confirmation
@@ -34,7 +34,7 @@ from forja.core.paths import forja_home, locks_dir, run_dir
 from forja.core.policy.config import EffectivePolicy, load_policy
 from forja.core.redaction import Redactor
 from forja.core.states import Level
-from forja.executors import KNOWN_CLIS
+from forja.executors import adapter_for
 from forja.languages import (
     CSharpAdapter,
     GoAdapter,
@@ -188,13 +188,20 @@ class Session:
         self.log.close()
 
 
-def executor_ref(name: str, path: Path, version: str, model: str = "") -> ExecutorRef:
+def executor_ref(
+    name: str,
+    path: Path,
+    version: str,
+    model: str = "",
+    template: CommandTemplate | None = None,
+) -> ExecutorRef:
     return ExecutorRef(
         name=name,
         path=str(path),
         version=version,
         model=model,
-        enforces_permissions=KNOWN_CLIS[name]().enforces_permissions,
+        enforces_permissions=adapter_for(name, template).enforces_permissions,
+        template=template,
     )
 
 
@@ -217,6 +224,7 @@ def new_config(
     facts: tuple[Fact, ...] = (),
     question: str = "",
     create: CreateRequest | None = None,
+    executor_template: CommandTemplate | None = None,
 ) -> RunConfig:
     from forja.orchestrator.config import Budget  # noqa: PLC0415
 
@@ -235,7 +243,9 @@ def new_config(
         fix=fix,
         create=create,
         question=question,
-        implementer=executor_ref(executor_name, executor_path, executor_version, executor_model),
+        implementer=executor_ref(
+            executor_name, executor_path, executor_version, executor_model, executor_template
+        ),
         test_author=test_author,
         budget=Budget(tokens=tokens, tasks=tasks),
         forja_version=FORJA_VERSION,
@@ -389,7 +399,7 @@ async def _context(
 
     def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
         return ExecutorAgentRunner(
-            KNOWN_CLIS[executor.name](),
+            adapter_for(executor.name, executor.template),
             Path(executor.path),
             {**env, "FORJA_AGENT_PYTHON": repo_python(repo)[0]},
             log,

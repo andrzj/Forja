@@ -6,6 +6,7 @@ live in their profile, never in the repository.
 """
 
 import os
+import re
 import sys
 import tomllib
 from collections.abc import Mapping
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from forja.core.adapters.executor import CommandTemplate
 
 DEFAULT_TOKENS = 2_000_000
 Mode = Literal["auto", "completa", "linha", "texto"]
@@ -29,6 +32,27 @@ class Interface(BaseModel):
     tema: str = ""  # empty: follow the background of the terminal
     ascii: bool = False
     redimensionar: bool = True
+
+
+class ModeloCli(BaseModel):
+    """``[clis.<nome>]``: a CLI the Forja does not know, described by a command template."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comando: list[str] = Field(min_length=1)  # {executable}, {package}, {cwd} and {role}
+    pacote_por_stdin: bool = False  # the package is piped instead of named by {package}
+    executaveis: list[str] = Field(default_factory=list)  # empty: the name of the CLI
+    versao: list[str] = Field(default_factory=lambda: ["--version"])
+    ambiente: list[str] = Field(default_factory=list)  # environment variables the CLI may see
+
+    def template(self) -> CommandTemplate:
+        return CommandTemplate(
+            argv=tuple(self.comando),
+            via_stdin=self.pacote_por_stdin,
+            executables=tuple(self.executaveis),
+            version_args=tuple(self.versao),
+            env_allow=tuple(self.ambiente),
+        )
 
 
 class Execucao(BaseModel):
@@ -55,6 +79,7 @@ class Execucao(BaseModel):
     linguagem: str = ""  # criar: the language of the new project
     nome: str = ""  # criar: its name (lower-case words joined by hyphens)
     fatos: str = ""  # the facts file the person keeps (see ``orchestrator.facts``); empty: none
+    clis: dict[str, ModeloCli] = Field(default_factory=dict)  # the generic CLIs this run uses
     interface: Interface = Field(default_factory=Interface)
 
 
@@ -65,6 +90,7 @@ class Perfil(BaseModel):
 
     cli: str = ""
     executaveis: dict[str, str] = Field(default_factory=dict)
+    clis: dict[str, ModeloCli] = Field(default_factory=dict)
     interface: Interface = Field(default_factory=Interface)
 
 
@@ -124,15 +150,25 @@ def _value(value: object) -> str:
     return f'"{text}"'
 
 
+def _key(name: str) -> str:
+    return name if re.fullmatch(r"[A-Za-z0-9_-]+", name) else _value(name)
+
+
 def dumps(data: Mapping[str, object]) -> str:
-    """TOML for the flat values and one level of tables these files hold."""
+    """TOML for the flat values, one level of tables and tables of tables these files hold."""
     lines = [
         f"{key} = {_value(value)}" for key, value in data.items() if not isinstance(value, dict)
     ]
     for key, value in data.items():
-        if isinstance(value, dict):
-            lines += ["", f"[{key}]"]
-            lines += [f"{name} = {_value(item)}" for name, item in value.items()]
+        if not isinstance(value, dict):
+            continue
+        if value and all(isinstance(item, dict) for item in value.values()):
+            for name, table in value.items():
+                lines += ["", f"[{key}.{_key(name)}]"]
+                lines += [f"{field} = {_value(item)}" for field, item in table.items()]
+            continue
+        lines += ["", f"[{key}]"]
+        lines += [f"{name} = {_value(item)}" for name, item in value.items()]
     return "\n".join(lines) + "\n"
 
 

@@ -19,7 +19,7 @@ from forja.cli.semgrep_rules import RULE_DIR, RULE_FILE
 from forja.cli.session import repo_python
 from forja.cli.settings import Perfil
 from forja.core.adapters.executor import locate_in_path
-from forja.executors import DEFAULT_CLI, KNOWN_CLIS
+from forja.executors import DEFAULT_CLI, KNOWN_CLIS, adapter_for
 from forja.executors.probe import executable_version, version_problem
 
 SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
@@ -237,9 +237,15 @@ async def _agent_check(
     name: str, profile: Perfil, environ: Mapping[str, str], console: Console, cache: Path
 ) -> Check:
     label = f"CLI {name}"
-    if name not in KNOWN_CLIS:
-        return Check(label, False, "CLI desconhecida", f"conheço: {', '.join(KNOWN_CLIS)}")
-    found = installed_clis(name, environ, profile.executaveis)
+    template = profile.clis[name].template() if name in profile.clis else None
+    if name not in KNOWN_CLIS and template is None:
+        return Check(
+            label,
+            False,
+            "CLI desconhecida",
+            f"conheço: {', '.join((*KNOWN_CLIS, *profile.clis))}",
+        )
+    found = installed_clis(name, environ, profile.executaveis, template=template)
     if not found:
         return Check(
             label,
@@ -247,12 +253,12 @@ async def _agent_check(
             "não encontrada no PATH",
             "instale a CLI e entre na sua conta antes; a Forja não faz isso por você",
         )
-    adapter = KNOWN_CLIS[name]()
+    adapter = adapter_for(name, template)
     version = await executable_version(adapter, found[0].path)
     if problem := version_problem(adapter, version):
         return Check(label, False, problem, "atualize a CLI")
     try:
-        await prove(name, found[0], environ, cache, console)
+        await prove(name, found[0], environ, cache, console, template)
     except Refused as refused:
         return Check(label, False, refused.message, "corrija a CLI e rode `forja doctor`")
     return Check(label, True, f"{found[0].path} ({version}) responde a uma tarefa de teste")

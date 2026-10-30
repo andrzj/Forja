@@ -18,6 +18,7 @@ from pydantic import (
 )
 
 from forja.core.adapters import valid_project_name
+from forja.core.adapters.executor import CommandTemplate
 from forja.core.artifacts.models import NonEmpty
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import Confirmation, ConfirmationError, confirmation_payload
@@ -44,6 +45,8 @@ class ExecutorRef(BaseModel):
     model: str = ""  # empty: the model the user configured in the CLI
     # whether the CLI itself holds the role to its permissions; None: not recorded (older run)
     enforces_permissions: bool | None = None
+    # how to call a CLI the Forja does not know; None: one of the known CLIs, found by name
+    template: CommandTemplate | None = None
 
 
 class FixRequest(BaseModel):

@@ -368,6 +368,49 @@ class TemplateExecutorAdapter:
         return TextActivity(line) if line.strip() else None
 
 
+GENERIC_ENVIRONMENT = frozenset(
+    {
+        "APPDATA", "LOCALAPPDATA", "COMSPEC", "PATHEXT",
+        "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE",
+    }
+)  # fmt: skip
+
+GENERIC_PROBE = ProbeTask(
+    prompt="Create a file named probe.txt here, containing exactly: forja-ok",
+    expected_file="probe.txt",
+    expected_content="forja-ok",
+    expected_event_kinds=frozenset(),  # a CLI described by a template may print nothing readable
+)
+
+
+@dataclass(frozen=True)
+class CommandTemplate:
+    """What a user declares about a CLI the Forja does not know: how to call it and where it is.
+
+    ``argv`` takes the placeholders of ``TemplateExecutorAdapter``. ``env_allow`` adds to the
+    variables every generic CLI gets (proxy, certificates and what a Windows process needs).
+    """
+
+    argv: tuple[str, ...]
+    via_stdin: bool = False
+    executables: tuple[str, ...] = ()  # empty: the name of the CLI
+    version_args: tuple[str, ...] = ("--version",)
+    env_allow: tuple[str, ...] = ()
+
+
+def template_adapter(name: str, template: CommandTemplate) -> TemplateExecutorAdapter:
+    return TemplateExecutorAdapter(
+        name=name,
+        discovery=DiscoverySpec(
+            executable_names=template.executables or (name,), version_args=template.version_args
+        ),
+        argv_template=template.argv,
+        probe=GENERIC_PROBE,
+        env_allow=GENERIC_ENVIRONMENT | frozenset(template.env_allow),
+        package_via_stdin=template.via_stdin,
+    )
+
+
 def locate_in_path(name: str, path: str | None = None) -> Path | None:
     """First executable called ``name`` on the PATH, as the platform would find it."""
     raw = os.environ.get("PATH", "") if path is None else path
