@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Mapping
 from pathlib import Path
 
 from forja.cli.args import Arguments, parse
+from forja.cli.awake import keep_awake
 from forja.cli.console import Console, TerminalConsole, Unattended, choose, confirm
 from forja.cli.detect import Detection, detect
 from forja.cli.doctor import doctor
@@ -96,7 +97,8 @@ def _finish(session: Session, ended: Ended, console: Console) -> int:
 async def _run(session: Session, renderer: Renderer, console: Console) -> int:
     keys = renderer.keys_source if isinstance(renderer, FullRenderer) else terminal_keys()
     try:
-        ended = await execute(session, renderer, keys)
+        with keep_awake():
+            ended = await execute(session, renderer, keys)
     except ForcedExit:
         if isinstance(renderer, FullRenderer):
             renderer.abort()
