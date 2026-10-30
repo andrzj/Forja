@@ -45,7 +45,7 @@ from forja.mutation.executor import (
     TestVerdict,
     run_mutants,
 )
-from forja.mutation.sites import discover
+from forja.mutation.sites import discover, function_spans
 
 DEFAULT_MIN_SCORE = 0.80
 LOWER_MIN_SCORE = 0.70  # Python and Go are slower and more fragile (Especificação)
@@ -95,19 +95,34 @@ def changed_lines(changes: Changes, files: tuple[str, ...]) -> dict[str, frozens
     return {path: frozenset(numbers) for path, numbers in found.items()}
 
 
+def touched_functions(source: str, path: str, wanted: frozenset[int]) -> frozenset[str]:
+    """The names of the functions that hold a line of ``wanted``: their text changed."""
+    return frozenset(
+        name
+        for name, first, last in function_spans(source, path)
+        if any(first <= number <= last for number in wanted)
+    )
+
+
 def build_mutants(
-    worktree: Path, lines: Mapping[str, frozenset[int]], coverage: CoverageReport
+    worktree: Path,
+    lines: Mapping[str, frozenset[int]],
+    coverage: CoverageReport,
+    whole_functions: bool = True,
 ) -> list[Mutant]:
-    """One mutant per place on a changed line where the rules allow a change."""
+    """One mutant per place on a changed line where the rules allow a change. With
+    ``whole_functions`` (the default, as in the mutator's differential run) also one per place
+    anywhere in a function that holds a changed line."""
     mutants: list[Mutant] = []
     for path, wanted in sorted(lines.items()):
         try:
             source = (worktree / path).read_text(encoding="utf-8")
             sites = discover(source, path)
+            touched = touched_functions(source, path, wanted) if whole_functions else frozenset()
         except (OSError, SyntaxError, ValueError):
             continue  # a file that does not compile is the build gate's finding, not this one's
         for site in sites:
-            if site.line not in wanted:
+            if site.line not in wanted and site.function not in touched:
                 continue
             mutated = apply_site(source, site).encode("utf-8")
             covered = coverage.is_covered(path, site.line)
@@ -207,7 +222,9 @@ class MutationCheck:
             return Approved()
         coverage = await run_coverage(self.tools, self.adapter, self.worktree, data, self.share)
         mutants = build_mutants(self.worktree, lines, coverage)
-        untested = untested_lines(lines, mutants, coverage)
+        # a line the attempt did not write is not its to cover: its mutant is only not run
+        written = [m for m in mutants if m.line in lines.get(m.file, frozenset())]
+        untested = untested_lines(lines, written, coverage)
         if untested:
             return self._unprotected(untested)
         if not mutants:

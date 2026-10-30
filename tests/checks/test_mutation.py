@@ -49,7 +49,7 @@ def test_only_the_lines_a_file_gained_are_mutated(tmp_path: Path) -> None:
     (tmp_path / "m.py").write_text("def f(a, b):\n    x = a + b\n    return a - b\n")
     coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset({2, 3}), tests={})})
 
-    mutants = build_mutants(tmp_path, {"m.py": frozenset({3})}, coverage)
+    mutants = build_mutants(tmp_path, {"m.py": frozenset({3})}, coverage, whole_functions=False)
 
     assert [(m.line, m.change) for m in mutants] == [(3, "- -> +")]
     assert mutants[0].covered
@@ -166,3 +166,50 @@ def test_a_language_gets_only_its_own_files_and_script_languages_share_rules() -
     assert of_language("typescript", files) == ("e.ts", "f.js", "g.tsx")
     assert of_language("javascript", files) == ("e.ts", "f.js", "g.tsx")
     assert of_language("rust", files) == ()
+
+
+SHAPES = "def f(a, b):\n    x = a + b\n    return a - b\n\n\ndef g(a, b):\n    return a * b\n"
+
+
+def test_a_function_that_holds_a_changed_line_is_mutated_whole_and_the_others_are_not(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "m.py").write_text(SHAPES)
+    coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset(range(1, 8)), tests={})})
+
+    mutants = build_mutants(tmp_path, {"m.py": frozenset({3})}, coverage)
+
+    assert [(m.line, m.change) for m in mutants] == [(2, "+ -> -"), (3, "- -> +")]
+
+
+def test_a_changed_line_with_no_site_still_marks_its_function_as_changed(tmp_path: Path) -> None:
+    (tmp_path / "m.py").write_text(SHAPES)
+    coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset(range(1, 8)), tests={})})
+
+    mutants = build_mutants(tmp_path, {"m.py": frozenset({1})}, coverage)
+
+    assert [m.line for m in mutants] == [2, 3]
+
+
+def test_a_method_and_the_function_in_it_are_changed_together(tmp_path: Path) -> None:
+    source = (
+        "class C:\n    def outer(self, a):\n        def inner(b):\n            return b + 1\n"
+        "        return a - 1\n\n    def other(self, a):\n        return a + 1\n"
+    )
+    (tmp_path / "m.py").write_text(source)
+    coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset(range(1, 9)), tests={})})
+
+    mutants = build_mutants(tmp_path, {"m.py": frozenset({4})}, coverage)
+
+    assert sorted({m.line for m in mutants}) == [4, 5]  # not the line 8 of the other method
+
+
+def test_without_whole_functions_the_neighbours_of_a_changed_line_are_left_alone(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "m.py").write_text(SHAPES)
+    coverage = CoverageReport({"m.py": FileCoverage(covered=frozenset(range(1, 8)), tests={})})
+
+    mutants = build_mutants(tmp_path, {"m.py": frozenset({3})}, coverage, whole_functions=False)
+
+    assert [m.line for m in mutants] == [3]

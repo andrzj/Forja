@@ -175,6 +175,17 @@ def _owner(node: Node, functions: frozenset[str]) -> str | None:
     return ".".join(reversed(names)) if inside else None
 
 
+def _qualified(node: Node, functions: frozenset[str]) -> str:
+    """The qualified name of a function node: the classes and functions around it, then itself."""
+    names = []
+    current: Node | None = node
+    while current is not None:
+        if current.type in functions or current.type in CLASSES:
+            names.append(_name(current))
+        current = current.parent
+    return ".".join(reversed(names))
+
+
 @cache
 def _parser(dialect: Dialect) -> Parser:
     parser = Parser()
@@ -219,3 +230,29 @@ def discover(source: str, path: str) -> list[Site]:
             )
         )
     return sorted(found, key=lambda site: (site.line, site.start, site.end))
+
+
+def function_spans(source: str, path: str) -> list[tuple[str, int, int]]:
+    """Every function of ``source`` as ``(qualified name, first line, last line)``, in file order.
+
+    The name is the one ``Site.function`` carries, so a site belongs to the functions of its name.
+    Same errors as ``discover``.
+    """
+    dialect = dialect_of(path)
+    if dialect is None:
+        raise ValueError(f"no mutation rules for {path}")
+    tree = _parser(dialect).parse(source.encode("utf-8"))
+    if tree.root_node.has_error:
+        raise SyntaxError(f"{path} does not parse")
+    language = "typescript" if dialect.language == "javascript" else dialect.language
+    functions = FUNCTIONS[language]
+    found: list[tuple[str, int, int]] = []
+    pending = [tree.root_node]
+    while pending:
+        node = pending.pop()
+        if node.type in functions:
+            found.append(
+                (_qualified(node, functions), node.start_point[0] + 1, node.end_point[0] + 1)
+            )
+        pending.extend(node.children)
+    return sorted(found, key=lambda span: (span[1], span[2]))
