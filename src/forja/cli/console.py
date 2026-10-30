@@ -36,6 +36,24 @@ class TerminalConsole:
         return answer or default
 
 
+class Unattended:
+    """A console that never asks: what is said reaches ``inner``, every question gets its default.
+
+    ``--config`` runs on it, even on a terminal, so a CI run and the same file typed by hand agree.
+    """
+
+    interactive = False
+
+    def __init__(self, inner: Console) -> None:
+        self._inner = inner
+
+    def say(self, text: str = "") -> None:
+        self._inner.say(text)
+
+    def ask(self, question: str, *, default: str = "") -> str:
+        return default
+
+
 def choose(console: Console, question: str, options: Sequence[str], *, default: int = 1) -> int:
     """Ask for one of the options by number; the index (from 0) of the chosen one."""
     console.say(question)

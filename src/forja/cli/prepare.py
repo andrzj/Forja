@@ -74,6 +74,11 @@ def objective_of(args: Arguments, saved: Execucao | None, console: Console) -> s
     """The verb asked for, or the answer to the menu; only what exists can be run."""
     verb = args.command if args.command in VERBS else (saved.objetivo if saved else "")
     if not verb:
+        if not console.interactive:
+            raise Refused(
+                "Diga o que fazer: `objetivo` no execucao.toml "
+                f"({', '.join(sorted(AVAILABLE))}) ou o verbo na linha de comando."
+            )
         names = list(VERBS)
         options = [
             f"{name}: {VERBS[name]}" + ("" if name in AVAILABLE else "  [ainda não disponível]")
@@ -274,6 +279,14 @@ def choose_cli(
     if len(found) == 1:
         return name, found[0], False
     options = [f"{item.path} ({item.source.value})" for item in found]
+    if not console.interactive:
+        raise Refused(
+            f"Encontrei {len(found)} instalações de {name} e não há quem escolha: "
+            "dê o caminho em `executavel"
+            + ("_testes" if tests else "")
+            + "` no execucao.toml:\n"
+            + "\n".join(f"  {option}" for option in options)
+        )
     return (
         name,
         found[choose(console, f"Encontrei {len(found)} instalações de {name}:", options)],

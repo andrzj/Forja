@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Mapping
 from pathlib import Path
 
 from forja.cli.args import Arguments, parse
-from forja.cli.console import Console, TerminalConsole, choose, confirm
+from forja.cli.console import Console, TerminalConsole, Unattended, choose, confirm
 from forja.cli.detect import Detection, detect
 from forja.cli.doctor import doctor
 from forja.cli.facade import run_facade
@@ -137,6 +137,8 @@ async def start(
     profile = load_perfil(home)
     saved = load_execucao(args.config) if args.config else None
     automatic = args.config is not None or not console.interactive
+    if automatic:
+        console = Unattended(console)
     if detection.repo is not None and not args.plan_only:
         pending = find_unfinished(forja_home(environ=environ), detection.repo)
         if pending:
