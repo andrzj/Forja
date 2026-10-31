@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from forja.core.adapters.common import CommandPlan
 from forja.core.artifacts.models import Producer
@@ -115,6 +115,17 @@ class PermissionSetup:
             parts = name.replace("\\", "/").split("/")
             if not name or name.startswith(("/", "\\")) or ".." in parts or ":" in name:
                 raise ValueError(f"permission file {name!r} must stay inside {AGENT_DIR}")
+
+
+@runtime_checkable
+class InstructionChannel(Protocol):
+    """An adapter whose CLI takes standing instructions outside the package and the diff.
+
+    The Forja asks for it only to repeat text it already put in the package (the voice), so a CLI
+    without it loses nothing but the repetition.
+    """
+
+    def instruction_setup(self, text: str) -> PermissionSetup: ...
 
 
 # -- finding the CLI ---------------------------------------------------------------------------

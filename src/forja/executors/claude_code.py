@@ -34,6 +34,7 @@ from forja.core.artifacts.models import Producer
 
 NAME = "claude-code"
 SETTINGS_FILE = "claude-settings.json"
+INSTRUCTIONS_FILE = "instructions.md"
 # Hooks of the user's profile would otherwise run inside every agent call and add their output to
 # what the agent reads.
 # Best effort, and the CLI's own rules: the file tools may not reach above the working copy. The
@@ -45,7 +46,7 @@ OUTSIDE = tuple(f"{tool}(../**)" for tool in ("Read", "Edit", "Write"))
 OWN = tuple(
     f"{tool}(./{AGENT_DIR}/{name})"
     for tool in ("Edit", "Write")
-    for name in (SETTINGS_FILE, "package.md")
+    for name in (SETTINGS_FILE, INSTRUCTIONS_FILE, "package.md")
 )
 SETTINGS = {"disableAllHooks": True, "permissions": {"deny": list(OWN)}}
 
@@ -135,6 +136,14 @@ class ClaudeCodeAdapter:
         return PermissionSetup(
             {SETTINGS_FILE: json.dumps(SETTINGS).encode("utf-8")},
             ("--tools", ",".join(tools), "--allowedTools", ",".join(allowed)),
+        )
+
+    def instruction_setup(self, text: str) -> PermissionSetup:
+        """The text goes after the default system prompt, which keeps the CLI's own tool and
+        safety guidance; ``--system-prompt`` would replace it."""
+        return PermissionSetup(
+            {INSTRUCTIONS_FILE: text.encode("utf-8")},
+            ("--append-system-prompt-file", f"{AGENT_DIR}/{INSTRUCTIONS_FILE}"),
         )
 
     def plan_invocation(

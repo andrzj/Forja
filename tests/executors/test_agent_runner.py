@@ -579,6 +579,40 @@ def test_the_adapter_also_denies_the_agent_its_own_package_and_settings() -> Non
 
     assert f"Edit(./.forja-agent/{PACKAGE})" in deny
     assert "Write(./.forja-agent/claude-settings.json)" in deny
+    assert "Edit(./.forja-agent/instructions.md)" in deny
+
+
+def test_the_voice_also_goes_to_the_cli_as_a_file_the_system_prompt_is_extended_with(
+    tmp_path: Path,
+) -> None:
+    r = rig(tmp_path, GOOD, voice="Write plainly.")
+
+    go(work(r))
+
+    assert (r.workcopy / ".forja-agent" / "instructions.md").read_text("utf-8") == "Write plainly."
+    argv = r.recorded["argv"]
+    assert argv[argv.index("--append-system-prompt-file") + 1] == ".forja-agent/instructions.md"
+    assert "--system-prompt" not in argv
+
+
+def test_without_a_voice_the_cli_gets_no_instruction_file(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+
+    go(work(r))
+
+    assert not (r.workcopy / ".forja-agent" / "instructions.md").exists()
+    assert "--append-system-prompt-file" not in r.recorded["argv"]
+
+
+def test_an_agent_that_rewrites_the_voice_instruction_has_its_work_rejected(
+    tmp_path: Path,
+) -> None:
+    r = rig(tmp_path, GOOD, voice="Write plainly.")
+    go(work(r))
+    (r.workcopy / ".forja-agent" / "instructions.md").write_text("Write anything.", "utf-8")
+
+    with pytest.raises(RejectedWork, match="changed its own permissions"):
+        go(settle(r.runner.apply_diff(r.ctx)))
 
 
 def kept(*paths: str) -> dict[str, ManifestEntry]:

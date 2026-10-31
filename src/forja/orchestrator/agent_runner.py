@@ -29,6 +29,8 @@ from forja.core.adapters.executor import (
     ExecutorAdapter,
     FileEditActivity,
     FileReadActivity,
+    InstructionChannel,
+    PermissionSetup,
     RolePermissions,
     TextActivity,
     UsageActivity,
@@ -499,11 +501,21 @@ class ExecutorAgentRunner:
                 voice=self._voice,
             )
             (agent_dir / PACKAGE).write_text(package, encoding="utf-8", newline="\n")
-            setup = self._adapter.permission_setup(self._role, self._permissions)
+            setup = self._setup()
             for name, data in setup.files.items():
                 (agent_dir / name).write_bytes(data)
 
         return Step(payload, run)
+
+    def _setup(self) -> PermissionSetup:
+        """The role's permissions and, where the CLI has a channel for it, the voice instruction."""
+        setup = self._adapter.permission_setup(self._role, self._permissions)
+        if not self._voice or not isinstance(self._adapter, InstructionChannel):
+            return setup
+        channel = self._adapter.instruction_setup(self._voice)
+        return PermissionSetup(
+            {**setup.files, **channel.files}, (*setup.extra_args, *channel.extra_args)
+        )
 
     # -- the call ---------------------------------------------------------------------------------
 
@@ -512,7 +524,7 @@ class ExecutorAgentRunner:
         request = AgentRequest(
             self._role, workcopy / AGENT_DIR / PACKAGE, workcopy, self._permissions, self._model
         )
-        setup = self._adapter.permission_setup(self._role, self._permissions)
+        setup = self._setup()
         plan = self._adapter.plan_invocation(request, setup, self._executable)
         # git must fail in the copy even if a repository lies above it (contract 3)
         blocking = git_blocking_environment(workcopy)
@@ -673,7 +685,7 @@ class ExecutorAgentRunner:
 
     def _refuse_tampering(self, source: Path) -> None:
         """The agent writes in its own directory; its permissions are not for it to change."""
-        setup = self._adapter.permission_setup(self._role, self._permissions)
+        setup = self._setup()
         for name, data in setup.files.items():
             kept = source / AGENT_DIR / name
             if not kept.is_file() or kept.read_bytes() != data:

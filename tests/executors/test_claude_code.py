@@ -263,3 +263,21 @@ def test_only_the_tools_the_forja_knows_are_shown_and_only_with_what_they_need()
     assert _tool("Bash", {}) is None
     assert _tool("Bash", {"command": 5}) is None
     assert _tool("Bash", {"command": "ls"}) == CommandActivity("ls")
+
+
+def test_the_instruction_file_extends_the_system_prompt_and_does_not_replace_it() -> None:
+    setup = adapter.instruction_setup("Write plainly.")
+
+    assert setup.files == {"instructions.md": b"Write plainly."}
+    assert setup.extra_args == ("--append-system-prompt-file", f"{AGENT_DIR}/instructions.md")
+
+
+def test_the_agent_may_not_edit_the_instruction_file() -> None:
+    deny = json.loads(
+        adapter.permission_setup(Producer.IMPLEMENTER, RolePermissions(True)).files[
+            "claude-settings.json"
+        ]
+    )["permissions"]["deny"]
+
+    assert f"Edit(./{AGENT_DIR}/instructions.md)" in deny
+    assert f"Write(./{AGENT_DIR}/instructions.md)" in deny
