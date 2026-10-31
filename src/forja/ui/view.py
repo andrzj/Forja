@@ -246,7 +246,7 @@ class ViewModel:
         elif kind == "session_started":
             self.message = ""
 
-    def _activity(self, clock: str, payload: Mapping[str, object], foreign: bool = False) -> None:
+    def _activity(self, clock: str, payload: Mapping[str, object], foreign: bool) -> None:
         """The tokens are the run's, whoever spent them; the feed is the task on the screen's."""
         kind = payload.get("type")
         if kind == "usage":

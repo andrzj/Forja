@@ -9,8 +9,10 @@ import pytest
 from forja.core.events import EventLog
 from forja.core.states import ExecutionState, Level, TaskState
 from forja.orchestrator.config import RunConfig
+from forja.orchestrator.phases import Orchestrator
 from forja.orchestrator.planner import PlannedTask
 from forja.orchestrator.ports import AttemptContext
+from forja.orchestrator.task_cycle import TaskCycle
 from tests.orchestrator.fakes import AgentResult, ScriptedAgent, ScriptedPlanner
 from tests.orchestrator.harness import MemoryWorld
 
@@ -167,3 +169,20 @@ def test_the_agents_own_branch_and_worktree_and_everything_outside_the_run_stay_
         ("hooks_changed", "hooks"),
     ):
         assert not ignore(difference(kind, subject)), (kind, subject)  # type: ignore[operator]
+
+
+def test_the_limit_of_one_never_enters_the_scheduler_of_tasks_together(
+    world: MemoryWorld, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered: list[int] = []
+    original = Orchestrator._execute_together
+
+    async def spy(self: Orchestrator, cycle: TaskCycle, limit: int) -> None:
+        entered.append(limit)
+        await original(self, cycle, limit)
+
+    monkeypatch.setattr(Orchestrator, "_execute_together", spy)
+    together(world, APART, Watched(), 1)
+    assert entered == []
+    together(MemoryWorld(tmp_path / "two"), APART, Watched(), 2)
+    assert entered == [2]

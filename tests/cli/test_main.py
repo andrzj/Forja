@@ -13,7 +13,7 @@ from forja.cli import main as door
 from forja.cli import prepare as preparation
 from forja.cli.args import parse
 from forja.cli.detect import detect
-from forja.cli.settings import Execucao, Perfil, load_perfil, save_perfil
+from forja.cli.settings import Execucao, ModeloCli, Perfil, load_perfil, save_perfil
 from forja.core.states import ExecutionState
 from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
 from tests.cli.test_resume import make_run
@@ -559,3 +559,77 @@ def test_a_saved_investigation_is_read_back_from_execucao() -> None:
 def test_documenting_is_an_investigation_and_has_no_verb_of_its_own() -> None:
     with pytest.raises(SystemExit):
         parse(["documentar"])
+
+
+def capture_prepared(monkeypatch: pytest.MonkeyPatch) -> list[preparation.Prepared]:
+    seen: list[preparation.Prepared] = []
+
+    async def wrapped(*args: object, **kwargs: object) -> preparation.Prepared:
+        prepared = await preparation.prepare(*args, **kwargs)  # type: ignore[arg-type]
+        seen.append(prepared)
+        return prepared
+
+    monkeypatch.setattr(door, "prepare", wrapped)
+    return seen
+
+
+def install_clis(environ: dict[str, str], *names: str, **generic: ModeloCli) -> None:
+    home = Path(environ["FORJA_CONFIG_HOME"])
+    agent = next(iter(load_perfil(home).executaveis.values()))
+    save_perfil(
+        home,
+        Perfil(
+            cli="claude-code", executaveis={n: agent for n in ("claude-code", *names)}, clis=generic
+        ),
+    )
+
+
+def test_a_generic_cli_as_test_author_is_remembered_for_a_resumed_run(
+    repo: Path, tmp_path: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_clis(environ, "meu", meu=ModeloCli(comando=["{executable}", "{package}"]))
+    seen = capture_prepared(monkeypatch)
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--cli-testes", "meu", "--plano"]
+    assert go(argv, Talk(), environ) == 0
+    prepared = seen[0]
+    assert prepared.config.test_author is not None
+    assert prepared.config.test_author.template is not None
+    assert prepared.execucao.cli_testes == "meu"
+    assert set(prepared.execucao.clis) == {"meu"}
+
+
+def test_another_cli_is_suggested_only_when_the_test_author_is_the_implementers(
+    repo: Path, tmp_path: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(KNOWN_CLIS, "outra-cli", ClaudeCodeAdapter)
+    install_clis(environ, "outra-cli")
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    base = ["corrigir", "x", "--criterios", str(criteria), "--plano"]
+
+    alone = Talk()
+    assert go(base, alone, environ) == 0
+    assert "sugestão:" in alone.text
+
+    other = Talk()
+    assert go([*base, "--cli-testes", "outra-cli"], other, environ) == 0
+    assert "sugestão:" not in other.text
+
+    refactoring = Talk()
+    assert go(["refatorar", "--plano"], refactoring, environ) == 0
+    assert "sugestão:" not in refactoring.text
+
+
+def test_another_cli_is_suggested_when_only_the_model_of_the_tests_differs(
+    repo: Path, tmp_path: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(KNOWN_CLIS, "outra-cli", ClaudeCodeAdapter)
+    install_clis(environ, "outra-cli")
+    criteria = tmp_path / "c.json"
+    criteria.write_text(CRITERIA, encoding="utf-8")
+    talk = Talk()
+    argv = ["corrigir", "x", "--criterios", str(criteria), "--modelo-testes", "m2", "--plano"]
+    assert go(argv, talk, environ) == 0
+    assert "sugestão:" in talk.text

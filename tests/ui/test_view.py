@@ -342,3 +342,45 @@ def test_the_feed_shows_the_task_on_the_screen_and_the_tokens_count_both() -> No
 
     assert [line.text for line in snapshot.feed] == ["from t1-a1"]
     assert snapshot.tokens_used == 30
+
+
+def test_with_one_task_in_progress_the_number_is_the_count_done_plus_one() -> None:
+    view = model()
+    for task in ("t1", "t2", "t3"):
+        view.apply(transition(Level.TASK, task, TaskState.PENDING, payload={"intent": task}))
+    assert view.snapshot().number == 1
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+    view.apply(transition(Level.TASK, "t3", TaskState.IN_PROGRESS))
+
+    assert (view.snapshot().task_id, view.snapshot().number) == ("t3", 2)
+
+
+def test_with_two_tasks_in_progress_the_number_is_the_place_of_the_task_on_the_screen() -> None:
+    view = two_running()
+
+    assert (view.snapshot().task_id, view.snapshot().number) == ("t1", 1)
+
+
+def test_the_screen_that_moves_to_another_task_starts_at_attempt_zero() -> None:
+    view = two_running()
+    view.apply(transition(Level.ATTEMPT, "t1-a1", AttemptState.CREATED))
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+
+    snapshot = view.snapshot()
+
+    assert (snapshot.task_id, snapshot.attempt) == ("t2", 0)
+
+
+def test_a_view_with_no_tasks_speaks_of_the_first() -> None:
+    assert model().snapshot().number == 1
+
+
+def test_the_number_counts_the_place_of_the_task_followed_among_all_the_tasks() -> None:
+    view = model()
+    for task in ("t1", "t2", "t3", "t4"):
+        view.apply(transition(Level.TASK, task, TaskState.PENDING, payload={"intent": task}))
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+    view.apply(transition(Level.TASK, "t3", TaskState.IN_PROGRESS))
+    view.apply(transition(Level.TASK, "t4", TaskState.IN_PROGRESS))
+
+    assert (view.snapshot().task_id, view.snapshot().number) == ("t3", 3)

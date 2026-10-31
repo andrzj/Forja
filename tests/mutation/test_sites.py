@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from forja.mutation import Site, apply_site, discover
+from forja.mutation.sites import function_spans
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "forja"
 
@@ -240,3 +241,23 @@ def test_csharp_follows_the_java_set() -> None:
 def test_a_file_of_a_language_without_rules_is_refused() -> None:
     with pytest.raises(ValueError, match="no mutation rules"):
         discover("x", "notes.txt")
+
+
+def test_the_spans_of_the_functions_are_their_exact_lines_in_file_order() -> None:
+    source = (
+        "def zeta():\n"
+        "    return 1\n"
+        "\n"
+        "class K:\n"
+        "    def beta(self):\n"
+        "        def inner():\n"
+        "            return 2\n"
+        "        return inner\n"
+        "\n"
+        "def alpha():\n"
+        "    return 3\n"
+    )
+    spans = function_spans(source, "m.py")
+    assert [(first, last) for _, first, last in spans] == [(1, 2), (5, 8), (6, 7), (10, 11)]
+    assert spans[0][0] == "zeta"
+    assert spans[-1][0] == "alpha"
