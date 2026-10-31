@@ -80,6 +80,29 @@ def test_the_merge_before_a_rejected_one_is_not_taken_with_it(world: World) -> N
     assert len(merges(world)) == 1
 
 
+def test_a_merge_that_does_not_apply_blocks_its_task_and_leaves_the_run_branch_clean(
+    world: World,
+) -> None:
+    before = world.repo.sh("rev-parse", "HEAD")
+    agent = Watched(
+        edits=({"src/shared.py": "one\n"}, {"src/shared.py": "two\n"}), meet=2
+    )  # both branch from the same commit and write the same file differently
+
+    outcome, log = together(world, agent)
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert {task_state(log, t) for t in ("t1", "t2")} == {TaskState.INTEGRATED, TaskState.BLOCKED}
+    blocked = "t2" if task_state(log, "t1") is TaskState.INTEGRATED else "t1"
+    payload = log.state.transition_payload(Level.TASK, blocked, TaskState.BLOCKED)
+    assert payload is not None and payload["reason"] == "integration_conflict"
+    assert log.state.open_operations == {}
+    assert len(merges(world)) == 1
+    assert world.repo.sh("show", f"{world.workspace.run_branch}:src/shared.py") in {"one", "two"}
+    assert world.repo.sh("rev-parse", "HEAD") == before
+    assert world.repo.sh("status", "--porcelain") == ""
+    assert len(world.repo.sh("worktree", "list").splitlines()) == 1
+
+
 def test_a_task_that_stops_the_run_leaves_no_half_merge_and_the_user_branch_alone(
     world: World,
 ) -> None:

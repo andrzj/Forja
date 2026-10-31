@@ -49,7 +49,7 @@ from forja.orchestrator.ports import (
     TaskInfo,
 )
 from forja.orchestrator.summary import DOCUMENTATION, PREMISE, TRACE
-from forja.orchestrator.workspace_git import CommitMessage
+from forja.orchestrator.workspace_git import CommitMessage, IntegrationConflict
 
 REASON_LIMIT = 1500
 UNTESTED_LIMIT = 200
@@ -801,13 +801,33 @@ class TaskCycle:
     async def _integrate_alone(self, info: TaskInfo) -> None:
         run, journal = self._ctx, self._journal
         task = info.task_id
-        await journal.operate(
-            "integrate_task",
-            Level.TASK,
-            task,
-            task,
-            run.workspace.integrate_task(task, f"merge: {info.intent}"),
-        )
+        merge_id = journal.operation_id("integrate_task", task)
+        try:
+            await journal.operate(
+                "integrate_task",
+                Level.TASK,
+                task,
+                task,
+                run.workspace.integrate_task(task, f"merge: {info.intent}"),
+            )
+        except IntegrationConflict as conflict:
+            # the workspace already undid the merge: block first, so a crash here cannot read the
+            # settled merge as done; then settle the intent, which nothing applied
+            journal.enter(
+                Level.TASK,
+                task,
+                TaskState.BLOCKED,
+                payload={"reason": "integration_conflict", "detail": str(conflict)},
+            )
+            if merge_id is not None:
+                self._log.append_effect(
+                    Level.TASK,
+                    task,
+                    "integrate_task",
+                    merge_id,
+                    payload={"conflict": str(conflict)},
+                )
+            return
         if journal.done("rollback_integration", task):
             journal.enter(
                 Level.TASK, task, TaskState.BLOCKED, payload={"reason": "integration_gate"}

@@ -26,7 +26,7 @@ Rodar tarefas juntas exigia três coisas. Primeira, decidir quem pode começar s
 
 - Sem configuração, nada muda: a execução segue sequencial.
 - **Limite de segurança.** Com `paralelismo` acima de 1, um agente que mexa no ramo da execução, no ramo de outra tarefa ou na worktree de outra tarefa não é visto pela guarda. A guarda ignora esse trabalho por nome, não por mudança exata. Esse é o risco aceito por esta decisão até a correção (tríades exatas). Por isso o uso acima de 1 não é recomendado antes dela.
-- **Conflito de merge.** `IntegrationConflict` é levantado quando o merge falha e nenhum código do orquestrador o captura (conferido em `task_cycle.py` e `phases.py`): a execução termina com erro em vez de bloquear a tarefa. Defeito conhecido, anterior ao paralelismo; com ele, o arquivo de teste comum a duas tarefas disjuntas o torna mais provável.
+- **Conflito de merge.** `IntegrationConflict` é levantado quando o merge falha; `TaskCycle._integrate_alone` o captura e a tarefa fica `BLOCKED` com `reason` `integration_conflict`, a worktree da execução limpa (o `merge --abort` é do `GitWorkspace`) e as outras tarefas seguindo. Corrigido no item 9 da fila: antes disso a exceção não era capturada e a execução terminava com erro. Com o paralelismo, o arquivo de teste comum a duas tarefas disjuntas torna o conflito mais provável.
 - **Tela.** Mostra a primeira tarefa em andamento e declara as outras com `+N em andamento`.
 - **Testes.** `tests\orchestrator\test_schedule.py`, `test_together.py`, `test_together_git.py` e `test_together_resume.py`.
 

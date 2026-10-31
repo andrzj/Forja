@@ -83,6 +83,22 @@ def test_two_tasks_of_disjoint_scope_run_at_once_and_both_join_the_run(
     assert agent.most == 2
 
 
+def test_a_merge_that_does_not_apply_blocks_its_task_and_leaves_the_other_running(
+    world: MemoryWorld,
+) -> None:
+    agent = Watched(edits=({"src/shared.py": "one\n"}, {"src/shared.py": "two\n"}), meet=2)
+
+    log = together(world, APART, agent, 2)
+
+    assert sorted(str(s) for s in states(log)) == sorted(
+        str(s) for s in (TaskState.INTEGRATED, TaskState.BLOCKED)
+    )
+    blocked = next(t for t in ("t1", "t2") if states(log)[int(t[1]) - 1] is TaskState.BLOCKED)
+    payload = log.state.transition_payload(Level.TASK, blocked, TaskState.BLOCKED)
+    assert payload is not None and payload["reason"] == "integration_conflict"
+    assert log.state.open_operations == {}
+
+
 def test_tasks_whose_scopes_touch_never_run_together(world: MemoryWorld) -> None:
     agent = Watched()
 

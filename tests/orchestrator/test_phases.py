@@ -11,9 +11,11 @@ from forja.core.states import AttemptState, ExecutionState, Level, StageState, T
 from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.config import Budget
 from forja.orchestrator.diary import HYPOTHESIS_REQUEST
+from forja.orchestrator.operations import Step
 from forja.orchestrator.outcome import ExitCode
 from forja.orchestrator.phases import SUMMARY_NAME, Orchestrator, confirm_run
 from forja.orchestrator.summary import Premise
+from forja.orchestrator.workspace_git import IntegrationConflict
 from tests.core.idempotency.conftest import Repo
 from tests.orchestrator.fakes import (
     INCONCLUSIVE,
@@ -153,6 +155,42 @@ def test_a_task_that_breaks_the_integration_gate_is_rolled_back_and_blocked(
     assert "merge: reduce the complexity of f" not in subjects
     assert "merge: reduce the complexity of g" in subjects
     assert world.memory.branches["main"] == world.memory.base
+
+
+def test_a_task_whose_merge_does_not_apply_is_blocked_and_the_run_goes_on(
+    world: MemoryWorld,
+) -> None:
+    # one task after the other, the second branches from a run branch that holds the first, so a
+    # clash is something that reached the run branch from outside: stand for it at the merge
+    real = world.workspace.integrate_task
+
+    def clashing(task_id: str, subject: str) -> Step:
+        if task_id != "t2":
+            return real(task_id, subject)
+
+        async def run() -> None:
+            raise IntegrationConflict(f"forja/{RUN}/t2 does not merge into the run branch")
+
+        return Step.plain({}, run)
+
+    world.workspace.integrate_task = clashing  # type: ignore[method-assign]
+    before = world.memory.base
+
+    outcome, log = world.run(planner=ScriptedPlanner(TWO_TASKS))
+
+    assert outcome.state is ExecutionState.DELIVERED
+    assert task_state(log, "t1") is TaskState.INTEGRATED
+    assert task_state(log, "t2") is TaskState.BLOCKED
+    blocked = log.state.transition_payload(Level.TASK, "t2", TaskState.BLOCKED)
+    assert blocked is not None and blocked["reason"] == "integration_conflict"
+    assert "does not merge into" in str(blocked["detail"])
+    assert log.state.open_operations == {}
+    memory = world.memory
+    subjects = [c.subject for c in memory.log(world.workspace.run_branch)]
+    assert "merge: reduce the complexity of f" in subjects
+    assert "merge: reduce the complexity of g" not in subjects
+    assert "src/t2.py" not in memory.tip(world.workspace.run_branch).tree
+    assert memory.branches["main"] == before
 
 
 def test_the_summary_is_written_in_portuguese_and_names_the_branch(world: MemoryWorld) -> None:

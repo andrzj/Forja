@@ -47,7 +47,7 @@ Tarefa bloqueada fecha, mas quem depende dela nunca começa. Se nenhuma tarefa e
 
 Merge, gate de integração e rollback rodam um de cada vez, sob um `Lock`, porque os três mexem na worktree e no ramo da execução. A ordem de integração é a de término de cada tarefa.
 
-**Conflito de merge.** Quando duas tarefas alteram o mesmo arquivo de forma incompatível, o merge falha, a Forja desfaz o merge e levanta `IntegrationConflict` (`orchestrator\workspace_git.py`). **Nada no orquestrador captura essa exceção** (conferido em `task_cycle.py` e `phases.py`, que só tratam `StopRun` e cancelamento): ela sobe, a execução termina com erro e, com `paralelismo` acima de 1, as outras tarefas em curso são canceladas. A tarefa não vira `BLOCKED`. É um defeito conhecido, não um comportamento desejado, e vale também com `paralelismo` 1. Até ser corrigido, não use `paralelismo` acima de 1 com tarefas que possam tocar o mesmo arquivo de teste.
+**Conflito de merge.** Quando duas tarefas alteram o mesmo arquivo de forma incompatível, o merge falha, a Forja desfaz o merge e levanta `IntegrationConflict` (`orchestrator\workspace_git.py`). `TaskCycle._integrate_alone` (`orchestrator\task_cycle.py`) captura a exceção: a tarefa vira `BLOCKED` com `reason` `integration_conflict` e o texto do conflito em `detail`, a worktree da execução fica como estava antes do merge, e as outras tarefas seguem, com `paralelismo` 1 ou acima. A tarefa bloqueada precisa de revisão do dono; a Forja não tenta o merge de novo. (Antes do item 9 da fila, a exceção não era capturada e derrubava a execução; já não é assim.)
 
 ## Parada
 
