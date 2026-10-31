@@ -270,3 +270,75 @@ def test_replaying_stops_at_a_torn_last_line(tmp_path: Path) -> None:
     view.replay(path)
 
     assert view.snapshot().state == ExecutionState.DELIVERED
+
+
+# -- tasks that run together -----------------------------------------------------------------
+
+
+def two_running() -> ViewModel:
+    view = model()
+    for task in ("t1", "t2"):
+        view.apply(transition(Level.TASK, task, TaskState.PENDING, payload={"intent": task}))
+    view.apply(transition(Level.TASK, "t1", TaskState.IN_PROGRESS))
+    view.apply(transition(Level.TASK, "t2", TaskState.IN_PROGRESS))
+    return view
+
+
+def test_with_two_tasks_in_progress_the_screen_follows_the_first_and_counts_both() -> None:
+    snapshot = two_running().snapshot()
+
+    assert (snapshot.task_id, snapshot.tasks_running) == ("t1", 2)
+
+
+def test_the_attempts_and_gates_of_the_task_not_on_the_screen_do_not_move_it() -> None:
+    view = two_running()
+    view.apply(transition(Level.ATTEMPT, "t1-a1", AttemptState.CREATED))
+    view.apply(transition(Level.ATTEMPT, "t2-a1", AttemptState.CREATED))
+    view.apply(transition(Level.ATTEMPT, "t2-a2", AttemptState.CREATED))
+    view.apply(tool("intent", "run_tool:t2-a2:tests:1"))
+
+    snapshot = view.snapshot()
+
+    assert snapshot.attempt == 1
+    assert set(dict(snapshot.gates).values()) == {GateStatus.PENDING}
+
+
+def test_the_rejection_of_the_task_not_on_the_screen_is_still_listed() -> None:
+    view = two_running()
+    view.apply(
+        transition(Level.ATTEMPT, "t2-a1", AttemptState.REJECTED, payload={"reason": "gate 6"})
+    )
+
+    assert view.snapshot().rejections == ("t2-a1: gate 6",)
+
+
+def test_when_the_task_on_the_screen_ends_the_screen_moves_to_the_one_still_running() -> None:
+    view = two_running()
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+    view.apply(transition(Level.ATTEMPT, "t2-a1", AttemptState.CREATED))
+
+    snapshot = view.snapshot()
+
+    assert (snapshot.task_id, snapshot.attempt, snapshot.tasks_running) == ("t2", 1, 1)
+
+
+def test_the_number_on_the_screen_is_the_place_of_the_task_followed_not_the_count_done() -> None:
+    view = two_running()
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+    view.apply(transition(Level.TASK, "t3", TaskState.PENDING, payload={"intent": "t3"}))
+    view.apply(transition(Level.TASK, "t3", TaskState.IN_PROGRESS))
+
+    assert (view.snapshot().task_id, view.snapshot().number) == ("t2", 2)
+
+
+def test_the_feed_shows_the_task_on_the_screen_and_the_tokens_count_both() -> None:
+    view = two_running()
+    for target in ("t1-a1", "t2-a1"):
+        event = activity("text", text=f"from {target}")
+        view.apply(event.model_copy(update={"target_id": target}))
+        view.apply(activity("usage", input=10, output=5).model_copy(update={"target_id": target}))
+
+    snapshot = view.snapshot()
+
+    assert [line.text for line in snapshot.feed] == ["from t1-a1"]
+    assert snapshot.tokens_used == 30

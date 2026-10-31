@@ -108,12 +108,13 @@ def _join(segments: list[Pieces]) -> Pieces:
 def _head(view: View, theme: Theme, columns: int, depth: ColorDepth) -> Text:
     marks = theme.glyphs.marks
     if view.tasks_total:
-        number = min(view.tasks_done + 1, view.tasks_total)
-        text = f"{marks.current} tarefa {number}/{view.tasks_total}"
+        text = f"{marks.current} tarefa {view.number}/{view.tasks_total}"
         if view.attempt:
             text += f" {marks.bullet} tentativa {view.attempt}/{view.attempts_max}"
         if view.task_intent:
             text += f" {marks.bullet} {view.task_intent}"
+        if view.tasks_running > 1:
+            text += f" {marks.bullet} +{view.tasks_running - 1} em andamento"
     else:
         text = f"{marks.current} {view.state}"
         if view.message:

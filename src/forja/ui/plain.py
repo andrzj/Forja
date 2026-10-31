@@ -50,8 +50,8 @@ class PlainRenderer:
         if not view.task_id or (view.task_id, view.attempt) == (self._task, self._attempt):
             return
         if view.task_id != self._task:
-            number = min(view.tasks_done + 1, view.tasks_total)
-            self._line(view, f"tarefa {number}/{view.tasks_total}: {view.task_intent}")
+            others = f" (+{view.tasks_running - 1} em andamento)" if view.tasks_running > 1 else ""
+            self._line(view, f"tarefa {view.number}/{view.tasks_total}: {view.task_intent}{others}")
         if view.attempt:
             self._line(view, f"tentativa {view.attempt}/{view.attempts_max} de {view.task_id}")
         self._task, self._attempt = view.task_id, view.attempt

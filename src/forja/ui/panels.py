@@ -91,7 +91,7 @@ def header(view: View, theme: Theme, columns: int, *, compact: bool) -> list[Tex
     if not compact:
         return [_finish(top, columns), cost]
     task = _line(columns)
-    where = f" tarefa {min(view.tasks_done + 1, max(view.tasks_total, 1))}/{view.tasks_total}"
+    where = f" tarefa {view.number}/{view.tasks_total}"
     if view.attempt:
         where += f" {marks.bullet} tentativa {view.attempt}/{view.attempts_max}"
     _put(task, fit(where, columns, ellipsis=ellipsis), theme.style(Role.TEXT))
