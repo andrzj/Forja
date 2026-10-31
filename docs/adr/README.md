@@ -37,3 +37,6 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0029](0029-o-teste-diferencial-so-executa-com-casos-declarados-no-repositorio.md) | O teste diferencial só executa com casos declarados no repositório | Aceito |
 | [0030](0030-o-teste-diferencial-compara-medianas-e-poe-o-caso-instavel-em-quarentena.md) | O teste diferencial compara medianas e põe o caso instável em quarentena | Aceito |
 | [0031](0031-o-diario-e-uma-projecao-do-log-fiel-ao-que-foi-escrito.md) | O diário é uma projeção do log, fiel ao que foi escrito | Aceito |
+| [0032](0032-o-paralelismo-usa-escopos-disjuntos-e-a-guarda-de-git-ignora-por-nome.md) | Paralelismo por escopos disjuntos, com guarda de git por nome | Aceito |
+| [0033](0033-o-adaptador-generico-de-cli-e-um-modelo-de-comando.md) | Adaptador genérico de CLI: um modelo de comando, sem código | Aceito |
+| [0034](0034-a-mutacao-muta-a-funcao-inteira-sem-capacidade-incremental.md) | A mutação cobre a função inteira das funções tocadas, sem a capacidade incremental | Aceito |
