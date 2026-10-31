@@ -64,6 +64,7 @@ from forja.orchestrator.planner import (
     InvestigationPlanner,
 )
 from forja.orchestrator.ports import AgentRunner, Planner, RunContext
+from forja.orchestrator.voice_brief import brief as voice_brief
 from forja.orchestrator.workspace_git import (
     GitWorkspace,
     Layout,
@@ -398,6 +399,7 @@ async def _context(
         if config.agent_runs_tests:
             commands = (*commands, "forja agente testar")
     sensitive = SensitivePaths.with_defaults(policy.sensitive_paths)
+    voice = voice_brief(policy.voice_off, policy.voice_extra)
 
     def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
         return ExecutorAgentRunner(
@@ -415,6 +417,7 @@ async def _context(
                 else commands,
             ),
             model=executor.model,
+            voice=voice,
         )
 
     agents: dict[Producer, AgentRunner] = {

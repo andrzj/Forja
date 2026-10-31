@@ -282,8 +282,14 @@ def _fence(text: str) -> str:
     return "`" * ticks
 
 
-def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = False) -> str:
-    """The text the agent receives: the task, the rules, the files in scope and the last verdict."""
+def build_package(
+    ctx: AttemptContext, redactor: Redactor, *, facade: bool = False, voice: str = ""
+) -> str:
+    """The text the agent receives: the task, the rules, the files in scope and the last verdict.
+
+    ``voice`` is the Forja's own instruction on how to write (``voice_brief.brief``): fixed text,
+    so it does not pass through the redactor. Empty leaves the section out.
+    """
     task = ctx.task
     items, notes = [], []
     for name in task.scope:
@@ -339,6 +345,8 @@ def build_package(ctx: AttemptContext, redactor: Redactor, *, facade: bool = Fal
         ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]
+    if voice:
+        parts.append(f"## Voice\n\n{voice}")
     if specifier:
         listed = "\n".join(f"- {e.id}: {e.text}" for e in elements_of(task.intent))
         parts.append(f"## {ELEMENTS}\n\n{listed}\n")
@@ -459,6 +467,7 @@ class ExecutorAgentRunner:
         role: Producer = Producer.IMPLEMENTER,
         permissions: RolePermissions = RolePermissions(can_edit_files=True),  # noqa: B008
         model: str = "",
+        voice: str = "",
         idle_limit: float = IDLE_LIMIT,
         poll: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
@@ -466,7 +475,7 @@ class ExecutorAgentRunner:
         self._adapter, self._executable, self._env, self._log = adapter, executable, host_env, log
         self._sensitive = sensitive or SensitivePaths.with_defaults()
         self._redactor = redactor or Redactor(sensitive=self._sensitive)
-        self._role, self._permissions, self._model = role, permissions, model
+        self._role, self._permissions, self._model, self._voice = role, permissions, model, voice
         self._idle_limit, self._poll, self._clock = idle_limit, poll, clock
 
     # -- the copy the agent works in ------------------------------------------------------------
@@ -484,7 +493,10 @@ class ExecutorAgentRunner:
             agent_dir = target / AGENT_DIR
             agent_dir.mkdir()
             package = build_package(
-                ctx, self._redactor, facade=bool(self._permissions.allowed_commands)
+                ctx,
+                self._redactor,
+                facade=bool(self._permissions.allowed_commands),
+                voice=self._voice,
             )
             (agent_dir / PACKAGE).write_text(package, encoding="utf-8", newline="\n")
             setup = self._adapter.permission_setup(self._role, self._permissions)

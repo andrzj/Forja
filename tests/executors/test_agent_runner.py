@@ -151,6 +151,16 @@ def test_the_agent_gets_a_copy_without_git_with_the_package_and_the_permissions(
     assert (r.workcopy / ".forja-agent" / "claude-settings.json").is_file()
 
 
+def test_the_package_the_agent_gets_carries_the_voice_the_runner_was_given(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD, voice="Write plainly.")
+
+    go(settle(r.runner.prepare_workcopy(r.ctx)))
+
+    package = (r.workcopy / ".forja-agent" / "package.md").read_text("utf-8")
+    assert "## Voice" in package
+    assert "Write plainly." in package
+
+
 def test_a_copy_is_made_again_from_scratch(tmp_path: Path) -> None:
     r = rig(tmp_path, GOOD)
     go(settle(r.runner.prepare_workcopy(r.ctx)))

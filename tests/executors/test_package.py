@@ -7,6 +7,7 @@ from forja.core.artifacts.models import Producer
 from forja.core.redaction import Redactor
 from forja.orchestrator.agent_runner import _fence, build_package
 from forja.orchestrator.ports import AttemptContext, TaskInfo
+from forja.orchestrator.voice_brief import brief
 
 TOKEN = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
 
@@ -208,3 +209,35 @@ def test_a_secret_in_the_earlier_attempts_never_reaches_the_package(tmp_path: Pa
     ctx = replace(context(tmp_path, ("src/a.py",)), diary=f"You said: key {TOKEN}\n")
 
     assert TOKEN not in build_package(ctx, Redactor())
+
+
+def test_the_voice_instruction_is_in_the_package_of_every_role_that_writes_text(
+    tmp_path: Path,
+) -> None:
+    base = context(tmp_path, ("src/a.py",))
+    for role in (
+        Producer.IMPLEMENTER,
+        Producer.TEST_AUTHOR,
+        Producer.SPECIFIER,
+        Producer.ARCHAEOLOGIST,
+        Producer.DOCUMENTER,
+    ):
+        ctx = replace(base, task=replace(base.task, role=role))
+
+        text = build_package(ctx, Redactor(), voice=brief())
+
+        assert "## Voice" in text, role
+        assert "You write comments" in text, role
+
+
+def test_the_voice_instruction_comes_as_given_not_redacted_and_only_once(tmp_path: Path) -> None:
+    ctx = context(tmp_path, ("src/a.py",))
+
+    text = build_package(ctx, Redactor(), voice=f"Never write {TOKEN}.")
+
+    assert text.count("## Voice") == 1
+    assert f"Never write {TOKEN}." in text
+
+
+def test_without_a_voice_instruction_the_package_has_no_voice_section(tmp_path: Path) -> None:
+    assert "## Voice" not in package(tmp_path)
