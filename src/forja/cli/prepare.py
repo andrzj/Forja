@@ -617,10 +617,11 @@ async def prepare(
     tokens = saved.tokens if saved else 2_000_000
     runs_tests = saved.agente_roda_testes if saved else True
     tasks = saved.tarefas if saved else 5
+    parallel = saved.paralelismo if saved else 1
     config = new_config(
         repo=repo, base_commit=base_commit, executor_name=name, executor_path=choice.path,
         executor_version=version, executor_model=model, tokens=tokens, scope=scope,
-        agent_runs_tests=runs_tests, tasks=tasks, semgrep_config=rules,
+        agent_runs_tests=runs_tests, tasks=tasks, parallel_tasks=parallel, semgrep_config=rules,
         policy_version=policy_digest(policy), facts=recorded,
         fix=fixing[0] if fixing else None, question=question, create=creation,
         test_author=executor_ref(
@@ -665,6 +666,7 @@ async def prepare(
         tokens=tokens,
         agente_roda_testes=runs_tests,
         tarefas=tasks,
+        paralelismo=parallel,
         semgrep_config=rules,
         fatos=facts_path,
         clis=_used_models(profile, saved, name, author[0] if author else ""),

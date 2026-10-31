@@ -31,6 +31,7 @@ from forja.orchestrator.workspace_git import (
     NothingToCommit,
     NothingToRollBack,
     RepositoryNotReady,
+    others_work,
 )
 from forja.testing.repo import MemoryRepo, MergeConflict, read_tree, write_tree
 
@@ -49,8 +50,11 @@ def _key(path: Path) -> str:
 class MemoryWatch:
     """What changed in the branches between entering and leaving the block."""
 
-    def __init__(self, repo: MemoryRepo) -> None:
+    def __init__(
+        self, repo: MemoryRepo, ignore: Callable[[Difference], bool] | None = None
+    ) -> None:
         self._repo = repo
+        self._ignore = ignore
         self._before: dict[str, str] = {}
         self.differences: list[Difference] = []
 
@@ -75,7 +79,7 @@ class MemoryWatch:
                 found.append(Difference(DifferenceKind.REF_REMOVED, ref, before, None))
             elif before != now:
                 found.append(Difference(DifferenceKind.REF_MOVED, ref, before, now))
-        self.differences = found
+        self.differences = [d for d in found if self._ignore is None or not self._ignore(d)]
 
 
 class MemoryWorkspace:
@@ -105,8 +109,10 @@ class MemoryWorkspace:
     async def recover(self) -> IndexLockReport:
         return IndexLockReport((), ())
 
-    def watch(self) -> MemoryWatch:
-        return MemoryWatch(self.repo)
+    def watch(self, task_id: str | None = None, attempt_id: str | None = None) -> MemoryWatch:
+        if task_id is None or attempt_id is None:
+            return MemoryWatch(self.repo)
+        return MemoryWatch(self.repo, others_work(self.run_id, self.layout, task_id, attempt_id))
 
     # -- the run branch and its worktree ----------------------------------------------------------
 

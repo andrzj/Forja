@@ -104,6 +104,7 @@ class RunConfig(BaseModel):
     question: str = ""  # what to find out; present exactly when the objective is INVESTIGATE
     create: CreateRequest | None = None  # present exactly when the objective is CREATE
     budget: Budget = Budget()
+    parallel_tasks: int = Field(default=1, ge=1)  # tasks of disjoint scope that run at once
     forja_version: NonEmpty
     policy_version: NonEmpty
     agent_runs_tests: bool = True  # the agent may call `forja agente testar` in its copy

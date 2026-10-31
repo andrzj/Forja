@@ -28,6 +28,7 @@ from forja.core.states import (
 from forja.orchestrator.config import RunConfig, confirmed_payload
 from forja.orchestrator.outcome import ExitCode, Outcome, StopRun, exit_code_for
 from forja.orchestrator.ports import Baseline, RunContext
+from forja.orchestrator.schedule import Candidate, startable
 from forja.orchestrator.summary import (
     METRICS,
     read_facts,
@@ -237,6 +238,10 @@ class Orchestrator:
 
     async def _execute(self) -> None:
         cycle = TaskCycle(self._ctx)
+        if self._ctx.config.parallel_tasks > 1:
+            await self._execute_together(cycle, self._ctx.config.parallel_tasks)
+            self._go(ExecutionState.CLOSING)
+            return
         state = self._log.state
         for task in state.children_of(Level.TASK, self._run_id):
             if state.state_of(Level.TASK, task) in (TaskState.INTEGRATED, TaskState.BLOCKED):
@@ -245,6 +250,49 @@ class Orchestrator:
                 break
             await cycle.run(task)
         self._go(ExecutionState.CLOSING)
+
+    def _candidates(self) -> list[Candidate]:
+        state = self._log.state
+        found = []
+        for task in state.children_of(Level.TASK, self._run_id):
+            payload = state.transition_payload(Level.TASK, task, TaskState.PENDING) or {}
+            scope, parents = payload.get("scope"), payload.get("depends_on")
+            found.append(
+                Candidate(
+                    task,
+                    tuple(str(p) for p in scope) if isinstance(scope, list) else (),
+                    tuple(str(p) for p in parents) if isinstance(parents, list) else (),
+                )
+            )
+        return found
+
+    async def _execute_together(self, cycle: TaskCycle, limit: int) -> None:
+        """Run the tasks the schedule allows at once. A task that stops the run (``StopRun``, or
+        any error) takes the others down with it; they start again from the log on a resume."""
+        state = self._log.state
+        running: dict[str, asyncio.Task[None]] = {}
+        try:
+            while True:
+                candidates = self._candidates()
+                done = {c.task_id: state.state_of(Level.TASK, c.task_id) for c in candidates}
+                integrated = [t for t, s in done.items() if s is TaskState.INTEGRATED]
+                closed = [
+                    t for t, s in done.items() if s in (TaskState.INTEGRATED, TaskState.BLOCKED)
+                ]
+                if not self._ctx.meter.exhausted():
+                    for task in startable(candidates, list(running), integrated, closed, limit):
+                        running[task] = asyncio.create_task(cycle.run(task))
+                if not running:
+                    return
+                finished, _ = await asyncio.wait(
+                    running.values(), return_when=asyncio.FIRST_COMPLETED
+                )
+                for task_id in [t for t, job in running.items() if job in finished]:
+                    running.pop(task_id).result()
+        finally:
+            for job in running.values():
+                job.cancel()
+            await asyncio.gather(*running.values(), return_exceptions=True)
 
     async def _close(self) -> None:
         ctx, journal = self._ctx, self._journal

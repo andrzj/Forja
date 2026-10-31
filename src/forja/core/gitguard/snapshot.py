@@ -6,6 +6,7 @@ The snapshot is semantic where git refreshes bytes on its own (the index is read
 """
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -146,11 +147,13 @@ class GitWatch:
 
     It never raises on a difference: the caller turns it into a rejection of the attempt. An
     exception raised inside the block propagates, and the comparison is still made.
-    Forja must not change refs itself while the block runs (execution is sequential).
+    Forja must not change what it watches while the block runs, except what ``ignore`` names: with
+    tasks running together, the work Forja does for the others is not the agent's.
     """
 
-    def __init__(self, git: Git) -> None:
+    def __init__(self, git: Git, ignore: Callable[[Difference], bool] | None = None) -> None:
         self._git = git
+        self._ignore = ignore
         self.before: GitSnapshot | None = None
         self.after: GitSnapshot | None = None
         self.differences: list[Difference] = []
@@ -167,4 +170,5 @@ class GitWatch:
     ) -> None:
         assert self.before is not None
         self.after = await take_snapshot(self._git)
-        self.differences = compare_snapshots(self.before, self.after)
+        found = compare_snapshots(self.before, self.after)
+        self.differences = [d for d in found if self._ignore is None or not self._ignore(d)]

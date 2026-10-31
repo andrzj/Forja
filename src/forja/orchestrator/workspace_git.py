@@ -26,6 +26,7 @@ from typing import Any
 from forja.core.dependencies import link_dependencies, stage_all, unlink_dependencies
 from forja.core.events import OpenOperation
 from forja.core.gitguard import GitWatch
+from forja.core.gitguard.snapshot import Difference, DifferenceKind
 from forja.core.idempotency import (
     Reconciliation,
     normalize_stage_id,
@@ -153,6 +154,39 @@ class Layout:
         return self.worktree(attempt_id)
 
 
+_REF_KINDS = frozenset(
+    {DifferenceKind.REF_ADDED, DifferenceKind.REF_REMOVED, DifferenceKind.REF_MOVED}
+)
+
+
+def _same_path(path: str | Path) -> str:
+    return os.path.normcase(os.path.realpath(path))
+
+
+def others_work(
+    run_id: str, layout: Layout, task_id: str, attempt_id: str
+) -> Callable[[Difference], bool]:
+    """Whether a difference is Forja's own work for another task of the run (a branch, the run
+    branch, a worktree of the run), which tasks running together do while an agent is called. The
+    task's own branch and attempt worktree, and anything outside the run, stay the agent's."""
+    own_branch = f"refs/heads/{task_branch_name(run_id, task_id)}"
+    others = f"refs/heads/{task_branch_name(run_id, '')}"
+    run_branch = f"refs/heads/{run_branch_name(run_id)}"
+    own_tree = _same_path(layout.attempt_worktree(attempt_id))
+    root = _same_path(layout.root) + os.sep
+
+    def theirs(difference: Difference) -> bool:
+        subject = difference.subject
+        if difference.kind in _REF_KINDS:
+            return subject == run_branch or (subject.startswith(others) and subject != own_branch)
+        if difference.kind in (DifferenceKind.CONFIG_CHANGED, DifferenceKind.HOOKS_CHANGED):
+            return False
+        tree = _same_path(subject)
+        return tree.startswith(root) and tree != own_tree
+
+    return theirs
+
+
 @dataclass(frozen=True)
 class CommitMessage:
     """Subject from the task, reason from the agent, facts from Forja as trailers."""
@@ -228,9 +262,13 @@ class GitWorkspace:
         await self._git.lines("worktree", "prune")
         return report
 
-    def watch(self) -> GitWatch:
-        """Photograph refs, HEAD, index, config and hooks around a call to the agent."""
-        return GitWatch(self._git)
+    def watch(self, task_id: str | None = None, attempt_id: str | None = None) -> GitWatch:
+        """Photograph refs, HEAD, index, config and hooks around a call to the agent. With the task
+        and the attempt, the work Forja does for the run's other tasks is not counted."""
+        if task_id is None or attempt_id is None:
+            return GitWatch(self._git)
+        theirs = others_work(self.run_id, self.layout, task_id, attempt_id)
+        return GitWatch(self._git, theirs)
 
     # -- the run branch and its worktree ----------------------------------------------------------
 

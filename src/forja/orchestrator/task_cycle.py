@@ -11,6 +11,7 @@ in a commit and sent to an extra test author stage, ``<task>-t<n>`` (n from 2) w
 included; once it commits, the implementer's stage is committed with it.
 """
 
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 
@@ -90,6 +91,8 @@ class TaskCycle:
         self._ctx = ctx
         self._journal = ctx.journal
         self._log = ctx.journal.log
+        # the merge, the integration gate and the rollback all use the run's worktree and branch
+        self._integration = asyncio.Lock()
 
     @property
     def _state(self) -> RunState:
@@ -386,7 +389,12 @@ class TaskCycle:
         op_id = self._journal.operation_id("call_agent_cli", ctx.attempt_id)
         if op_id is None:
             return None
-        async with run.workspace.watch() as watch:
+        together = (
+            run.config.parallel_tasks > 1
+        )  # then the other tasks' git work is not the agent's
+        async with run.workspace.watch(
+            ctx.task.task_id if together else None, ctx.attempt_id if together else None
+        ) as watch:
             result = await run.runner(ctx.task.role).call(
                 ctx, op_id, run.sinks(Level.ATTEMPT, ctx.attempt_id, "call_agent_cli")
             )
@@ -785,6 +793,10 @@ class TaskCycle:
 
     async def _integrate(self, info: TaskInfo) -> None:
         """Only after the last stage: a task with tests and no fix is not ready to join the run."""
+        async with self._integration:
+            await self._integrate_alone(info)
+
+    async def _integrate_alone(self, info: TaskInfo) -> None:
         run, journal = self._ctx, self._journal
         task = info.task_id
         await journal.operate(
