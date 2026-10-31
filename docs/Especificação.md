@@ -289,7 +289,7 @@ Todo gate é código, recebe entradas declaradas e devolve um de quatro resultad
 
 **Combinação de modo e resultado.** Em `observacao`, nenhum resultado bloqueia. Em `bloqueante`, `reprovado` rejeita a tentativa, e a política para `inconclusivo` é um atributo obrigatório do check, com dois valores: `bloquear` ou `premissa`. A configuração é validada na carga; um check bloqueante sem essa política impede o início da execução.
 
-**Padrões para detectores frágeis.** "Comentário que repete o código", "interface pública sem comentário" e os medidores de profundidade de módulo e *pass-through* começam em `observacao`, porque sua definição varia por linguagem e estilo e eles produzem falsos positivos. A lista de marcadores de texto gerado por IA é `bloqueante` por padrão, configurável por repositório.
+**Padrões para detectores frágeis.** "Comentário que repete o código", "interface pública sem comentário" e os medidores de profundidade de módulo e *pass-through* começam em `observacao`, porque sua definição varia por linguagem e estilo e eles produzem falsos positivos. A voz (gate 12) **nunca bloqueia**, por decisão do dono em 31/10/2026: a Forja a mede e reporta, e busca controlá-la na origem, instruindo o agente (ver *Perfil de voz*).
 
 **Chave de cache:** hash do commit, ferramenta e versão, hash da configuração efetiva, toolchain e versão, plataforma e escopo medido. Uma evidência só é reaproveitada se a chave inteira coincidir. A versão das políticas e o tipo de medição não entram na chave; a evidência registra a versão da política que a julgou. (Hoje só a chave e o índice existem em `core`; o reaproveitamento de medições foi adiado por decisão do dono em 29/10/2026, ver “Medições em cache” na lista de critérios.)
 
@@ -588,7 +588,8 @@ Se um documento existente cita símbolo, comando ou caminho que deixou de existi
 "Soar humano" não se prova; o que se faz é reprovar o que comprovadamente não é útil nem humano.
 
 - **Regras de Ousterhout:** comentário que repete o código (comparação entre palavras do comentário e identificadores próximos) e interface pública sem comentário de interface são reportados, em modo observação por padrão; comentários explicam porquê, invariantes, unidades e efeitos colaterais.
-- **Marcadores de texto gerado:** lista versionada e configurável de padrões proibidos (aberturas genéricas, vocabulário inflado, emojis, excesso de travessões, frases que reafirmam o óbvio).
+- **Marcadores de texto gerado:** lista versionada e configurável de padrões proibidos (aberturas genéricas, vocabulário inflado, emojis, excesso de travessões, frases que reafirmam o óbvio). Servem para medir e reportar, nunca para reprovar uma tentativa.
+- **Controle na origem:** a Forja instrui o agente a escrever sem esses padrões, pelo canal que cada CLI permitir (o pacote, para qualquer uma; arquivo de instruções, regras ou skill onde a CLI os carregar sem tocar o diff nem afrouxar o isolamento). O conteúdo da instrução segue a skill `humanizer`.
 - **Mesmo perfil** para comentários, mensagens de commit e documentação; idioma configurado por repositório.
 
 ## Segurança e governança de dados
