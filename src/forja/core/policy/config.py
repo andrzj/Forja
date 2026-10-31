@@ -37,6 +37,9 @@ from forja.core.redaction.settings import (
 
 POLICY_SCHEMA_VERSION = 1
 _CHECK_KEYS = {"mode", "on_inconclusive", "promotion", "thresholds", "commands", "limits"}
+# Gate 12 measures and reports; the Forja steers the voice by instructing the agent (voice_brief),
+# never by rejecting what it wrote. Owner's decision of 31/10/2026 (docs/voz.md).
+NEVER_BLOCKING = frozenset({"voice", "comments"})
 # Kept in step with adapters.language.Operation (a test compares them); importing it here would
 # make the two packages import each other.
 ADAPTER_OPERATIONS = frozenset(
@@ -286,6 +289,12 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         for key in sorted(set(raw) - _CHECK_KEYS):
             bad(f"{where}.{key}", "unknown key")
         _validate_enum(raw, "mode", Mode, where, bad)
+        if check_id in NEVER_BLOCKING and raw.get("mode") == Mode.BLOCKING.value:
+            bad(
+                f"{where}.mode",
+                "the voice never blocks: the Forja instructs the agent and reports what it "
+                "measured (see docs/voz.md)",
+            )
         _validate_enum(raw, "on_inconclusive", InconclusivePolicy, where, bad)
         _validate_promotion(raw.get("promotion"), where, bad)
         _validate_thresholds(raw.get("thresholds"), spec, where, bad)

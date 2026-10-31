@@ -10,6 +10,8 @@ import pytest
 from forja.core.gates import InconclusivePolicy, Mode
 from forja.core.policy import (
     POLICY_SCHEMA_VERSION,
+    CheckRegistry,
+    CheckSpec,
     PolicyConfigError,
     build_policy,
     freeze_policy,
@@ -340,3 +342,40 @@ def test_a_forja_version_with_a_plus_in_it_still_round_trips(tmp_path: Path) -> 
 
     assert load_frozen_policy(make_registry(), tmp_path).version == version
     assert version.startswith("1.0+dev+")
+
+
+def _with_voice() -> CheckRegistry:
+    registry = make_registry()
+    registry.register(CheckSpec("voice", 12, Mode.OBSERVATION, InconclusivePolicy.PREMISE))
+    registry.register(CheckSpec("comments", 12, Mode.OBSERVATION, InconclusivePolicy.PREMISE))
+    return registry
+
+
+@pytest.mark.parametrize("check", ["voice", "comments"])
+def test_the_voice_checks_cannot_be_made_blocking(check: str) -> None:
+    layer = parse_layer(
+        "layer 0", f'[checks.{check}]\nmode = "blocking"\non_inconclusive = "block"'
+    )
+
+    with pytest.raises(PolicyConfigError) as info:
+        build_policy(_with_voice(), [layer])
+
+    assert info.value.problems == [
+        f"layer 0: checks.{check}.mode: the voice never blocks: the Forja instructs the agent and "
+        "reports what it measured (see docs/voz.md)"
+    ]
+
+
+def test_the_voice_checks_can_still_be_set_to_observation() -> None:
+    layer = parse_layer("layer 0", '[checks.voice]\nmode = "observation"\n[checks.comments]')
+
+    build_policy(_with_voice(), [layer])
+
+
+def test_other_checks_are_still_promotable_to_blocking() -> None:
+    toml = (
+        '[checks.complexity]\nmode = "blocking"\non_inconclusive = "block"\n'
+        'promotion = { date = 2026-10-10, reason = "r" }'
+    )
+
+    build_policy(_with_voice(), [parse_layer("layer 0", toml)])
