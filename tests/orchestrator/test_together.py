@@ -133,7 +133,7 @@ def test_a_task_that_falls_over_takes_the_running_ones_down_without_a_hang(
 def theirs(tmp_path: Path) -> object:
     from forja.orchestrator.workspace_git import Layout, others_work  # noqa: PLC0415
 
-    return others_work("r1", Layout(tmp_path / "wt"), "t1", "t1-a1")
+    return others_work("r1", Layout(tmp_path / "wt"), "t1", "t1-a1", lambda: ["t1", "t2"])
 
 
 def difference(kind: str, subject: str) -> object:
@@ -160,6 +160,7 @@ def test_the_agents_own_branch_and_worktree_and_everything_outside_the_run_stay_
         ("ref_moved", "refs/heads/forja/r1/t1"),
         ("ref_added", "refs/heads/sneaky"),
         ("ref_added", "refs/heads/forja/other-run/t2"),
+        ("ref_added", "refs/heads/forja/r1/t9"),  # not a task of the run
         ("index_changed", str(tmp_path / "wt" / "t1-a1")),
         ("index_changed", str(tmp_path / "repo")),
         ("config_changed", "config"),

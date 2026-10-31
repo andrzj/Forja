@@ -6,7 +6,7 @@ for the journal to run, or reports through the sinks the orchestrator hands it.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
@@ -211,7 +211,12 @@ class Workspace(Protocol):
 
     async def recover(self) -> IndexLockReport: ...
 
-    def watch(self, task_id: str | None = None, attempt_id: str | None = None) -> Watch: ...
+    def watch(
+        self,
+        task_id: str | None = None,
+        attempt_id: str | None = None,
+        tasks: Callable[[], Collection[str]] = ...,
+    ) -> Watch: ...
 
     def create_run_branch(self, base_commit: str) -> Step: ...
 

@@ -6,7 +6,7 @@ same; what is in memory is the history around them.
 
 import os
 import shutil
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -109,10 +109,17 @@ class MemoryWorkspace:
     async def recover(self) -> IndexLockReport:
         return IndexLockReport((), ())
 
-    def watch(self, task_id: str | None = None, attempt_id: str | None = None) -> MemoryWatch:
+    def watch(
+        self,
+        task_id: str | None = None,
+        attempt_id: str | None = None,
+        tasks: Callable[[], Collection[str]] = tuple,
+    ) -> MemoryWatch:
         if task_id is None or attempt_id is None:
             return MemoryWatch(self.repo)
-        return MemoryWatch(self.repo, others_work(self.run_id, self.layout, task_id, attempt_id))
+        return MemoryWatch(
+            self.repo, others_work(self.run_id, self.layout, task_id, attempt_id, tasks)
+        )
 
     # -- the run branch and its worktree ----------------------------------------------------------
 

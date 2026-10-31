@@ -393,7 +393,9 @@ class TaskCycle:
             run.config.parallel_tasks > 1
         )  # then the other tasks' git work is not the agent's
         async with run.workspace.watch(
-            ctx.task.task_id if together else None, ctx.attempt_id if together else None
+            ctx.task.task_id if together else None,
+            ctx.attempt_id if together else None,
+            lambda: self._state.children_of(Level.TASK, self._journal.run_id),
         ) as watch:
             result = await run.runner(ctx.task.role).call(
                 ctx, op_id, run.sinks(Level.ATTEMPT, ctx.attempt_id, "call_agent_cli")
