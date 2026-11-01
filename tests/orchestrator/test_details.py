@@ -43,7 +43,7 @@ from forja.orchestrator.ports import (
     SinkFactory,
 )
 from forja.orchestrator.summary import Facts, Premise, render_summary, summary_body
-from forja.orchestrator.task_cycle import REASON_LIMIT, TaskCycle, _count, describe_stop
+from forja.orchestrator.task_cycle import TaskCycle, _count, describe_stop
 from tests.orchestrator.crash import Counting, CrashAfter, Interrupted
 from tests.orchestrator.fakes import (
     PASSED,
@@ -743,10 +743,10 @@ def test_a_stop_by_a_check_that_could_not_apply_says_so() -> None:
     assert describe_stop(a_stop(result)) == "gate 8 (complexity): not_applicable"
 
 
-def test_what_the_agent_is_told_is_cut_to_the_limit() -> None:
-    result = Rejected(findings=(Finding(message="x" * 3000, target="a.py"),))
+def test_what_the_agent_is_told_is_not_cut() -> None:
+    result = Rejected(findings=(Finding(message="z" * 3000, target="a.py"),))
 
-    assert len(describe_stop(a_stop(result))) == REASON_LIMIT
+    assert describe_stop(a_stop(result)).count("z") == 3000
 
 
 def test_the_detail_of_an_agent_error_is_cut_to_three_hundred_characters(

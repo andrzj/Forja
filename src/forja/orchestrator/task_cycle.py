@@ -51,7 +51,6 @@ from forja.orchestrator.ports import (
 from forja.orchestrator.summary import DOCUMENTATION, PREMISE, TRACE
 from forja.orchestrator.workspace_git import CommitMessage, IntegrationConflict
 
-REASON_LIMIT = 1500
 UNTESTED_LIMIT = 200
 RETURNED = (
     "Returned to the test author: the new code has lines no test runs. Write tests for them; "
@@ -73,7 +72,7 @@ def describe_stop(run: CheckRun) -> str:
         text = f"inconclusive ({result.reason.value}): {result.detail}"
     else:
         text = result.result
-    return f"{where}: {text}"[:REASON_LIMIT]
+    return f"{where}: {text}"
 
 
 def untested_targets(run: CheckRun) -> list[str]:
@@ -271,7 +270,7 @@ class TaskCycle:
             self._exhaust(
                 info,
                 "tests_for_new_lines_exhausted",
-                detail=detail[:REASON_LIMIT],
+                detail=detail,
                 lines=self._untested_by(attempt),
             )
         payload = self._state.transition_payload(Level.STAGE, info.stage_id, StageState.EXHAUSTED)
@@ -328,7 +327,7 @@ class TaskCycle:
         own = self._own_rejection(info)
         if own is not None or not info.reviews:
             return own
-        return f"{RETURNED}{self._own_rejection(self.info(info.task_id))}"[:REASON_LIMIT]
+        return f"{RETURNED}{self._own_rejection(self.info(info.task_id))}"
 
     async def _work(self, ctx: AttemptContext) -> None:
         run, journal = self._ctx, self._journal
@@ -370,14 +369,14 @@ class TaskCycle:
                 Level.ATTEMPT,
                 attempt,
                 AttemptState.VALIDATING,
-                payload={"reason": result.reason[:REASON_LIMIT]},
+                payload={"reason": result.reason},
             )
             if differences:
                 reason = "git changed while the agent ran: " + "; ".join(differences)
                 self._reject(attempt, reason)
                 # the repository was touched outside the contract: more attempts would start from
                 # a state nobody approved, so the run stops and says why
-                raise StopRun(reason[:REASON_LIMIT])
+                raise StopRun(reason)
 
         if self._state.state_of(Level.ATTEMPT, attempt) is AttemptState.VALIDATING:
             await self._judge(ctx)
@@ -404,7 +403,7 @@ class TaskCycle:
         return result, [difference.describe() for difference in watch.differences]
 
     def _reject(self, attempt: str, reason: str, untested: list[str] | None = None) -> None:
-        payload: dict[str, JsonValue] = {"reason": reason[:REASON_LIMIT]}
+        payload: dict[str, JsonValue] = {"reason": reason}
         if untested:
             payload["untested"] = [*untested]
         self._log.append_transition(
@@ -646,7 +645,7 @@ class TaskCycle:
             AttemptState.DISCARDED,
             payload={
                 "reason": "inconclusive_gate",
-                "detail": detail[:REASON_LIMIT],
+                "detail": detail,
                 "infra_failure": False,
             },
         )

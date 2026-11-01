@@ -19,7 +19,7 @@ from forja.core.adapters import LanguageAdapter
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.core.reports.models import CoverageReport
 
-DEFAULT_MAX_CRAP = 30.0  # the classic threshold; calibrated in step 9
+DEFAULT_MAX_CRAP = 30.0  # the classic threshold; not calibrated (the owner dropped the calibration)
 
 
 def max_crap(data: GateInput, language: str) -> float:
