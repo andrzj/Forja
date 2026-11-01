@@ -11,6 +11,8 @@ from forja.checks.scope import disposable, in_scope
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 from forja.core.manifest import EntryKind, Manifest, ManifestEntry, build_manifest, manifest_of
 
+TEXT_SOURCE = (".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".go", ".java", ".cs")
+
 
 def frozen_digest_of(worktree: Path, root: str, files: Collection[str]) -> str:
     """The digest of every file under ``root`` (when there is one), a tool's cache left out, and of
@@ -33,9 +35,12 @@ def _by_text(worktree: Path, entry: ManifestEntry) -> ManifestEntry:
 
     The author's copy holds what the agent wrote and the implementer's copy is a checkout, where
     ``core.autocrlf`` may have turned every line ending into CRLF: the same tests, other bytes.
-    A file with a NUL byte is binary and keeps its own hash.
+    Only test source is read this way, where a line ending cannot change what a test asserts. A
+    fixture or data file is hashed byte for byte (a line ending can change what it holds), so
+    ``core.autocrlf`` may refuse such a stage: that is the safe side. A file with a NUL byte keeps
+    its own hash.
     """
-    if entry.kind is not EntryKind.FILE:
+    if entry.kind is not EntryKind.FILE or not entry.path.lower().endswith(TEXT_SOURCE):
         return entry
     try:
         content = (worktree / entry.path).read_bytes()

@@ -221,10 +221,19 @@ def test_a_change_of_text_is_still_a_change_under_other_line_endings(tmp_path: P
     assert judge(tmp_path, digest) == ["the frozen tests were changed [tests]"]
 
 
-def test_a_binary_file_is_hashed_as_it_is(tmp_path: Path) -> None:
+def test_a_data_file_is_hashed_byte_for_byte(tmp_path: Path) -> None:
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests/blob.bin").write_bytes(b"a\r\nb\x00")
+    (tmp_path / "tests/case.json").write_bytes(b"{" + bytes([10]) + b"}")
     digest = frozen_digest_of(tmp_path, "tests", ())
-    (tmp_path / "tests/blob.bin").write_bytes(b"a\nb\x00")
+    (tmp_path / "tests/case.json").write_bytes(b"{" + bytes([13, 10]) + b"}")
+
+    assert frozen_digest_of(tmp_path, "tests", ()) != digest
+
+
+def test_a_source_file_with_a_nul_byte_is_hashed_as_it_is(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/blob.py").write_bytes(b"a" + bytes([13, 10]) + b"b" + bytes([0]))
+    digest = frozen_digest_of(tmp_path, "tests", ())
+    (tmp_path / "tests/blob.py").write_bytes(b"a" + bytes([10]) + b"b" + bytes([0]))
 
     assert frozen_digest_of(tmp_path, "tests", ()) != digest
