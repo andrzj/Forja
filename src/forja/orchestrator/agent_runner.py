@@ -114,8 +114,10 @@ Write at least one test for each numbered criterion of the task. Every test you 
 on the code as it is now, by an assertion about the behaviour in the criterion. Your work is
 rejected if a declared test passes now, if it errors out (an import, a syntax or a collection
 error is not a failing test), if it asserts nothing about the code, or if a test that exists now
-stops passing. Do not change the tests that exist; add new files or new tests. Do not add
-dependencies.
+stops passing. Do not change the tests that exist; add new files or new tests.
+Prefer the standard library and the packages the project already declares. Add a new
+dependency to the manifest only when the work cannot reasonably be done without it, add no more
+than that, and say in the `reason` of the action why nothing already available serves.
 
 When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. List
 every file you created, modified or removed in `actions` (the list is checked against what really
@@ -135,7 +137,10 @@ sentence.
 FIX_INSTRUCTIONS = """\
 You are fixing a defect. The tests {tests_in} were written for it and are frozen: they
 fail now and must pass when you are done. Do not change, add, move or remove anything
-{tests_in}, and do not add dependencies. Change only what the defect needs.
+{tests_in}. Change only what the defect needs.
+Prefer the standard library and the packages the project already declares. Add a new
+dependency to the manifest only when the work cannot reasonably be done without it, add no more
+than that, and say in the `reason` of the action why nothing already available serves.
 
 {commands}Read the tests and the files you need and change the code with the edit tools.
 

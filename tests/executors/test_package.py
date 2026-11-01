@@ -264,3 +264,22 @@ def test_every_template_that_takes_assumptions_shows_their_shape() -> None:
 
     for template in templates:
         assert '"missing_evidence"' in template
+
+
+def test_the_fix_and_the_test_author_may_add_a_dependency_only_when_nothing_available_serves() -> (
+    None
+):
+    from forja.orchestrator import agent_runner
+
+    for template in (agent_runner.AUTHOR_INSTRUCTIONS, agent_runner.FIX_INSTRUCTIONS):
+        assert "do not add dependencies" not in template.lower()
+        assert (
+            "Prefer the standard library and the packages the project already declares" in template
+        )
+        assert "why nothing already available serves" in template
+
+
+def test_a_refactoring_still_adds_no_dependency() -> None:
+    from forja.orchestrator import agent_runner
+
+    assert "do not add dependencies" in agent_runner.INSTRUCTIONS
