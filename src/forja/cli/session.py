@@ -8,7 +8,7 @@ the work; this only connects the pieces the orchestrator is written against.
 import hashlib
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -43,6 +43,7 @@ from forja.languages import (
     TypeScriptAdapter,
 )
 from forja.languages.go.adapter import find_golangci_lint
+from forja.languages.python.environment import RunEnvironment, VirtualEnvironment
 from forja.orchestrator.agent_runner import ExecutorAgentRunner
 from forja.orchestrator.budget import Meter
 from forja.orchestrator.config import (
@@ -78,6 +79,7 @@ GIT_ENVIRONMENT = (
     "LANG", "LC_ALL", "PATHEXT", "COMSPEC",
 )  # fmt: skip
 NETWORK_PROBES_WITHOUT_A_PERSON = 60
+INSTALL_TIMEOUT = 600.0  # seconds for one venv or pip command
 FORJA_VERSION = "0.0.0"
 POLICY_VERSION = "0.0.0+default"
 IN_USER_ENVIRONMENT = Confirmation(
@@ -90,12 +92,18 @@ def git_base_environment(environ: Mapping[str, str]) -> dict[str, str]:
     return {name: value for name, value in environ.items() if name.upper() in wanted}
 
 
-def languages(repo: Path) -> AdapterRegistry:
-    """The language adapters of a run."""
+def languages(
+    repo: Path, python_of: Callable[[], tuple[str, ...]] | None = None
+) -> AdapterRegistry:
+    """The language adapters of a run. ``python_of`` gives the interpreter each Python project
+    uses when it is made, which changes once the run has an environment of its own."""
     registry = AdapterRegistry()
     python = repo_python(repo)
     lint = find_golangci_lint()
-    registry.register_language(PythonAdapter(python=python), lambda: PythonAdapter(python=python))
+    registry.register_language(
+        PythonAdapter(python=python),
+        lambda: PythonAdapter(python=(python_of or (lambda: python))()),
+    )
     registry.register_language(GoAdapter(golangci_lint=lint), lambda: GoAdapter(golangci_lint=lint))
     registry.register_language(TypeScriptAdapter(), TypeScriptAdapter)
     registry.register_language(CSharpAdapter(), CSharpAdapter)
@@ -364,7 +372,17 @@ async def _context(
     def sinks(level: Level, target: str, operation: str) -> LogEventSink:
         return LogEventSink(log, level, target, operation)
 
-    registry = languages(repo)
+    run_python = RunEnvironment(
+        VirtualEnvironment(
+            directory / "venv",
+            base_python=repo_python(repo)[0],
+            env=env,
+            timeout=INSTALL_TIMEOUT,
+            log_dir=directory / "logs" / "venv",
+        ),
+        repo_python(repo),
+    )
+    registry = languages(repo, lambda: run_python.python)
     rules = await export_rules(
         plain, config.base_commit, config.semgrep_config, directory / "semgrep-rules"
     )
@@ -387,6 +405,7 @@ async def _context(
         markers=build_markers(policy.voice_extra, policy.voice_off),
         fact_ids=frozenset(fact.id for fact in config.facts),
         differential_cases=policy.differential if config.objective is Objective.REFACTOR else (),
+        installer=run_python.install,
     )
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:

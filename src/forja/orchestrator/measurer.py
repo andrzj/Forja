@@ -37,6 +37,12 @@ from forja.checks.coverage import CoverageShare
 from forja.checks.crap import CrapCheck
 from forja.checks.dependency_audit import DependencyAuditCheck, is_artifact
 from forja.checks.dependency_cycles import DependencyCyclesCheck
+from forja.checks.dependency_install import (
+    DependencyInstallCheck,
+    Installer,
+    install_findings,
+    requirements_of,
+)
 from forja.checks.differential import DifferentialCheck
 from forja.checks.differential_base import DifferentialBase
 from forja.checks.differential_base import load as load_differential_base
@@ -168,7 +174,9 @@ class PipelineMeasurer:
         markers: Sequence[Marker] = MARKERS,
         fact_ids: frozenset[str] = frozenset(),
         differential_cases: Iterable[DifferentialCase] = (),
+        installer: Installer | None = None,
     ) -> None:
+        self._installer = installer
         self._adapters = adapters
         self._git = git
         self._log = log
@@ -643,6 +651,24 @@ class PipelineMeasurer:
         test_texts = await read_before(git, changes, self.is_test)
         artifacts = await read_before(git, changes, is_artifact)
         declared = await read_before(git, changes, lambda path: is_manifest(manifests, path))
+        head = (await git.lines("rev-parse", "HEAD"))[0]
+        if self._installer is not None:  # before the checks, which run in the environment it makes
+            stopped = await install_findings(
+                ctx.worktree,
+                changes,
+                declared,
+                manifests,
+                requirements_of(self._adapters.languages()),
+                self._installer,
+                self._registry_get,
+            )
+            if stopped:
+                data = GateInput(
+                    ctx.worktree, head, ctx.task.task_id, ctx.task.stage_id, ctx.attempt_id
+                )
+                return await self._pipeline([DependencyInstallCheck(tuple(stopped))]).run(
+                    data, set()
+                )
         tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
@@ -750,7 +776,6 @@ class PipelineMeasurer:
             VoiceCheck(worktree, changes, self._classify, self._markers, ctx.message),
             CommentsCheck(worktree, changes, everything, self._classify),
         ]
-        head = (await git.lines("rev-parse", "HEAD"))[0]
         claims = expectations.claims if expectations is not None else ()
         evidence = frozenset({*self._settings, *self._read_base_metrics(), *STATIC_METRICS})
         if claims or ctx.task.role is Producer.DOCUMENTER:  # whoever states something cites it

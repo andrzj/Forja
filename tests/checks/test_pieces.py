@@ -109,6 +109,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "scope": (1, Mode.BLOCKING, "block"),
         "freeze": (1, Mode.BLOCKING, "block"),
         "secrets": (2, Mode.BLOCKING, "block"),
+        "dependency_install": (2, Mode.BLOCKING, "block"),
         "format": (3, Mode.BLOCKING, "block"),
         "lint": (3, Mode.BLOCKING, "block"),
         "build": (4, Mode.BLOCKING, "block"),

@@ -8,6 +8,7 @@ Forja's own. Installing a package runs code of the package (ADR 0018: no sandbox
 checks that each name exists in the registry first.
 """
 
+import asyncio
 import itertools
 import sys
 from collections.abc import Collection, Mapping
@@ -17,6 +18,7 @@ from forja.core.process import Outcome, ProcessIdentity, ProcessRunner, ProcessS
 
 _PURELIB = "import sysconfig; print(sysconfig.get_path('purelib'))"
 _PTH = "forja-base.pth"
+_READY = "forja-ready"
 _TAIL = 5  # lines of the installer's output that go into the error
 
 
@@ -45,6 +47,31 @@ class _Collector:
 
 def _scripts(directory: Path) -> Path:
     return directory / ("Scripts" if sys.platform == "win32" else "bin")
+
+
+class RunEnvironment:
+    """The environment of a run, made when the first dependency needs it. Until then, and for a
+    repository that never adds one, the interpreter is the repository's own."""
+
+    def __init__(self, environment: "VirtualEnvironment", base_python: tuple[str, ...]) -> None:
+        self._environment = environment
+        self._base = base_python
+        self._lock = asyncio.Lock()  # tasks that run together share one environment
+
+    @property
+    def python(self) -> tuple[str, ...]:
+        return self._environment.python if self._environment.ready else self._base
+
+    async def install(self, requirements: Collection[str]) -> str | None:
+        """Install the requirements; the error text when that failed, else ``None``."""
+        async with self._lock:
+            try:
+                if not self._environment.ready:
+                    await self._environment.create()
+                await self._environment.install(requirements)
+            except EnvironmentFailed as error:
+                return str(error)
+        return None
 
 
 class VirtualEnvironment:
@@ -85,6 +112,12 @@ class VirtualEnvironment:
         await self._run(self._base, "-m", "venv", str(self._directory))
         own_packages = await self._purelib(self.python[0])
         (Path(own_packages) / _PTH).write_text(base_packages + "\n", encoding="utf-8")
+        (self._directory / _READY).write_text("", encoding="utf-8")
+
+    @property
+    def ready(self) -> bool:
+        """Whether ``create`` finished, here or in an earlier process."""
+        return (self._directory / _READY).is_file()
 
     async def install(self, requirements: Collection[str]) -> None:
         """Install the requirements not installed yet; nothing runs when there are none."""
