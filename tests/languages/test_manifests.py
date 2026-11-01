@@ -286,3 +286,41 @@ def test_python_reads_a_requirements_edit_line_by_line() -> None:
 
 def test_python_says_nothing_of_a_file_that_is_not_its_manifest() -> None:
     assert only_dependencies_changed("setup.cfg", "", "x") is None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "pkg --index-url http://evil",
+        "pkg --hash=sha256:abc",
+        "pkg \\",
+        "pkg @ file:///x",
+        "pkg.whl",
+        "pkg-1.0.tar.gz",
+        "pkg; python_version >= '3' and extra == '$X'",
+        "pkg; os_name == '/x'",
+        "C:\\x\\pkg",
+        "$PKG",
+    ],
+)
+def test_python_refuses_what_is_not_exactly_a_registry_requirement(line: str) -> None:
+    assert only_dependencies_changed("requirements.txt", "a\n", f"a\n{line}\n") is False
+
+
+def test_python_accepts_extras_specifiers_and_markers() -> None:
+    line = "pkg[extra,more]>=1.0,<2; python_version >= '3.10'"
+
+    assert only_dependencies_changed("requirements.txt", "a\n", f"a\n{line}\n") is True
+
+
+def test_python_refuses_to_drop_or_change_an_option_line() -> None:
+    before = "--index-url http://mirror\na\n"
+
+    assert only_dependencies_changed("requirements.txt", before, "a\n") is False
+    assert only_dependencies_changed("requirements.txt", before, "a\nb\n") is False
+    assert only_dependencies_changed("requirements.txt", before, before + "b\n") is True
+    assert only_dependencies_changed("requirements.txt", "a\n", "a\n--hash=x\n") is False
+
+
+def test_python_does_not_let_a_line_join_a_continued_one() -> None:
+    assert only_dependencies_changed("requirements.txt", "a \\n", "a \\nb\n") is False

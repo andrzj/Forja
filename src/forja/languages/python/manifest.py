@@ -56,13 +56,23 @@ def _requirements(text: str) -> frozenset[str]:
     return frozenset(found)
 
 
+_PLAIN = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._-]*"  # the name
+    r"(\[[A-Za-z0-9._, -]*\])?"  # extras
+    r"\s*\(?(?:[<>=!~]=?=?\s*[A-Za-z0-9.*+!_-]+\s*,?\s*)*\)?"  # version specifiers
+    r"\s*(;[\w\s.,'\"()<>=!~*-]*)?"  # a marker: no URL, path, variable or reference in it
+)
+_ARCHIVE = (".whl", ".zip", ".tar.gz", ".tgz", ".tar.bz2", ".tar")
+
+
 def _plain_requirement(requirement: str) -> bool:
-    """A requirement that names a package of the registry: no option, no URL, no direct reference
-    (``name @ url``), no path."""
+    """A requirement that names a package of the registry and nothing else: the whole text is a
+    PEP 508 name, extras, version specifiers and marker. No option (``--hash`` and the like), no
+    URL, no direct reference (``name @ url``), no path, no archive file, no line continuation."""
     text = requirement.strip()
-    if not text or text.startswith(("-", ".", "/")) or "://" in text or "@" in text:
-        return False
-    return _name(text) is not None
+    return bool(_PLAIN.fullmatch(text)) and not text.lower().split(";", 1)[0].strip().endswith(
+        _ARCHIVE
+    )
 
 
 def only_dependencies_changed(path: str, before: str, after: str) -> bool | None:
@@ -124,11 +134,29 @@ def _requirement_strings(data: dict[str, object]) -> list[str]:
 
 
 def _requirements_edit(before: str, after: str) -> bool:
+    """Only plain requirements come and go: every other line (an option, an include, a hash
+    continuation) stays as it was, and a continued line lets nothing be added after it."""
     kept = {line.strip() for line in before.splitlines()}
-    for line in after.splitlines():
-        text = line.split(" #", 1)[0].strip()
-        if line.strip() in kept or not text or text.startswith("#"):
-            continue
-        if not _plain_requirement(text):
-            return False
-    return True
+    if before != after and any(line.rstrip().endswith("\\") for line in after.splitlines()):
+        return False
+    if _others(before) != _others(after):
+        return False
+    return all(
+        _plain_requirement(text)
+        for line in after.splitlines()
+        if line.strip() not in kept and (text := _content(line))
+    )
+
+
+def _content(line: str) -> str:
+    text = line.split(" #", 1)[0].strip()
+    return "" if text.startswith("#") else text
+
+
+def _others(text: str) -> list[str]:
+    """The lines that are not a blank, a comment or a plain requirement, in order."""
+    return [
+        content
+        for line in text.splitlines()
+        if (content := _content(line)) and not _plain_requirement(content)
+    ]
