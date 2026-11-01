@@ -32,6 +32,13 @@ GATE_NAMES = {
     "crap": "crap",
     "pass_through": "pass.",
     "module_depth": "prof.",
+    "dependency_cycles": "ciclos",
+    "layer_rules": "camadas",
+    "package_metrics": "pacotes",
+    "sast": "sast",
+    "dependency_audit": "auditoria",
+    "new_dependency": "dep.nova",
+    "differential": "difer.",
 }
 Pieces = list[tuple[str, Style]]
 _COLOR_SYSTEM = {"truecolor": "truecolor", "256": "256", "16": "standard", "none": None}

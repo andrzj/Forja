@@ -93,7 +93,36 @@ def test_the_pipeline_is_in_order_so_what_came_before_a_running_gate_passed() ->
         "crap": GateStatus.PENDING,
         "pass_through": GateStatus.PENDING,
         "module_depth": GateStatus.PENDING,
+        "dependency_cycles": GateStatus.PENDING,
+        "layer_rules": GateStatus.PENDING,
+        "package_metrics": GateStatus.PENDING,
+        "sast": GateStatus.PENDING,
+        "dependency_audit": GateStatus.PENDING,
+        "new_dependency": GateStatus.PENDING,
+        "differential": GateStatus.PENDING,
     }  # fmt: skip
+
+
+def test_the_checks_of_gates_9_to_11_are_on_the_bar_after_gate_8_and_run_in_order() -> None:
+    view = model()
+
+    view.apply(tool("intent", "run_tool:t1-a1:sast:1"))
+
+    after = {
+        "dependency_cycles", "layer_rules", "package_metrics", "sast", "dependency_audit",
+        "new_dependency", "differential",
+    }  # fmt: skip
+    assert list(GATES[-7:]) == [
+        "dependency_cycles", "layer_rules", "package_metrics", "sast", "dependency_audit",
+        "new_dependency", "differential",
+    ]  # fmt: skip
+    found = statuses(view)
+    assert set(found) >= after
+    assert found["module_depth"] is GateStatus.PASSED
+    assert found["layer_rules"] is GateStatus.PASSED
+    assert found["sast"] is GateStatus.RUNNING
+    assert found["dependency_audit"] is GateStatus.PENDING
+    assert found["differential"] is GateStatus.PENDING
 
 
 def test_the_lint_of_the_parent_commit_is_the_lint_gate() -> None:

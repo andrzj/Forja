@@ -31,6 +31,13 @@ def gates(**changes: GateStatus) -> tuple[tuple[str, GateStatus], ...]:
         "crap": GateStatus.PENDING,
         "pass_through": GateStatus.PENDING,
         "module_depth": GateStatus.PENDING,
+        "dependency_cycles": GateStatus.PENDING,
+        "layer_rules": GateStatus.PENDING,
+        "package_metrics": GateStatus.PENDING,
+        "sast": GateStatus.PENDING,
+        "dependency_audit": GateStatus.PENDING,
+        "new_dependency": GateStatus.PENDING,
+        "differential": GateStatus.PENDING,
     }  # fmt: skip
     return tuple({**base, **changes}.items())
 
@@ -123,9 +130,11 @@ def test_before_any_task_the_first_line_says_the_state_of_the_run() -> None:
 
 
 def test_the_second_line_has_the_gates_the_tokens_and_the_time_when_there_is_room() -> None:
-    second = render_status(VIEWS["busy"], THEMES["escuro"], 120)[1].plain
+    second = render_status(VIEWS["busy"], THEMES["escuro"], 200)[1].plain
 
     assert "✓escopo ✓segredos ✓formato ◔lint ·build ·testes ·complex." in second
+    assert "·crap ·pass. ·prof. ·ciclos ·camadas ·pacotes ·sast" in second
+    assert "·auditoria ·dep.nova ·difer." in second
     assert "tokens ████░░░░░░ 43%" in second
     assert second.endswith("12:31")
 
@@ -134,7 +143,7 @@ def test_a_narrow_window_loses_the_time_first_then_the_gates_and_never_the_token
     def second(columns: int) -> str:
         return render_status(VIEWS["busy"], THEMES["escuro"], columns)[1].plain
 
-    full = second(120)
+    full = second(200)
     no_time = second(len(full) - 1)
     no_gates = second(len("tokens ████░░░░░░ 43%") + 3)
     tiny = second(len("tokens ████░░░░░░ 43%"))

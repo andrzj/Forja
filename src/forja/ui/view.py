@@ -30,6 +30,13 @@ GATES = (
     "crap",
     "pass_through",
     "module_depth",
+    "dependency_cycles",
+    "layer_rules",
+    "package_metrics",
+    "sast",
+    "dependency_audit",
+    "new_dependency",
+    "differential",
 )
 _FEED = 60
 _REJECTIONS = 20
