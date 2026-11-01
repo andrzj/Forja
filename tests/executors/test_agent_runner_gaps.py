@@ -38,6 +38,23 @@ def test_a_git_directory_below_the_root_is_cleared_like_any_other(tmp_path: Path
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="junctions exist on Windows")
+def test_clearing_a_directory_removes_a_junction_without_entering_it(tmp_path: Path) -> None:
+    import _winapi  # noqa: PLC0415
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "precious.txt").write_text("p", encoding="utf-8")
+    cleared = tmp_path / "cleared"
+    cleared.mkdir()
+    _winapi.CreateJunction(str(outside), str(cleared / "jn"))  # type: ignore[attr-defined,unused-ignore]
+
+    _wipe(cleared, frozenset())
+
+    assert list(cleared.iterdir()) == []
+    assert (outside / "precious.txt").read_text(encoding="utf-8") == "p"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions exist on Windows")
 def test_a_junction_is_refused_wherever_it_is_in_the_path(tmp_path: Path) -> None:
     import _winapi  # noqa: PLC0415
 
