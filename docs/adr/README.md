@@ -41,3 +41,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0033](0033-o-adaptador-generico-de-cli-e-um-modelo-de-comando.md) | Adaptador genérico de CLI: um modelo de comando, sem código | Aceito |
 | [0034](0034-a-mutacao-muta-a-funcao-inteira-sem-capacidade-incremental.md) | A mutação cobre a função inteira das funções tocadas, sem a capacidade incremental | Aceito |
 | [0035](0035-a-voz-e-instrucao-e-medida-nunca-bloqueio.md) | A voz é instrução e medida, nunca bloqueio | Aceito |
+| [0036](0036-dependencias-do-agente-em-ambiente-virtual-por-execucao.md) | Dependências do agente em ambiente virtual por execução | Aceito |

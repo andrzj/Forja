@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from forja.languages.python.environment import EnvironmentFailed, VirtualEnvironment
+from forja.languages.python.environment import (
+    EnvironmentFailed,
+    RunEnvironment,
+    VirtualEnvironment,
+)
 from forja.languages.python.manifest import declared_requirements
 
 PACKAGE = "forjaprobe"
@@ -139,3 +143,71 @@ def test_requirements_that_are_not_plain_are_left_out_and_other_files_have_none(
     assert declared_requirements("go.mod", "good") == frozenset()
     with pytest.raises(ValueError, match="not valid TOML"):
         declared_requirements("pyproject.toml", "= =")
+
+
+def test_the_environment_is_made_in_a_directory_whose_parents_do_not_exist(tmp_path: Path) -> None:
+    environment = VirtualEnvironment(
+        tmp_path / "a" / "b" / "venv",
+        base_python=sys.executable,
+        env=dict(os.environ),
+        timeout=300,
+        log_dir=tmp_path / "logs",
+    )
+
+    asyncio.run(environment.create())
+
+    assert environment.ready
+
+
+def test_an_environment_can_be_made_again_over_the_same_parent(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+    asyncio.run(environment.create())
+
+    asyncio.run(environment.create())
+
+    assert environment.ready
+
+
+def test_each_command_has_a_numbered_log_from_one(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+
+    asyncio.run(environment.create())
+
+    logs = sorted(path.name for path in (tmp_path / "logs").iterdir())
+    assert logs == ["venv-1.log", "venv-2.log", "venv-3.log"]
+
+
+def test_the_package_directory_is_the_last_line_the_interpreter_prints(tmp_path: Path) -> None:
+    (tmp_path / "noise").mkdir()
+    (tmp_path / "noise" / "sitecustomize.py").write_text("print('noise')\n", encoding="utf-8")
+    noisy = dict(os.environ, PYTHONPATH=str(tmp_path / "noise"))  # it says more before the answer
+    environment = VirtualEnvironment(
+        tmp_path / "work" / "venv",
+        base_python=sys.executable,
+        env=noisy,
+        timeout=300,
+        log_dir=tmp_path / "logs",
+    )
+
+    asyncio.run(environment.create())
+
+    assert _imports(environment.python, "pytest")
+
+
+def test_a_run_uses_the_repository_interpreter_until_it_has_an_environment(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+    run = RunEnvironment(environment, (sys.executable,))
+    assert run.python == (sys.executable,)
+
+    assert asyncio.run(run.install(set())) is None
+
+    assert run.python == environment.python
+    assert environment.ready
+
+
+def test_a_run_environment_says_why_an_installation_failed(tmp_path: Path) -> None:
+    run = RunEnvironment(_environment(tmp_path), (sys.executable,))
+
+    failure = asyncio.run(run.install({"forja-no-such-package"}))
+
+    assert failure is not None and "forja-no-such-package" in failure

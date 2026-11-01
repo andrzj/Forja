@@ -117,6 +117,16 @@ promotion = { date = 2026-11-01, reason = "regras revisadas em 30 PRs sem falso 
 
 Vale o mesmo para `dependency_audit` e `new_dependency`. A política para “não consegui medir” é `block` no `sast` e no `dependency_audit` (ferramenta que falha bloqueia quando o gate bloqueia) e `premise` no `new_dependency`; pode ser trocada com `on_inconclusive = "block"` ou `"premise"` na mesma seção.
 
-## Hoje
+## Dependências que o agente adiciona
 
-Nos papéis atuais (refatorar e corrigir) o agente só pode mudar código de produção, então o gate de escopo já rejeita qualquer mudança em manifesto. O `dependency_audit` e o `new_dependency` passam a valer quando um papel editar manifestos. O `sast` vale desde já.
+O implementador e o autor de testes podem editar o manifesto, desde que a edição só mude dependências e o manifesto esteja no escopo da tarefa (a tarefa que precisa de dependência nova inclui `pyproject.toml` no escopo). Em `pyproject.toml` só mudam `project.dependencies`, `optional-dependencies` e `dependency-groups`; em `requirements*.txt` cada linha nova é requisito simples do registro (sem URL, caminho, opção ou arquivo). Lockfile e manifestos de outras linguagens seguem recusados. As instruções mandam preferir a biblioteca padrão e o que o projeto já declara, e justificar no `reason` cada dependência nova (ADR 0036).
+
+**Python.** Antes de rodar qualquer check, o `dependency_install` (gate 2, bloqueante) confere cada nome novo no PyPI e instala os requisitos num ambiente virtual da execução, em `<execução>env`, criado na primeira necessidade a partir do interpretador do repositório. Os pacotes do interpretador do repositório continuam visíveis, atrás dos instalados. O ambiente da Forja e o do repositório não são tocados. Nome que o PyPI não lista, registro sem resposta ou instalação que falha rejeita a tentativa, com o erro do instalador, e nada é instalado em caso de nome inexistente. Idade e uso continuam com o `new_dependency`, depois da instalação. O ambiente fica no diretório da execução (a retomada o reencontra) e não é apagado.
+
+**Outras linguagens.** A dependência nova passa pelo gate 1 só no Python; nas demais o manifesto segue recusado, porque não há passo de instalação.
+
+### O que isto não garante
+
+- **Instalar executa código do pacote.** Não há sandbox (ADR 0018): o código roda com as suas permissões. Um pacote recém-registrado com nome plausível passa na existência, é instalado e só depois o `new_dependency` o reprova por idade. Você escolheu aceitar isso (01/11/2026) em vez de exigir só wheels (`--only-binary`) ou de julgar a idade antes de instalar.
+- **O instalador não recebe chaves nem tokens.** Só PATH, pastas do usuário, certificados, proxy e variáveis `PIP_*`. O código do pacote ainda roda nos testes, com o ambiente dos testes.
+- **Instalação editável do repositório não aparece** no ambiente novo. Em layout `src` com `pip install -e`, os testes podem falhar depois da primeira dependência adicionada.
