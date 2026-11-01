@@ -137,6 +137,36 @@ def added_dependencies(
     return found, unreadable
 
 
+async def unproven_dependencies(
+    worktree: Path,
+    changes: Changes,
+    before: dict[str, str],
+    manifests: Manifests,
+    get: HttpGet = urllib_get,
+) -> list[Finding]:
+    """What stops an installation: every new name that the registry does not list, that it cannot
+    be asked about, or in a manifest that cannot be read. Nothing is installed on the word of a
+    name the agent wrote until this is empty. Age and use are judged later, by the gate."""
+    added, unreadable = added_dependencies(worktree, changes, before, manifests)
+    findings = [Finding(message=f"{path} cannot be read", target=path) for path in unreadable]
+    total = sum(len(names) for names in added.values())
+    if total > MAX_LOOKUPS:
+        message = f"{total} new dependencies (limit {MAX_LOOKUPS})"
+        return findings + [Finding(message=message, target=path) for path, _ in added]
+    for (path, declared), names in added.items():
+        for name in sorted(names):
+            try:
+                await look_up(declared.ecosystem, name, get)
+            except Missing:
+                message = f"{name} does not exist in the {declared.ecosystem} registry"
+            except Unreachable:
+                message = f"{name} could not be checked in the {declared.ecosystem} registry"
+            else:
+                continue
+            findings.append(Finding(message=message, target=path))
+    return findings
+
+
 @dataclass(frozen=True)
 class NewDependencyCheck:
     worktree: Path

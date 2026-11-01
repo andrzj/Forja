@@ -16,6 +16,7 @@ from forja.checks.new_dependency import (
     dependency_edit_of,
     manifests_of,
     threshold,
+    unproven_dependencies,
 )
 from forja.checks.registries import Response
 from forja.core.gates import Approved, GateInput, GateResult, Inconclusive
@@ -312,3 +313,51 @@ def test_a_renamed_or_deleted_manifest_is_never_a_dependency_edit(tmp_path: Path
 
     assert edit(Change(ChangeKind.RENAMED, "requirements.txt", "old.txt")) is False
     assert edit(Change(ChangeKind.DELETED, "requirements.txt")) is False
+
+
+def unproven(tmp_path: Path, text: str, before: str = "", *, get: Any = None) -> list[str]:
+    (tmp_path / MANIFEST).write_text(text, encoding="utf-8")
+    change = Change(ChangeKind.MODIFIED, MANIFEST)
+    found = asyncio.run(
+        unproven_dependencies(
+            tmp_path, Changes((change,), 0, ()), {MANIFEST: before}, manifests, get or registry()
+        )
+    )
+    return [f.message for f in found]
+
+
+def test_a_listed_dependency_is_proven_even_when_it_is_new_in_the_registry(tmp_path: Path) -> None:
+    get = registry(created="2026-10-21T00:00:00Z")
+
+    assert unproven(tmp_path, "a left-pad\n", "a\n", get=get) == []
+
+
+def test_a_missing_dependency_stops_the_installation(tmp_path: Path) -> None:
+    assert unproven(tmp_path, "a ghost\n", "a\n") == ["ghost does not exist in the npm registry"]
+
+
+def test_a_registry_that_cannot_be_reached_stops_the_installation(tmp_path: Path) -> None:
+    assert unproven(tmp_path, "offline\n") == ["offline could not be checked in the npm registry"]
+
+
+def test_a_dependency_already_declared_is_not_looked_up(tmp_path: Path) -> None:
+    assert unproven(tmp_path, "ghost\n", "ghost\n") == []
+
+
+def test_a_manifest_that_cannot_be_read_stops_the_installation(tmp_path: Path) -> None:
+    (tmp_path / MANIFEST).write_bytes(b"\xff\xfe")
+    change = Change(ChangeKind.MODIFIED, MANIFEST)
+
+    found = asyncio.run(
+        unproven_dependencies(tmp_path, Changes((change,), 0, ()), {MANIFEST: ""}, manifests)
+    )
+
+    assert [f.message for f in found] == [f"{MANIFEST} cannot be read"]
+
+
+def test_too_many_new_dependencies_stop_the_installation(tmp_path: Path) -> None:
+    names = " ".join(f"n{i}" for i in range(MAX_LOOKUPS + 1))
+
+    assert unproven(tmp_path, names) == [
+        f"{MAX_LOOKUPS + 1} new dependencies (limit {MAX_LOOKUPS})"
+    ]
