@@ -20,8 +20,8 @@ Todos os gates abaixo estão em **observação** (medem e reportam, não bloquei
 | 11 | `differential` | `max_time_ratio` | 1,25 | Palpite (comentário: “a guess until the calibration of queue item 6”). | `checks\differential.py` (`DEFAULT_MAX_TIME_RATIO`) |
 | 11 | `differential` | `max_memory_ratio` | 1,25 | Mesmo palpite do tempo. | `checks\differential.py` (`DEFAULT_MAX_MEMORY_RATIO`) |
 | 11 | `differential` | `runs` | 3 | Sem fonte registrada; número de execuções por caso a cada tentativa (a mediana). | `checks\differential.py` (`DEFAULT_RUNS`) |
-| 12 | `voice` | `max_dashes` | 3 | Comentário: travessões que um arquivo acrescenta “before it reads as excess”. Sem dado. | `checks\voice_markers.py` (`MAX_DASHES`) |
-| 12 | `comments` | `MIN_WORDS` | 2 | Comentário no código: um comentário de uma palavra é rótulo. Constante, não ajustável na política. | `checks\comments.py` |
+| 12 | `voice` | `max_dashes` | 3 | Comentário: travessões que um arquivo acrescenta “before it reads as excess”. Sem dado. **Medida, não bloqueio** (ADR 0035): a política recusa `mode = "blocking"` para `voice` e `comments`, então calibrar este valor não o torna reprovação; a instrução ao agente pede zero. | `checks\voice_markers.py` (`MAX_DASHES`) |
+| 12 | `comments` | `MIN_WORDS` | 2 | Comentário no código: um comentário de uma palavra é rótulo. Constante, não ajustável na política. Medida, não bloqueio (ADR 0035). | `checks\comments.py` |
 | 12 | `comments` | `REPEAT_RATIO` | 0,75 | Fração das palavras do comentário que o código já tem. Sem fonte; constante, não ajustável na política. | `checks\comments.py` |
 | 1 | `scope` | `max_files`, `max_lines` | 8 arquivos, 400 linhas por tarefa | Orçamento da execução (`files_per_task`, `lines_per_task`); a Especificação põe os valores padrão em aberto (Plano, questão 6). | `orchestrator\config.py` (linhas 87 e 88) |
 

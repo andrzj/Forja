@@ -4,6 +4,23 @@ Resultado do passo 0 da fila 10 (`docs\plano-voz.md`), lido em 31/10/2026 nas p�
 
 As leituras foram feitas por subagentes que citaram o URL de cada fato; conferi a coerência com o que os adaptadores já assumem, não reli as páginas uma a uma.
 
+## O que a Forja faz
+
+A voz é **instrução e medida, nunca bloqueio** (ADR 0035).
+
+- **Instrui.** `orchestrator\voice_brief.py` guarda o texto (`VERSION = 1`), em inglês como o resto do pacote, a partir da skill `humanizer` v2.9.1 no modo embutido. Pede: não inventar fato, dizer o simples, seguir o idioma e os hábitos do repositório (hábito claro do repositório vale mais que a lista), deixar código, identificadores e citações como estão, escrever só o texto. Mais 20 padrões a evitar, entre eles cumprimento e elogio, falar de si, oferta de ajuda, anúncio de importância, vocabulário inflado, travessões (a instrução pede zero; a medida tolera 3), negrito e títulos em maiúsculas, emoji, voz passiva, texto que narra a mudança e palpite que preenche lacuna.
+- **Acompanha a medida.** Regra ligada a um marcador do gate 12 (`greeting`, `self-reference`, `offer`, `announcement`, `inflated`, `emoji`) sai do texto quando o repositório desliga esse marcador em `[voice] markers_off`. Os padrões que o repositório acrescenta em `markers_extra` entram listados. Assim a instrução e a medida dizem a mesma coisa.
+- **Entrega.** A seção `## Voice` entra no pacote de toda chamada que escreve texto (implementador, autor de testes, especificador, arqueólogo, documentador), em qualquer CLI, inclusive a genérica. O pacote enviado já é registrado com hash. No Claude Code o mesmo texto vai também como arquivo de prompt de sistema adicional (`--append-system-prompt-file`, com `instructions.md` em `.forja-agent`, fora do diff; o agente não pode editá-lo e mudá-lo rejeita o trabalho).
+- **Mede.** O gate 12 (`voice` e `comments`) continua só em observação e o resumo reporta o que ele mediu. A política recusa `mode = "blocking"` para os dois: é erro de configuração.
+
+## O que a Forja não garante
+
+- **Efeito.** Instruir não faz o modelo obedecer. Só uma execução real, com agente real, mostra quanto a escrita muda; isso é do dono (E2E).
+- **Canal próprio fora do Claude Code.** Codex, Grok e Gemini têm canal candidato (abaixo), mas a documentação não confirma o efeito em headless. A Forja não grava opção não confirmada, que pode derrubar a chamada. Esses três, o Cursor e a CLI genérica recebem só o pacote.
+- **Idioma.** A política não tem chave de idioma. O texto manda seguir o idioma do texto ao redor.
+- **Skills.** Nenhuma skill é carregada: o conteúdo do `humanizer` vai como texto.
+- **Reescrita.** A Forja não edita o que o agente escreveu.
+
 ## Critério
 
 Um canal serve se (a) leva texto de instrução ao modelo em modo headless, (b) não escreve na worktree da tentativa (o arquivo apareceria no diff e cairia no gate 1) e (c) não religa o que a Forja desliga de propósito (instruções e skills do projeto, MCP, hooks).
@@ -29,6 +46,6 @@ Nenhuma CLI tem, na documentação lida, um modo de carregar uma skill em headle
 ## O que isto decide
 
 1. **O pacote é o canal de toda CLI**, inclusive a genérica e o Cursor. É o único que não depende de recurso da CLI e já é registrado com hash.
-2. **Claude Code ganha um segundo canal documentado**, o arquivo de prompt de sistema adicional.
+2. **Claude Code ganha um segundo canal documentado**, o arquivo de prompt de sistema adicional (feito no passo 3: `InstructionChannel`, `ClaudeCodeAdapter.instruction_setup`).
 3. **Codex, Grok e Gemini têm canal candidato, não verificado.** A Forja não grava opção que a documentação não confirma para modo headless: passar uma opção desconhecida pode derrubar a chamada. Esses canais só entram depois de uma chamada real que mostre que valem (E2E do dono) ou de a documentação passar a dizer.
 4. **Nenhum canal substitui o prompt de sistema.** Substituir tira a orientação de ferramentas e segurança do padrão.
