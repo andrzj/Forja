@@ -259,7 +259,7 @@ class PytestRunner:
         # executor waiting ten times the whole baseline for it
         command = [
             sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", "-n0",
-            f"--timeout={TEST_TIMEOUT}", *self.deselect, *self.tests,
+            f"--timeout={TEST_TIMEOUT}", "-m", "not slow", *self.deselect, *self.tests,
         ]  # fmt: skip
         # the copy's own source must be the one imported, not the installed project's
         env = {
