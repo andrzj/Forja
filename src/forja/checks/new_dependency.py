@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from forja.checks.base import Undecided, decided, rejected
-from forja.checks.changes import Changes
+from forja.checks.changes import Change, ChangeKind, Changes
 from forja.checks.registries import HttpGet, Missing, Standing, Unreachable, look_up, urllib_get
 from forja.core.gates import (
     Approved,
@@ -69,6 +69,34 @@ def is_manifest(manifests: Manifests, path: str) -> bool:
         return manifests(path, "") is not None
     except ValueError:
         return True
+
+
+def dependency_edit_of(
+    adapters: Iterable[Any], worktree: Path, before: dict[str, str]
+) -> Callable[[Change], bool]:
+    """Whether a change is an edit of a manifest that touches only its dependencies. That is what
+    an adapter says through ``only_dependencies_changed`` (a capability outside its ``Protocol``,
+    as ``declared_dependencies`` is); a language without it has no manifest the agent may edit.
+    A rename, a copy and a deletion are never one."""
+
+    known = tuple(adapters)
+
+    def edit(change: Change) -> bool:
+        if change.kind not in (ChangeKind.ADDED, ChangeKind.MODIFIED) or change.old_path:
+            return False
+        try:
+            after = (worktree / change.path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return False
+        was = "" if change.kind is ChangeKind.ADDED else before.get(change.path, "")
+        for adapter in known:
+            judge = getattr(adapter, "only_dependencies_changed", None)
+            verdict = judge(change.path, was, after) if callable(judge) else None
+            if verdict is not None:
+                return bool(verdict)
+        return False
+
+    return edit
 
 
 def threshold(data: GateInput, language: str, name: str, default: int) -> int:

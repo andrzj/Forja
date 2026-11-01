@@ -16,6 +16,7 @@ from forja.languages.csharp.manifest import declared_dependencies as csharp
 from forja.languages.go.manifest import declared_dependencies as go
 from forja.languages.java.manifest import declared_dependencies as java
 from forja.languages.python.manifest import declared_dependencies as python
+from forja.languages.python.manifest import only_dependencies_changed
 from forja.languages.typescript.manifest import declared_dependencies as typescript
 
 PYPROJECT = """
@@ -231,3 +232,57 @@ def test_the_refusal_of_entities_says_so_and_a_broken_document_says_that(text: s
         java("pom.xml", text)
     with pytest.raises(ValueError, match="not valid XML"):
         java("pom.xml", "<project")
+
+
+DEMO_PYPROJECT = """[project]
+name = "demo"
+dependencies = ["requests"]
+
+[tool.ruff]
+line-length = 100
+"""
+
+
+def with_dependency(text: str, requirement: str) -> str:
+    return text.replace('["requests"]', f'["requests", "{requirement}"]')
+
+
+def test_python_lets_an_edit_add_a_plain_requirement_to_pyproject() -> None:
+    after = with_dependency(DEMO_PYPROJECT, "python-slugify>=8")
+
+    assert only_dependencies_changed("pyproject.toml", DEMO_PYPROJECT, after) is True
+
+
+@pytest.mark.parametrize(
+    "requirement", ["evil @ https://example.com/e.whl", "git+https://example.com/e.git", "./local"]
+)
+def test_python_refuses_a_requirement_that_is_not_from_the_registry(requirement: str) -> None:
+    after = with_dependency(DEMO_PYPROJECT, requirement)
+
+    assert only_dependencies_changed("pyproject.toml", DEMO_PYPROJECT, after) is False
+
+
+@pytest.mark.parametrize(
+    "after",
+    [
+        DEMO_PYPROJECT.replace("100", "120"),
+        DEMO_PYPROJECT + '\n[build-system]\nrequires = ["evil"]\n',
+        DEMO_PYPROJECT.replace('name = "demo"', 'name = "demo"\nscripts = {x = "y:z"}'),
+        "not = [toml",
+    ],
+)
+def test_python_refuses_an_edit_that_changes_more_than_the_dependencies(after: str) -> None:
+    assert only_dependencies_changed("pyproject.toml", DEMO_PYPROJECT, after) is False
+
+
+def test_python_reads_a_requirements_edit_line_by_line() -> None:
+    assert only_dependencies_changed("requirements.txt", "a\n", "a\nb>=1  # why\n") is True
+    assert (
+        only_dependencies_changed("requirements.txt", "a\n", "a\n--index-url http://x\n") is False
+    )
+    assert only_dependencies_changed("requirements.txt", "a\n", "a\nb @ https://x/y.whl\n") is False
+    assert only_dependencies_changed("requirements.txt", "a\n", "a\n-r other.txt\n") is False
+
+
+def test_python_says_nothing_of_a_file_that_is_not_its_manifest() -> None:
+    assert only_dependencies_changed("setup.cfg", "", "x") is None

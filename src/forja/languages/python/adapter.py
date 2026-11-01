@@ -29,7 +29,7 @@ from forja.core.adapters import (
 )
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.python import parsers
-from forja.languages.python.manifest import declared_dependencies
+from forja.languages.python.manifest import declared_dependencies, only_dependencies_changed
 from forja.languages.python.template import template
 
 MANIFEST = "pyproject.toml"
@@ -96,6 +96,11 @@ class PythonAdapter:
         """The packages a manifest declares; ``None`` when ``path`` is not one of this
         language's manifests, ``ValueError`` when it is one that cannot be read."""
         return declared_dependencies(path, text)
+
+    def only_dependencies_changed(self, path: str, before: str, after: str) -> bool | None:
+        """Whether an edit of a manifest of this language touches only the dependencies it
+        declares, each added one a plain registry requirement; ``None`` for any other file."""
+        return only_dependencies_changed(path, before, after)
 
     def classify(self, path: str) -> FileClass | None:
         parts = path.replace("\\", "/").split("/")

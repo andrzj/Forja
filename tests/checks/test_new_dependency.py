@@ -13,12 +13,14 @@ from forja.checks.new_dependency import (
     MAX_LOOKUPS,
     Declared,
     NewDependencyCheck,
+    dependency_edit_of,
     manifests_of,
     threshold,
 )
 from forja.checks.registries import Response
 from forja.core.gates import Approved, GateInput, GateResult, Inconclusive
 from forja.core.gates.models import Rejected
+from forja.languages.python import PythonAdapter
 
 NOW = datetime(2026, 10, 22, tzinfo=UTC)
 MANIFEST = "package.json"
@@ -291,3 +293,22 @@ def test_the_manifests_can_be_asked_about_many_paths_from_a_one_shot_iterator() 
     assert manifests("a.py", "") is None
     assert manifests("pyproject.toml", "") is not None
     assert manifests("pyproject.toml", "") is not None
+
+
+def test_a_dependency_edit_is_a_changed_manifest_that_touches_only_dependencies(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "requirements.txt").write_text("a\nb\n", encoding="utf-8")
+    (tmp_path / "setup.cfg").write_text("x\n", encoding="utf-8")
+    edit = dependency_edit_of([PythonAdapter()], tmp_path, {"requirements.txt": "a\n"})
+
+    assert edit(Change(ChangeKind.MODIFIED, "requirements.txt")) is True
+    assert edit(Change(ChangeKind.MODIFIED, "setup.cfg")) is False
+
+
+def test_a_renamed_or_deleted_manifest_is_never_a_dependency_edit(tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text("a\n", encoding="utf-8")
+    edit = dependency_edit_of([PythonAdapter()], tmp_path, {"old.txt": "a\n"})
+
+    assert edit(Change(ChangeKind.RENAMED, "requirements.txt", "old.txt")) is False
+    assert edit(Change(ChangeKind.DELETED, "requirements.txt")) is False

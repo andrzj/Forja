@@ -53,6 +53,7 @@ from forja.checks.mutation import MutationCheck
 from forja.checks.new_dependency import (
     NewDependencyCheck,
     added_dependencies,
+    dependency_edit_of,
     is_manifest,
     manifests_of,
 )
@@ -693,7 +694,7 @@ class PipelineMeasurer:
                 changes,
                 ctx.task,
                 self._classify,
-                is_manifest=lambda path: is_manifest(manifests, path),
+                dependency_edit=dependency_edit_of(self._adapters.languages(), worktree, declared),
             ),
             *await self._frozen(ctx, changes),
             SecretsCheck(

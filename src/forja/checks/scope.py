@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from forja.checks.base import rejected
 from forja.checks.change_record import CHANGES_DIR, diary_path, record_path
-from forja.checks.changes import Changes, added_lines
+from forja.checks.changes import Change, Changes, added_lines
 from forja.core.adapters import FileClass
 from forja.core.artifacts.models import Producer
 from forja.core.gates import Approved, Finding, GateInput, GateResult
@@ -77,14 +77,16 @@ def _limit(task_value: int, data: GateInput, name: str) -> int:
 class ScopeCheck:
     """The implementer may change only production files in the task's scope; tests stay frozen.
 
-    A dependency manifest is the one other file the implementer and the test author may change:
-    the dependency it adds is examined by gate 10, and the Forja installs it only after that."""
+    The dependencies a manifest declares are the one other thing the implementer and the test
+    author may change, in a manifest inside what each may touch (the task scope; the test
+    directory): the dependency it adds is examined by gate 10, and the Forja installs it only
+    after that. The rest of the manifest stays out of reach."""
 
     changes: Changes
     task: TaskInfo
     classify: Callable[[str], FileClass]
     declared: tuple[str, ...] = ()  # what the agent said it changed; empty means not asked
-    is_manifest: Callable[[str], bool] = lambda path: False  # a dependency manifest of a language
+    dependency_edit: Callable[[Change], bool] = lambda change: False  # touches only dependencies
     id: str = "scope"
     gate: int = 1
     requires: frozenset[str] = frozenset()
@@ -107,20 +109,28 @@ class ScopeCheck:
     def _forbidden(self) -> list[Finding]:
         findings = []
         for change in self.changes.files:
+            edit = self.dependency_edit(change)
             for path in (change.old_path, change.path):
                 if path is None:
                     continue
-                finding = self._by_role(path)
+                finding = self._dependencies(path) if edit else self._by_role(path)
                 if finding:
                     findings.append(finding)
         return findings
 
+    def _dependencies(self, path: str) -> Finding | None:
+        match self.task.role:
+            case Producer.IMPLEMENTER:
+                if self.task.scope and not in_scope(path, self.task.scope):
+                    return Finding(message="outside the task scope", target=path)
+            case Producer.TEST_AUTHOR:
+                if self.task.test_root and not in_scope(path, (self.task.test_root,)):
+                    return Finding(message="outside the test directory", target=path)
+            case _:
+                return self._by_role(path)
+        return None  # a new dependency is the agent's to declare; gate 10 examines it
+
     def _by_role(self, path: str) -> Finding | None:
-        if self.is_manifest(path) and self.task.role in (
-            Producer.TEST_AUTHOR,
-            Producer.IMPLEMENTER,
-        ):
-            return None  # a new dependency is the agent's to declare; gate 10 examines it
         match self.task.role:
             case Producer.TEST_AUTHOR:
                 return self._author(path)

@@ -54,3 +54,81 @@ def _requirements(text: str) -> frozenset[str]:
         if name := _name(requirement):  # an option, a comment, a blank or a path has none
             found.add(name)
     return frozenset(found)
+
+
+def _plain_requirement(requirement: str) -> bool:
+    """A requirement that names a package of the registry: no option, no URL, no direct reference
+    (``name @ url``), no path."""
+    text = requirement.strip()
+    if not text or text.startswith(("-", ".", "/")) or "://" in text or "@" in text:
+        return False
+    return _name(text) is not None
+
+
+def only_dependencies_changed(path: str, before: str, after: str) -> bool | None:
+    """Whether the edit of a Python manifest touches nothing but the dependencies it declares, and
+    each one it adds is a plain registry requirement. ``None`` when ``path`` is not a Python
+    manifest. Anything else in ``pyproject.toml`` (the build system, the tools, the entry points)
+    is configuration the agent may not change, and an option or a URL in a requirements file
+    can point the installer at another index or another source."""
+    name = file_name(path)
+    try:
+        if name == "pyproject.toml":
+            return _pyproject_edit(before, after)
+        if _REQUIREMENTS.fullmatch(name):
+            return _requirements_edit(before, after)
+    except (ValueError, tomllib.TOMLDecodeError):
+        return False
+    return None
+
+
+def _without_dependencies(data: dict[str, object]) -> dict[str, object]:
+    rest = {key: value for key, value in data.items() if key != "dependency-groups"}
+    project = rest.get("project")
+    if isinstance(project, dict):
+        rest["project"] = {
+            key: value
+            for key, value in project.items()
+            if key not in ("dependencies", "optional-dependencies")
+        }
+    return rest
+
+
+def _pyproject_edit(before: str, after: str) -> bool:
+    old = tomllib.loads(before) if before.strip() else {}
+    new = tomllib.loads(after)
+    if _without_dependencies(old) != _without_dependencies(new):
+        return False
+    return all(
+        _plain_requirement(item)
+        for item in _requirement_strings(new)
+        if item not in _requirement_strings(old)
+    )
+
+
+def _requirement_strings(data: dict[str, object]) -> list[str]:
+    project = data.get("project", {})
+    lists: list[object] = [project.get("dependencies", []) if isinstance(project, dict) else []]
+    if isinstance(project, dict):
+        lists += list(project.get("optional-dependencies", {}).values())
+    groups = data.get("dependency-groups", {})
+    if isinstance(groups, dict):
+        lists += list(groups.values())
+    return [
+        item
+        for items in lists
+        if isinstance(items, list)
+        for item in items
+        if isinstance(item, str)
+    ]
+
+
+def _requirements_edit(before: str, after: str) -> bool:
+    kept = {line.strip() for line in before.splitlines()}
+    for line in after.splitlines():
+        text = line.split(" #", 1)[0].strip()
+        if line.strip() in kept or not text or text.startswith("#"):
+            continue
+        if not _plain_requirement(text):
+            return False
+    return True

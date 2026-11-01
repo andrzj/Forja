@@ -343,28 +343,63 @@ def test_a_task_with_no_scope_still_keeps_the_implementer_to_production_files() 
     ]
 
 
-def judged_with_manifests(role: Producer, *paths: str) -> Any:
-    task = TaskInfo("t1", "t1-s", "intent", ("src",), 8, 400, role, "tests")
+def judged_with_dependencies(
+    role: Producer,
+    *paths: str,
+    edit: bool = True,
+    scope: tuple[str, ...] = ("src", "pyproject.toml"),
+) -> Any:
+    task = TaskInfo("t1", "t1-s", "intent", scope, 8, 400, role, "tests")
     data = GateInput(Path("."), "c" * 40, "t1", "t1-s", "t1-a1")
-    check = ScopeCheck(
-        modified(*paths), task, classify, is_manifest=lambda path: path.endswith("pyproject.toml")
-    )
+    check = ScopeCheck(modified(*paths), task, classify, dependency_edit=lambda change: edit)
     return asyncio.run(check.evaluate(data))
 
 
-@pytest.mark.parametrize("role", [Producer.IMPLEMENTER, Producer.TEST_AUTHOR])
-def test_the_implementer_and_the_test_author_may_declare_a_dependency(role: Producer) -> None:
-    assert judged_with_manifests(role, "pyproject.toml") == Approved()
+def test_the_implementer_may_edit_the_dependencies_of_a_manifest_in_its_scope() -> None:
+    assert judged_with_dependencies(Producer.IMPLEMENTER, "pyproject.toml") == Approved()
+
+
+def test_the_test_author_may_edit_the_dependencies_of_a_manifest_in_the_test_directory() -> None:
+    result = judged_with_dependencies(Producer.TEST_AUTHOR, "tests/requirements-dev.txt")
+
+    assert result == Approved()
 
 
 @pytest.mark.parametrize("role", [Producer.DOCUMENTER, Producer.SPECIFIER, Producer.ARCHAEOLOGIST])
 def test_the_other_roles_may_not_change_a_manifest(role: Producer) -> None:
-    assert isinstance(judged_with_manifests(role, "pyproject.toml"), Rejected)
+    assert isinstance(judged_with_dependencies(role, "pyproject.toml"), Rejected)
 
 
-def test_a_manifest_does_not_open_the_door_to_other_files() -> None:
-    result = judged_with_manifests(Producer.IMPLEMENTER, "pyproject.toml", "setup.cfg")
+def test_a_manifest_edit_that_is_not_only_dependencies_gets_no_exception() -> None:
+    result = judged_with_dependencies(Producer.IMPLEMENTER, "pyproject.toml", edit=False)
 
     assert described(result) == [
+        "only production files may change in this stage (this is other) [pyproject.toml]"
+    ]
+
+
+def test_a_dependency_edit_outside_the_task_scope_is_refused() -> None:
+    result = judged_with_dependencies(Producer.IMPLEMENTER, "pyproject.toml", scope=("src",))
+
+    assert described(result) == ["outside the task scope [pyproject.toml]"]
+
+
+def test_a_dependency_edit_outside_the_test_directory_is_refused() -> None:
+    result = judged_with_dependencies(Producer.TEST_AUTHOR, "pyproject.toml")
+
+    assert described(result) == ["outside the test directory [pyproject.toml]"]
+
+
+def test_a_dependency_edit_does_not_open_the_door_to_other_files() -> None:
+    task = TaskInfo("t1", "t1-s", "intent", ("src", "pyproject.toml"), 8, 400, Producer.IMPLEMENTER)
+    data = GateInput(Path("."), "c" * 40, "t1", "t1-s", "t1-a1")
+    check = ScopeCheck(
+        modified("pyproject.toml", "setup.cfg"),
+        task,
+        classify,
+        dependency_edit=lambda change: change.path == "pyproject.toml",
+    )
+
+    assert described(asyncio.run(check.evaluate(data))) == [
         "only production files may change in this stage (this is other) [setup.cfg]"
     ]
