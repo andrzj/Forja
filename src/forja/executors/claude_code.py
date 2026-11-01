@@ -15,6 +15,7 @@ from pathlib import Path
 from forja.core.adapters.common import CommandPlan
 from forja.core.adapters.executor import (
     AGENT_DIR,
+    DIARY_FILE,
     AgentActivity,
     AgentRequest,
     CommandActivity,
@@ -46,7 +47,7 @@ OUTSIDE = tuple(f"{tool}(../**)" for tool in ("Read", "Edit", "Write"))
 OWN = tuple(
     f"{tool}(./{AGENT_DIR}/{name})"
     for tool in ("Edit", "Write")
-    for name in (SETTINGS_FILE, INSTRUCTIONS_FILE, "package.md")
+    for name in (SETTINGS_FILE, INSTRUCTIONS_FILE, "package.md", DIARY_FILE)
 )
 SETTINGS = {"disableAllHooks": True, "permissions": {"deny": list(OWN)}}
 

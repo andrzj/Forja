@@ -12,15 +12,16 @@ Uma projeção do log de eventos da execução (`orchestrator\diary.py`). A Forj
 
 ## Regra de fidelidade
 
-Tudo o que o diário mostra ao modelo é fiel ao que foi escrito. A fala do agente e o motivo da rejeição não são resumidos nem reescritos. Texto de várias linhas vai citado, com `> ` em cada linha, para não passar por título ou seção do pacote. Os únicos cortes são os que a Forja diz no próprio texto (abaixo).
+Tudo o que o diário mostra ao modelo é fiel ao que foi escrito. A fala do agente e o motivo da rejeição não são resumidos, cortados nem omitidos, e nenhuma tentativa é deixada de fora (decisão do dono, 01/11/2026: todo input e output entre processos, agentes e etapas é fiel, verdadeiro e fidedigno). Texto de várias linhas vai citado, com `> ` em cada linha, para não passar por título ou seção do pacote.
 
 ## Onde aparece
 
 | Onde | O quê | Limites |
 | --- | --- | --- |
-| Pacote do agente, seção “Earlier attempts of this stage” | As tentativas anteriores **da mesma etapa**, a partir da segunda. As 3 últimas rejeitadas ou não terminadas vão completas; as mais antigas e todo descarte, em uma linha. Passa pelo redator, como README e fatos. | Linha única de 160 caracteres, terminada em `...`. Teto de 6000 caracteres: caem primeiro as linhas mais antigas, depois as completas mais antigas, e o texto diz quantas tentativas ficaram de fora. A rejeição mais recente aparece também em “The previous attempt was rejected”, de propósito. |
+| Arquivo `.forja-agent\diary.md` do pacote do agente, e seção “Earlier attempts of this stage” | O arquivo traz **todas** as tentativas anteriores da mesma etapa, a partir da segunda, cada uma inteira (o que o agente disse e o motivo). Passa pelo redator, como README e fatos. A seção do pacote traz a **ordem imperativa de ler o arquivo antes de agir**; só existe quando há tentativa anterior. | Nenhum corte e nenhuma omissão. O agente não pode editar o arquivo (negado nas permissões do Claude Code e do Grok) e a Forja confere, ao receber o trabalho, que ele é idêntico ao gravado; se mudou ou sumiu, o trabalho é rejeitado. |
+| Pacote do agente, seção “The previous attempt was rejected” | O motivo da última rejeição e, logo abaixo, o que o agente disse naquela tentativa, citado. | O motivo guardado no log já nasce limitado a `REASON_LIMIT` (1500) pelo ciclo; o diário não corta nada a mais. |
 | Pacote do agente, seção “Attack the hypothesis” | Pedido para escrever a hipótese em uma frase no `reason`, quando duas ou mais tentativas da etapa foram rejeitadas no mesmo `gate N (check)`. | Texto fixo da Forja, baseado em “Attack the Premise” da skill `ub-mode` (`unclebob/ub-mode`), com “hypothesis” no lugar de “premise”. Descarte por infraestrutura não conta. |
-| Resumo da execução, seção “Diário de bordo” | Por tarefa, cada tentativa com o que disse e o motivo, e as decisões da Forja. | Corte de 1500 caracteres (o mesmo limite do ciclo; na prática não corta). O resumo não vai ao modelo e não é commitado. |
+| Resumo da execução, seção “Diário de bordo” | Por tarefa, cada tentativa com o que disse e o motivo, e as decisões da Forja. | Sem corte; só o espaço em branco entre as palavras vira um espaço, para caber em uma linha. O resumo não vai ao modelo e não é commitado. |
 | Ramo da tarefa, `docs/mudancas/<tarefa>-diario.md` | Todas as tentativas de todas as etapas da tarefa, rejeitadas inclusive, e as decisões, em Markdown, citadas e sem corte. | Escrito pela Forja junto com o registro de mudança, no commit `docs:` do documentador. Deixa de fora a tentativa do documentador que está sendo julgada. |
 
 As tentativas rejeitadas continuam sem commit de código; o diário as registra como texto.

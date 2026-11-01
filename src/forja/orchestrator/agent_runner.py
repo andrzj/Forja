@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from forja.core.adapters.common import build_spec
 from forja.core.adapters.executor import (
     AGENT_DIR,
+    DIARY_FILE,
     AgentActivity,
     AgentRequest,
     CommandActivity,
@@ -78,6 +79,12 @@ ADR_REPORT = "ADR report"
 FACTS_REPORT = "Recorded facts"
 FINDINGS_REPORT = "Findings"
 DIARY_REPORT = "Earlier attempts"
+SAID_REPORT = "What the agent said"
+DIARY_ORDER = (
+    f"Before you do anything else, read `{AGENT_DIR}/{DIARY_FILE}`. It holds every earlier attempt "
+    "of this stage, whole: what you said and why each one was turned down. Do not act until "
+    "you have read it."
+)
 OUTPUT = "saida.json"
 IDLE_LIMIT = 300.0  # seconds without a single line of output: the CLI is stuck, not working
 OPERATION = "call_agent_cli"
@@ -290,6 +297,20 @@ def workcopy_of(ctx: AttemptContext) -> Path:
     return ctx.worktree.with_name(f"{ctx.attempt_id}-copy")
 
 
+def _quote(text: str) -> str:
+    return "\n".join(f"> {line}".rstrip() for line in text.strip().splitlines())
+
+
+def diary_document(ctx: AttemptContext, redactor: Redactor) -> str:
+    """The file the agent is told to read: every earlier attempt, redacted like the rest."""
+    if not ctx.diary:
+        return ""
+    result = redactor.redact([PackageItem(ItemKind.TEXT, DIARY_REPORT, ctx.diary, True)])
+    for dropped in result.dropped:
+        return f"The earlier attempts were withheld ({dropped.reason.value}).\n"
+    return result.items[0].content if result.items else ""
+
+
 def _fence(text: str) -> str:
     """A code fence longer than any run of backticks inside the text."""
     ticks = 3
@@ -324,8 +345,8 @@ def build_package(
     if ctx.facts:  # text a person wrote: redacted like the rest
         recorded = "\n".join(f"- `{f.id}` ({f.author}, {f.date}): {f.text}" for f in ctx.facts)
         items.append(PackageItem(ItemKind.TEXT, FACTS_REPORT, recorded, True))
-    if ctx.diary:  # what the agent itself said earlier: redacted like the rest
-        items.append(PackageItem(ItemKind.TEXT, DIARY_REPORT, ctx.diary, True))
+    if ctx.previous_said:  # what the agent itself said in the last rejected attempt
+        items.append(PackageItem(ItemKind.TEXT, SAID_REPORT, ctx.previous_said, True))
     result = redactor.redact(items)
     report = next((i.content for i in result.items if i.name == README_REPORT), "")
     author = task.role is Producer.TEST_AUTHOR
@@ -371,8 +392,8 @@ def build_package(
     adr = next((i.content for i in result.items if i.name == ADR_REPORT), "")
     recorded = next((i.content for i in result.items if i.name == FACTS_REPORT), "")
     found = next((i.content for i in result.items if i.name == FINDINGS_REPORT), "")
-    earlier = next((i.content for i in result.items if i.name == DIARY_REPORT), "")
-    hidden_names = (README_REPORT, ADR_REPORT, FACTS_REPORT, FINDINGS_REPORT, DIARY_REPORT)
+    said = next((i.content for i in result.items if i.name == SAID_REPORT), "")
+    hidden_names = (README_REPORT, ADR_REPORT, FACTS_REPORT, FINDINGS_REPORT, SAID_REPORT)
     shown = [i for i in result.items if i.name not in hidden_names]
     if shown or notes:
         parts.append("## Files in scope\n")
@@ -397,12 +418,14 @@ def build_package(
         parts.append(f"## Findings\n\n{FINDINGS_INSTRUCTIONS}\n{found}\n")
     if adr:
         parts.append(f"## Decision record owed\n\n{adr}\n")
-    if earlier:
-        parts.append(f"## Earlier attempts of this stage\n\n{earlier}\n")
+    if ctx.diary:  # fixed text of the Forja: the attempts themselves are in the file
+        parts.append(f"## Earlier attempts of this stage\n\n{DIARY_ORDER}\n")
     if ctx.hypothesis:  # fixed text of the Forja: nothing to redact
         parts.append(f"## Attack the hypothesis\n\n{ctx.hypothesis}\n")
     if ctx.previous_rejection:
         parts.append(f"## The previous attempt was rejected\n\n{ctx.previous_rejection}\n")
+        if said:
+            parts.append(f"What you said in that attempt:\n\n{_quote(said)}\n")
     return "\n".join(parts) + "\n"
 
 
@@ -517,6 +540,9 @@ class ExecutorAgentRunner:
                 voice=self._voice,
             )
             (agent_dir / PACKAGE).write_text(package, encoding="utf-8", newline="\n")
+            if ctx.diary:
+                diary = diary_document(ctx, self._redactor)
+                (agent_dir / DIARY_FILE).write_text(diary, encoding="utf-8", newline="\n")
             setup = self._setup()
             for name, data in setup.files.items():
                 (agent_dir / name).write_bytes(data)
@@ -591,7 +617,7 @@ class ExecutorAgentRunner:
             after = build_manifest(source, exclude={AGENT_DIR})
             hidden = self._hidden(ctx.worktree)
             before = self._visible(build_manifest(ctx.worktree, exclude={".git"}))
-            self._refuse_tampering(source)
+            self._refuse_tampering(source, ctx)
             self._refuse_off_limits(after, diff_manifests(before, after))
             self._refuse_collisions(after, hidden)
             problems = find_violations(after, destination_root=ctx.worktree)
@@ -699,13 +725,18 @@ class ExecutorAgentRunner:
             if any("/".join(parts[: i + 1]) in taken for i in range(len(parts))):
                 raise RejectedWork(f"{path}: the work goes where it may not write")
 
-    def _refuse_tampering(self, source: Path) -> None:
-        """The agent writes in its own directory; its permissions are not for it to change."""
+    def _refuse_tampering(self, source: Path, ctx: AttemptContext) -> None:
+        """The agent writes in its own directory; neither its permissions nor the diary are its."""
         setup = self._setup()
         for name, data in setup.files.items():
             kept = source / AGENT_DIR / name
             if not kept.is_file() or kept.read_bytes() != data:
                 raise RejectedWork(f"{AGENT_DIR}/{name}: the agent changed its own permissions")
+        if ctx.diary:
+            kept = source / AGENT_DIR / DIARY_FILE
+            expected = diary_document(ctx, self._redactor).encode("utf-8")
+            if not kept.is_file() or kept.read_bytes() != expected:
+                raise RejectedWork(f"{AGENT_DIR}/{DIARY_FILE}: the agent changed the diary")
 
 
 def _declared(workcopy: Path) -> LlmOutput:

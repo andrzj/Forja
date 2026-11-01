@@ -36,7 +36,7 @@ from forja.orchestrator.criteria import (
     manifest_of,
     with_criteria,
 )
-from forja.orchestrator.diary import stage_diary, stage_hypothesis, task_diary
+from forja.orchestrator.diary import stage_diary, stage_hypothesis, stage_last_said, task_diary
 from forja.orchestrator.findings import findings_artifact_id, findings_of, findings_report
 from forja.orchestrator.outcome import StopRun
 from forja.orchestrator.ports import (
@@ -291,6 +291,7 @@ class TaskCycle:
                 self._last_rejection(info),
                 facts=ctx.config.facts,
                 diary=stage_diary(self._state, info.stage_id, attempt),
+                previous_said=stage_last_said(self._state, info.stage_id, attempt),
                 hypothesis=stage_hypothesis(self._state, info.stage_id, attempt),
             )
             await self._work(attempt_ctx)

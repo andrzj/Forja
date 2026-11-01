@@ -5,7 +5,7 @@ from pathlib import Path
 
 from forja.core.artifacts.models import Producer
 from forja.core.redaction import Redactor
-from forja.orchestrator.agent_runner import _fence, build_package
+from forja.orchestrator.agent_runner import DIARY_ORDER, _fence, build_package, diary_document
 from forja.orchestrator.ports import AttemptContext, TaskInfo
 from forja.orchestrator.voice_brief import brief
 
@@ -166,7 +166,7 @@ def test_a_refactoring_package_keeps_its_own_instructions(tmp_path: Path) -> Non
     assert "frozen" not in text and "must FAIL" not in text
 
 
-def test_earlier_attempts_come_before_the_last_verdict_and_only_when_there_are_some(
+def test_earlier_attempts_are_a_file_to_read_before_acting_and_only_when_there_are_some(
     tmp_path: Path,
 ) -> None:
     assert "Earlier attempts" not in package(tmp_path, rejection="lint: no")
@@ -177,8 +177,20 @@ def test_earlier_attempts_come_before_the_last_verdict_and_only_when_there_are_s
     )
     text = build_package(ctx, Redactor())
 
-    assert "## Earlier attempts of this stage\n\n### Attempt `t1-a1`: rejected" in text
+    assert f"## Earlier attempts of this stage\n\n{DIARY_ORDER}\n" in text
+    assert "Before you do anything else, read `.forja-agent/diary.md`" in text
+    assert "split f" not in text
     assert text.index("## Earlier attempts") < text.index("## The previous attempt was rejected")
+
+
+def test_the_last_rejection_comes_with_what_the_agent_said_whole(tmp_path: Path) -> None:
+    said = "first line\n\nsecond " + "w" * 3000
+    ctx = replace(context(tmp_path, ("src/a.py",), "lint: no"), previous_said=said)
+
+    text = build_package(ctx, Redactor())
+
+    assert "lint: no\n\nWhat you said in that attempt:\n\n> first line\n>\n> second " in text
+    assert "w" * 3000 in text and "..." not in text
 
 
 def test_the_hypothesis_request_comes_after_the_earlier_attempts_and_only_when_asked(
@@ -205,10 +217,23 @@ def test_the_hypothesis_request_comes_after_the_earlier_attempts_and_only_when_a
     assert order == sorted(order)
 
 
-def test_a_secret_in_the_earlier_attempts_never_reaches_the_package(tmp_path: Path) -> None:
-    ctx = replace(context(tmp_path, ("src/a.py",)), diary=f"You said: key {TOKEN}\n")
+def test_a_secret_in_what_the_agent_said_never_reaches_the_package(tmp_path: Path) -> None:
+    ctx = replace(context(tmp_path, ("src/a.py",), "lint: no"), previous_said=f"key {TOKEN}")
 
     assert TOKEN not in build_package(ctx, Redactor())
+
+
+def test_a_secret_in_the_diary_file_never_reaches_it(tmp_path: Path) -> None:
+    ctx = replace(context(tmp_path, ("src/a.py",)), diary=f"You said: key {TOKEN}\n")
+
+    assert TOKEN not in diary_document(ctx, Redactor())
+
+
+def test_the_diary_file_is_the_diary_as_it_is_and_empty_without_one(tmp_path: Path) -> None:
+    ctx = context(tmp_path, ("src/a.py",))
+
+    assert diary_document(ctx, Redactor()) == ""
+    assert diary_document(replace(ctx, diary="a\n" + "b" * 9000), Redactor()) == "a\n" + "b" * 9000
 
 
 def test_the_voice_instruction_is_in_the_package_of_every_role_that_writes_text(

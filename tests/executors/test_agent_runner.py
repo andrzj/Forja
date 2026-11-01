@@ -570,6 +570,51 @@ def test_an_agent_that_rewrites_its_own_permissions_has_its_work_rejected(
     assert (r.ctx.worktree / "src" / "a.py").read_text("utf-8") == BEFORE
 
 
+def test_the_diary_is_written_whole_in_the_agents_directory_when_there_is_one(
+    tmp_path: Path,
+) -> None:
+    r = rig(tmp_path, GOOD)
+    diary = "### Attempt `t1-a0`: rejected\nYou said: " + "w" * 4000 + "\n"
+
+    go(settle(r.runner.prepare_workcopy(replace(r.ctx, diary=diary))))
+
+    assert (r.workcopy / ".forja-agent" / "diary.md").read_text("utf-8") == diary
+    assert not (rig(tmp_path / "b", GOOD).workcopy / ".forja-agent" / "diary.md").exists()
+
+
+def test_an_agent_that_changes_the_diary_has_its_work_rejected(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    ctx = replace(r.ctx, diary="### Attempt `t1-a0`: rejected\n")
+    go(settle(r.runner.prepare_workcopy(ctx)))
+    go(r.runner.call(ctx, "call_agent_cli:t1-a1", RecordingSink()))
+    (r.workcopy / ".forja-agent" / "diary.md").write_text("nothing happened", encoding="utf-8")
+
+    with pytest.raises(RejectedWork, match="changed the diary"):
+        go(settle(r.runner.apply_diff(ctx)))
+
+
+def test_an_agent_that_deletes_the_diary_has_its_work_rejected(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    ctx = replace(r.ctx, diary="### Attempt `t1-a0`: rejected\n")
+    go(settle(r.runner.prepare_workcopy(ctx)))
+    go(r.runner.call(ctx, "call_agent_cli:t1-a1", RecordingSink()))
+    (r.workcopy / ".forja-agent" / "diary.md").unlink()
+
+    with pytest.raises(RejectedWork, match="changed the diary"):
+        go(settle(r.runner.apply_diff(ctx)))
+
+
+def test_a_diary_left_alone_lets_the_work_through(tmp_path: Path) -> None:
+    r = rig(tmp_path, GOOD)
+    ctx = replace(r.ctx, diary="### Attempt `t1-a0`: rejected\n")
+    go(settle(r.runner.prepare_workcopy(ctx)))
+    go(r.runner.call(ctx, "call_agent_cli:t1-a1", RecordingSink()))
+
+    go(settle(r.runner.apply_diff(ctx)))
+
+    assert (r.ctx.worktree / "src" / "a.py").read_text("utf-8") == AFTER
+
+
 def test_the_adapter_also_denies_the_agent_its_own_package_and_settings() -> None:
     deny = json.loads(
         ClaudeCodeAdapter()
@@ -580,6 +625,7 @@ def test_the_adapter_also_denies_the_agent_its_own_package_and_settings() -> Non
     assert f"Edit(./.forja-agent/{PACKAGE})" in deny
     assert "Write(./.forja-agent/claude-settings.json)" in deny
     assert "Edit(./.forja-agent/instructions.md)" in deny
+    assert "Edit(./.forja-agent/diary.md)" in deny and "Write(./.forja-agent/diary.md)" in deny
 
 
 def test_the_voice_also_goes_to_the_cli_as_a_file_the_system_prompt_is_extended_with(

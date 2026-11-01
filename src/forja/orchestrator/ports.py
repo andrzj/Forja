@@ -86,7 +86,8 @@ class AttemptContext:
     adr: str = ""  # the decision record the task owes, if a rule says it owes one
     facts: tuple[Fact, ...] = ()  # what a person recorded, offered to every role as evidence
     findings: str = ""  # what the archaeologist found, for the documenter of an investigation
-    diary: str = ""  # what the earlier attempts of this stage did and how they ended
+    diary: str = ""  # what the earlier attempts of this stage did and how they ended, whole
+    previous_said: str = ""  # what the agent said in the last rejected attempt, whole
     hypothesis: str = ""  # the request to state the hypothesis, after repeated rejections
 
 

@@ -106,36 +106,13 @@ def _text(value: object) -> str:
     return "" if value is None else str(value)
 
 
-FULL_ENTRIES = 3  # the latest attempts of a stage that are shown in full
-LINE_CUT = 160
-DIARY_LIMIT = 6000
-
-
 def diary_text(entries: list[Entry]) -> str:
     """The earlier attempts of a stage, as the agent is shown them; empty when there are none.
 
-    The latest ``FULL_ENTRIES`` rejected or unfinished attempts keep what the agent said and why
-    the work was turned down; the older ones, and every discard, are one line. Past
-    ``DIARY_LIMIT`` characters the oldest lines go first, then the oldest full entries, and the
-    text says how many attempts it left out. The rule is fixed: the same entries give the same text.
+    Every attempt, in order, with what the agent said and why it ended as it did, whole: nothing
+    is cut and no attempt is left out. The same entries give the same text.
     """
-    judged = [e for e in entries if e.outcome not in (Outcome.DISCARDED, Outcome.APPROVED)]
-    full = {id(e) for e in judged[-FULL_ENTRIES:]}
-    blocks = [(id(e) in full, _full(e) if id(e) in full else _line(e)) for e in entries]
-    left_out = 0
-    while sum(len(text) + 1 for _, text in blocks) > DIARY_LIMIT and blocks:
-        lines = [i for i, (is_full, _) in enumerate(blocks) if not is_full]
-        del blocks[lines[0] if lines else 0]
-        left_out += 1
-    if not blocks:
-        return ""
-    head = [f"{left_out} earlier attempt(s) left out to keep this short."] if left_out else []
-    return "\n".join([*head, *(text for _, text in blocks)])
-
-
-def cut(text: str, size: int) -> str:
-    flat = " ".join(text.split())
-    return flat if len(flat) <= size else flat[: size - 3] + "..."
+    return "\n".join(_full(e) for e in entries)
 
 
 def _full(entry: Entry) -> str:
@@ -153,11 +130,6 @@ def _quoted(label: str, text: str) -> str:
     if len(lines) <= 1:
         return f"{label}: {text.strip()}"
     return f"{label}:\n" + "\n".join(f"> {line}" for line in lines)
-
-
-def _line(entry: Entry) -> str:
-    why = f": {cut(entry.detail, LINE_CUT)}" if entry.detail else ""
-    return f"- `{entry.attempt}`: {_verdict(entry)}{why}"
 
 
 def _verdict(entry: Entry) -> str:
@@ -199,6 +171,12 @@ def hypothesis_request(entries: list[Entry]) -> str:
         if e.outcome is Outcome.REJECTED and (found := _WHERE.match(e.detail))
     )
     return HYPOTHESIS_REQUEST if any(n >= REPEATS for n in gates.values()) else ""
+
+
+def stage_last_said(state: RunState, stage: str, current: str) -> str:
+    """What the agent said in the last rejected attempt of the stage, before ``current``."""
+    rejected = [e for e in _earlier(state, stage, current) if e.outcome is Outcome.REJECTED]
+    return rejected[-1].said if rejected else ""
 
 
 def stage_hypothesis(state: RunState, stage: str, current: str) -> str:

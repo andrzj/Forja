@@ -25,7 +25,6 @@ from forja.orchestrator.diary import (
     EXHAUSTED,
     Entry,
     Outcome,
-    cut,
     task_decisions,
     task_entries,
 )
@@ -433,7 +432,11 @@ _VERDICTS = {
     Outcome.OPEN: "não terminou",
 }
 _DECISIONS = {EXHAUSTED: "etapa esgotada", BLOCKED: "tarefa bloqueada"}
-DIARY_CUT = 1500  # the limit of the agent's reason and of a rejection: nothing is cut in practice
+
+
+def _flat(text: str) -> str:
+    """One line, with the words as they were: only the white space between them is collapsed."""
+    return " ".join(text.split())
 
 
 def diary_lines(state: RunState) -> list[str]:
@@ -447,7 +450,7 @@ def diary_lines(state: RunState) -> list[str]:
         lines.extend(f"  - {_diary_line(entry)}" for entry in entries)
         lines.extend(
             f"  - decisão da Forja: {_DECISIONS[d.what]} `{d.target}`"
-            + (f": {cut(d.reason, DIARY_CUT)}" if d.reason else "")
+            + (f": {_flat(d.reason)}" if d.reason else "")
             for d in decisions
         )
     return lines or ["Nenhuma tentativa."]
@@ -459,9 +462,9 @@ def _diary_line(entry: Entry) -> str:
         verdict += " (infraestrutura)"
     parts = [f"`{entry.attempt}` {verdict}"]
     if entry.said:
-        parts.append(f"disse: {cut(entry.said, DIARY_CUT)}")
+        parts.append(f"disse: {_flat(entry.said)}")
     if entry.detail and entry.outcome is not Outcome.APPROVED:
-        parts.append(f"motivo: {cut(entry.detail, DIARY_CUT)}")
+        parts.append(f"motivo: {_flat(entry.detail)}")
     return "; ".join(parts)
 
 

@@ -18,6 +18,7 @@ from forja.core.adapters.common import (
 )
 from forja.core.adapters.executor import (
     AGENT_DIR,
+    DIARY_FILE,
     AgentActivity,
     AgentRequest,
     CommandActivity,
@@ -61,6 +62,7 @@ from forja.core.adapters.registry import AdapterRegistry, AdapterRejected
 
 __all__ = [
     "AGENT_DIR",
+    "DIARY_FILE",
     "CAPABILITY_OPERATION",
     "CONTRACT_VERSION",
     "GITATTRIBUTES",

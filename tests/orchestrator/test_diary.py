@@ -16,24 +16,22 @@ from forja.core.states import (
 )
 from forja.orchestrator.diary import (
     BLOCKED,
-    DIARY_LIMIT,
     EXHAUSTED,
     HYPOTHESIS_REQUEST,
-    LINE_CUT,
     Decision,
     Entry,
     Outcome,
-    cut,
     diary_text,
     hypothesis_request,
     stage_diary,
     stage_entries,
     stage_hypothesis,
+    stage_last_said,
     task_decisions,
     task_diary,
     task_entries,
 )
-from forja.orchestrator.summary import DIARY_CUT, diary_lines
+from forja.orchestrator.summary import diary_lines
 from tests.core.events.support import FakeClock
 from tests.orchestrator.harness import RUN
 
@@ -217,22 +215,20 @@ def test_a_rejected_attempt_is_shown_with_what_the_agent_said_and_why() -> None:
     )
 
 
-def test_the_three_latest_are_in_full_and_the_older_ones_in_one_line() -> None:
-    text = diary_text([rejected(n, f"said {n}") for n in range(1, 6)])
+def test_every_attempt_is_in_full_however_many_there_are() -> None:
+    text = diary_text([rejected(n, f"said {n}") for n in range(1, 60)])
 
-    assert "- `t1-a1`: rejected: gate 8 (complexity): too complex" in text
-    assert "- `t1-a2`: rejected: gate 8 (complexity): too complex" in text
-    assert "You said: said 1" not in text
-    for n in (3, 4, 5):
+    for n in range(1, 60):
         assert f"### Attempt `t1-a{n}`: rejected\nYou said: said {n}\n" in text
+    assert "left out" not in text
 
 
-def test_a_discard_is_one_line_and_does_not_take_a_place_among_the_full_ones() -> None:
+def test_a_discard_is_shown_in_full_like_any_other_attempt() -> None:
     discard = Entry("t1", "t1-a2", "", Outcome.DISCARDED, "network", infrastructure=True)
 
     text = diary_text([rejected(1, "one"), discard, rejected(3, "three")])
 
-    assert "- `t1-a2`: discarded (infrastructure): network" in text
+    assert "### Attempt `t1-a2`: discarded (infrastructure)\nWhy: network\n" in text
     assert "### Attempt `t1-a1`: rejected" in text and "### Attempt `t1-a3`: rejected" in text
 
 
@@ -257,29 +253,13 @@ def test_a_reason_of_several_lines_is_quoted_too() -> None:
     assert "Why:\n> gate 8 (x): one\n> two\n" in text
 
 
-def test_the_line_of_an_older_attempt_is_cut() -> None:
-    text = diary_text([rejected(1, why="x" * 400), *(rejected(n) for n in range(2, 5))])
-
-    line = next(line for line in text.splitlines() if line.startswith("- `t1-a1`"))
-    assert len(line) == len("- `t1-a1`: rejected: ") + LINE_CUT and line.endswith("...")
-
-
-def test_past_the_limit_the_oldest_lines_go_first_and_the_text_says_so() -> None:
-    entries = [rejected(n, why="y" * 150) for n in range(1, 60)]
+def test_a_long_reason_and_a_long_saying_are_never_cut() -> None:
+    entries = [rejected(n, "s" * 3000, why="gate 8 (x): " + "z" * 5000) for n in range(1, 30)]
 
     text = diary_text(entries)
 
-    assert len(text) <= DIARY_LIMIT + 100
-    assert text.splitlines()[0] == "25 earlier attempt(s) left out to keep this short."
-    assert "### Attempt `t1-a59`: rejected" in text and "`t1-a1`" not in text
-
-
-def test_when_only_full_entries_are_left_the_oldest_of_them_go() -> None:
-    big = [rejected(n, "s" * 300, why="z" * 1500) for n in range(1, 5)]
-
-    text = diary_text(big)
-
-    assert "### Attempt `t1-a4`: rejected" in text
+    assert text.count("s" * 3000) == 29 and text.count("z" * 5000) == 29
+    assert "..." not in text and "left out" not in text
 
 
 def test_the_text_for_the_attempt_about_to_run_leaves_that_attempt_out(log: EventLog) -> None:
@@ -381,13 +361,22 @@ def test_an_approved_attempt_does_not_list_its_gates_in_the_summary(log: EventLo
     assert diary_lines(log.state) == ["- `t1` ():", "  - `t1-a1` aprovada"]
 
 
-def test_the_summary_cuts_what_the_agent_said_and_the_reason(log: EventLog) -> None:
+def test_the_summary_keeps_what_the_agent_said_and_the_reason_whole(log: EventLog) -> None:
     long = "w " * 1000
     attempt(log, "t1-a1", said=long, end=S.REJECTED, payload={"reason": long})
 
     line = diary_lines(log.state)[1]
 
-    assert line.count("...") == 2 and len(line) < 2 * DIARY_CUT + 60
+    assert line.count("w") == 2000 and "..." not in line
+
+
+def test_the_last_rejected_attempt_gives_what_the_agent_said(log: EventLog) -> None:
+    attempt(log, "t1-a1", said="one", end=S.REJECTED, payload={"reason": "r"})
+    attempt(log, "t1-a2", said="two", end=S.DISCARDED, payload={"reason": "network"})
+    attempt(log, "t1-a3", said="three")
+
+    assert stage_last_said(log.state, "t1", "t1-a3") == "one"
+    assert stage_last_said(log.state, "t1", "t1-a1") == ""
 
 
 def test_the_log_book_of_a_task_quotes_every_attempt_but_the_one_being_judged(
@@ -451,43 +440,3 @@ def test_the_log_book_is_the_same_after_the_log_is_read_again(
     assert task_diary(read_state(tmp_path / "events.jsonl", RUN), "t1", "t1-a2") == task_diary(
         log.state, "t1", "t1-a2"
     )
-
-
-def discarded(count: int, detail_size: int) -> list[Entry]:
-    """``count`` discards whose one-line texts are all ``21 + detail_size`` characters long."""
-    return [
-        Entry("t1", f"a{i:03d}", "", Outcome.DISCARDED, "d" * detail_size) for i in range(count)
-    ]
-
-
-def test_a_diary_exactly_at_the_limit_keeps_every_attempt() -> None:
-    text = diary_text(discarded(100, 38))  # 100 lines of 59 characters and a break each: 6000
-
-    assert len(text.splitlines()) == 100
-    assert "left out" not in text
-
-
-def test_a_diary_one_line_over_the_limit_drops_the_oldest_line_and_says_so() -> None:
-    text = diary_text(discarded(101, 38))
-
-    lines = text.splitlines()
-    assert lines[0] == "1 earlier attempt(s) left out to keep this short."
-    assert "`a000`" not in text
-    assert "`a001`" in lines[1]
-    assert len(lines) == 101
-
-
-def test_when_only_full_entries_are_left_the_oldest_of_them_goes_first() -> None:
-    entries = [Entry("t1", f"t1-a{n}", "s" * 1000, Outcome.REJECTED, "d" * 1000) for n in (1, 2, 3)]
-
-    text = diary_text(entries)
-
-    assert text.splitlines()[0] == "1 earlier attempt(s) left out to keep this short."
-    assert "`t1-a1`" not in text
-    assert "`t1-a2`" in text
-    assert "`t1-a3`" in text
-
-
-def test_a_text_as_long_as_the_cut_is_kept_whole() -> None:
-    assert cut("a" * 160, 160) == "a" * 160
-    assert cut("a" * 161, 160) == "a" * 157 + "..."

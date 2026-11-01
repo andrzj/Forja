@@ -14,6 +14,7 @@ from forja.core.adapters.common import CommandPlan
 from forja.core.artifacts.models import Producer
 
 AGENT_DIR = ".forja-agent"  # reserved inside the working copy; excluded from manifests and scope
+DIARY_FILE = "diary.md"  # inside ``AGENT_DIR``: every earlier attempt of the stage, whole
 
 
 # -- what the agent does, as the interface shows it --------------------------------------------
