@@ -241,3 +241,26 @@ def test_the_voice_instruction_comes_as_given_not_redacted_and_only_once(tmp_pat
 
 def test_without_a_voice_instruction_the_package_has_no_voice_section(tmp_path: Path) -> None:
     assert "## Voice" not in package(tmp_path)
+
+
+def test_a_task_with_no_scope_says_any_production_file_may_change(tmp_path: Path) -> None:
+    text = package(tmp_path, scope=())
+
+    assert "Any production file." in text
+    assert "Only inside:" not in text
+
+
+def test_every_template_that_takes_assumptions_shows_their_shape() -> None:
+    from forja.orchestrator import agent_runner
+
+    templates = [
+        agent_runner.INSTRUCTIONS,
+        agent_runner.AUTHOR_INSTRUCTIONS,
+        agent_runner.FIX_INSTRUCTIONS,
+        agent_runner.DOCUMENTER_INSTRUCTIONS,
+        agent_runner.SPECIFIER_INSTRUCTIONS,
+        agent_runner.ARCHAEOLOGIST_INSTRUCTIONS,
+    ]
+
+    for template in templates:
+        assert '"missing_evidence"' in template

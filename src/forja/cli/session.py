@@ -391,7 +391,11 @@ async def _context(
 
     async def functions(worktree: Path) -> Mapping[tuple[str, str], int]:
         found = await measurer.functions(worktree, sinks)
-        return {key: ccn for key, ccn in found.items() if in_scope(key[0], config.scope)}
+        return {
+            key: ccn
+            for key, ccn in found.items()
+            if not config.scope or in_scope(key[0], config.scope)
+        }
 
     commands: tuple[str, ...] = ()
     if locate_in_path("forja"):

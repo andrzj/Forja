@@ -331,3 +331,13 @@ def test_the_implementer_may_not_touch_tests_in_a_fix_either() -> None:
     assert described(evaluate(modified("tests/test_a.py"), scope=("tests",))) == [
         "only production files may change in this stage (this is test) [tests/test_a.py]"
     ]
+
+
+def test_a_task_with_no_scope_may_change_any_production_file() -> None:
+    assert evaluate(modified("src/a.py", "src/b.py"), scope=()) == Approved()
+
+
+def test_a_task_with_no_scope_still_keeps_the_implementer_to_production_files() -> None:
+    assert described(evaluate(modified("tests/test_a.py"), scope=())) == [
+        "only production files may change in this stage (this is test) [tests/test_a.py]"
+    ]

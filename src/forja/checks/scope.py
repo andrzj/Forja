@@ -144,7 +144,7 @@ class ScopeCheck:
         if kind is not FileClass.PRODUCTION:
             message = f"only production files may change in this stage (this is {kind.value})"
             return Finding(message=message, target=path)
-        if not in_scope(path, self.task.scope):
+        if self.task.scope and not in_scope(path, self.task.scope):
             return Finding(message="outside the task scope", target=path)
         return None
 

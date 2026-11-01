@@ -100,7 +100,9 @@ every file you created, modified or removed (the list is checked against what re
 "files": [{{"path": "relative/path.py", "change": "modified"}}]}}]}}
 
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess. Then answer with one short sentence.
+had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
+"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
+sentence.
 """
 
 AUTHOR_INSTRUCTIONS = """\
@@ -125,7 +127,9 @@ for the test (`path::name`) and `path` is its file:
 "path": "tests/test_x.py"}}]}}
 
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess. Then answer with one short sentence.
+had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
+"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
+sentence.
 """
 
 FIX_INSTRUCTIONS = """\
@@ -142,7 +146,9 @@ every file you created, modified or removed (the list is checked against what re
 "files": [{{"path": "relative/path.py", "change": "modified"}}]}}]}}
 
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess. Then answer with one short sentence.
+had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
+"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
+sentence.
 """
 
 DOCUMENTER_INSTRUCTIONS = """\
@@ -168,7 +174,9 @@ use `"actions": []` if you changed nothing:
 "change": "modified"}}]}}]}}
 
 `change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess. Then answer with one short sentence.
+had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
+"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
+sentence.
 """
 
 SPECIFIER_INSTRUCTIONS = """\
@@ -193,8 +201,9 @@ When you are done, write the file `{agent_dir}/{output}` with this shape and not
 "actions": []}}
 
 The ids of the criteria are 1, 2, 3... with no repeats. `claims` and `left_out` may be empty
-lists. Add `"assumptions"` only for something you had to guess. Then answer with one short
-sentence.
+lists. Add `"assumptions"` only for something you had to guess: a list of objects
+{{"statement": "what you guessed", "reason": "why", "missing_evidence": "what would settle it"}},
+never plain strings. Then answer with one short sentence.
 """
 
 ARCHAEOLOGIST_INSTRUCTIONS = """\
@@ -344,6 +353,8 @@ def build_package(
             else f"Only {tests_in}. The production files below are for reading."
             if author
             else f"Only inside: {', '.join(f'`{name}`' for name in task.scope)}."
+            if task.scope
+            else "Any production file."
         ),
         f"At most {task.max_files} files and {task.max_lines} changed lines.\n",
     ]

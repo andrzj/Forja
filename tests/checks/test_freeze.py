@@ -201,3 +201,30 @@ def test_a_change_nobody_listed_beside_the_code_names_the_tests_as_the_target(
     assert judge_beside_the_code(tmp_path, digest, tests) == [
         "the frozen tests were changed [tests]"
     ]
+
+
+def test_line_endings_alone_do_not_count_as_a_change(tmp_path: Path) -> None:
+    frozen(tmp_path)
+    (tmp_path / "tests/test_a.py").write_bytes(b"def test_a(): ...\n")
+    digest = frozen_digest_of(tmp_path, "tests", ())
+    (tmp_path / "tests/test_a.py").write_bytes(b"def test_a(): ...\r\n")
+
+    assert judge(tmp_path, digest) is None
+
+
+def test_a_change_of_text_is_still_a_change_under_other_line_endings(tmp_path: Path) -> None:
+    frozen(tmp_path)
+    (tmp_path / "tests/test_a.py").write_bytes(b"def test_a(): ...\n")
+    digest = frozen_digest_of(tmp_path, "tests", ())
+    (tmp_path / "tests/test_a.py").write_bytes(b"def test_b(): ...\r\n")
+
+    assert judge(tmp_path, digest) == ["the frozen tests were changed [tests]"]
+
+
+def test_a_binary_file_is_hashed_as_it_is(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/blob.bin").write_bytes(b"a\r\nb\x00")
+    digest = frozen_digest_of(tmp_path, "tests", ())
+    (tmp_path / "tests/blob.bin").write_bytes(b"a\nb\x00")
+
+    assert frozen_digest_of(tmp_path, "tests", ()) != digest

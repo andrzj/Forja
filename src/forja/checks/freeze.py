@@ -1,14 +1,15 @@
 """Gate 1 for the implementer: the tests the test author committed are not touched."""
 
+import hashlib
 from collections.abc import Callable, Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from forja.checks.base import rejected
 from forja.checks.changes import ChangeKind, Changes
 from forja.checks.scope import disposable, in_scope
 from forja.core.gates import Approved, Finding, GateInput, GateResult
-from forja.core.manifest import Manifest, ManifestEntry, build_manifest, manifest_of
+from forja.core.manifest import EntryKind, Manifest, ManifestEntry, build_manifest, manifest_of
 
 
 def frozen_digest_of(worktree: Path, root: str, files: Collection[str]) -> str:
@@ -24,7 +25,25 @@ def frozen_digest_of(worktree: Path, root: str, files: Collection[str]) -> str:
     if root:
         entries.update(_under_root(worktree, root))
     entries.update(manifest_of(worktree, files).entries)
-    return Manifest(entries).digest()
+    return Manifest({path: _by_text(worktree, entry) for path, entry in entries.items()}).digest()
+
+
+def _by_text(worktree: Path, entry: ManifestEntry) -> ManifestEntry:
+    """The entry with a text file's hash taken over its lines, not its line endings.
+
+    The author's copy holds what the agent wrote and the implementer's copy is a checkout, where
+    ``core.autocrlf`` may have turned every line ending into CRLF: the same tests, other bytes.
+    A file with a NUL byte is binary and keeps its own hash.
+    """
+    if entry.kind is not EntryKind.FILE:
+        return entry
+    try:
+        content = (worktree / entry.path).read_bytes()
+    except OSError:
+        return entry
+    if b"\x00" in content:
+        return entry
+    return replace(entry, sha256=hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest())
 
 
 def _under_root(worktree: Path, root: str) -> Mapping[str, ManifestEntry]:
