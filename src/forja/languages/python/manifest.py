@@ -27,6 +27,25 @@ def declared_dependencies(path: str, text: str) -> frozenset[str] | None:
     return None
 
 
+def declared_requirements(path: str, text: str) -> frozenset[str]:
+    """The plain registry requirements a Python manifest declares, whole (name, extras, versions,
+    marker), for the installer. Whatever is not plain (an option, a URL, a path) is left out; it
+    is not something the Forja installs. Empty when ``path`` is not a Python manifest,
+    ``ValueError`` when it is one that cannot be read."""
+    name = file_name(path)
+    if name == "pyproject.toml":
+        try:
+            data = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as error:
+            raise ValueError(f"not valid TOML: {error}") from None
+        found = _requirement_strings(data)
+    elif _REQUIREMENTS.fullmatch(name):
+        found = [content for line in text.splitlines() if (content := _content(line))]
+    else:
+        return frozenset()
+    return frozenset(" ".join(item.split()) for item in found if _plain_requirement(item))
+
+
 def _pyproject(text: str) -> frozenset[str]:
     try:
         data = tomllib.loads(text)
