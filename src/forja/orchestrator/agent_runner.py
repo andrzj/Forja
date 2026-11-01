@@ -305,7 +305,7 @@ def diary_document(ctx: AttemptContext, redactor: Redactor) -> str:
     """The file the agent is told to read: every earlier attempt, redacted like the rest."""
     if not ctx.diary:
         return ""
-    result = redactor.redact([PackageItem(ItemKind.TEXT, DIARY_REPORT, ctx.diary, True)])
+    result = redactor.redact([PackageItem(ItemKind.TEXT, DIARY_REPORT, ctx.diary)])
     for dropped in result.dropped:
         return f"The earlier attempts were withheld ({dropped.reason.value}).\n"
     return result.items[0].content if result.items else ""

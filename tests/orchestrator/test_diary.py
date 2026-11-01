@@ -379,6 +379,26 @@ def test_the_last_rejected_attempt_gives_what_the_agent_said(log: EventLog) -> N
     assert stage_last_said(log.state, "t1", "t1-a1") == ""
 
 
+def test_the_last_rejection_is_the_one_whose_words_come_back_when_there_are_several(
+    log: EventLog,
+) -> None:
+    attempt(log, "t1-a1", said="one", end=S.REJECTED, payload={"reason": "r1"})
+    attempt(log, "t1-a2", said="two", end=S.REJECTED, payload={"reason": "r2"})
+    attempt(log, "t1-a3", said="three")
+
+    assert stage_last_said(log.state, "t1", "t1-a3") == "two"
+
+
+def test_a_task_without_attempts_or_decisions_has_no_line_in_the_diary(log: EventLog) -> None:
+    log.append_transition(Level.TASK, "t2", None, TaskState.PENDING, parent_id=RUN)
+    attempt(log, "t1-a1", said="one", end=S.APPROVED, payload={"gates_passed": []})
+
+    lines = diary_lines(log.state)
+
+    assert any("`t1`" in line for line in lines)
+    assert not any("`t2`" in line for line in lines)
+
+
 def test_the_log_book_of_a_task_quotes_every_attempt_but_the_one_being_judged(
     log: EventLog,
 ) -> None:

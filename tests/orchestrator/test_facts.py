@@ -161,6 +161,19 @@ def test_a_fact_that_settles_a_premise_changes_its_line_and_one_that_settles_non
     assert "- O fato `F2` trata da premissa `p00000000`, que esta execução não teve." in text
 
 
+def test_a_fact_that_names_no_premise_is_not_said_to_name_a_missing_one(
+    world: MemoryWorld,
+) -> None:
+    world.config = world.config.model_copy(
+        update={"facts": (Fact(id="F3", author="Ana", date="2026-10-22", text="a plain fact"),)}
+    )
+
+    world.run(measurer=ScriptedMeasurer(), agent=ScriptedAgent(edits=[CODE], assumptions=(GUESS,)))
+
+    text = (world.run_dir / SUMMARY_NAME).read_text(encoding="utf-8")
+    assert "`F3` trata da premissa" not in text
+
+
 def test_a_premise_of_the_specifier_does_not_blame_its_own_stage_as_a_commit(
     world: MemoryWorld,
 ) -> None:
