@@ -33,6 +33,7 @@ from tests.orchestrator.resume_support import (
     fingerprint,
     scenario,
     with_one_more_discarded_attempt,
+    without_discarded_in_summary,
 )
 
 PROJECT = Path(__file__).resolve().parents[2]
@@ -118,9 +119,11 @@ def test_interrupted_after_the_nth_line_the_run_resumes_to_the_same_end(
 
     assert outcome.state is ExecutionState.DELIVERED
     expected = reference["fingerprint"]
+    reached = fingerprint(world, log)
     if running:
         expected = with_one_more_discarded_attempt(expected)
-    assert fingerprint(world, log) == expected
+        reached = without_discarded_in_summary(reached)
+    assert reached == expected
 
 
 # -- deaths that a raised exception cannot imitate ------------------------------------------------
@@ -181,9 +184,11 @@ def test_a_process_killed_for_real_leaves_a_run_that_resumes_to_the_same_end(
 
     assert outcome.state is ExecutionState.DELIVERED
     expected = reference["fingerprint"]
+    reached = fingerprint(world, log)
     if running:
         expected = with_one_more_discarded_attempt(expected)
-    assert fingerprint(world, log) == expected
+        reached = without_discarded_in_summary(reached)
+    assert reached == expected
 
 
 def test_the_agent_of_a_killed_run_is_not_left_running(world: World) -> None:
@@ -208,7 +213,9 @@ def test_a_resume_interrupted_in_the_middle_can_be_resumed_again(
     outcome, log = restart(world)
 
     assert outcome.state is ExecutionState.DELIVERED
-    assert fingerprint(world, log) == with_one_more_discarded_attempt(reference["fingerprint"])
+    assert without_discarded_in_summary(fingerprint(world, log)) == (
+        with_one_more_discarded_attempt(reference["fingerprint"])
+    )
 
 
 def _after_agent_call_started(reference: dict[str, Any]) -> int:

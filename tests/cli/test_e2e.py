@@ -138,7 +138,9 @@ def arm(
     leaks.chmod(0o755)  # a stand-in that finds nothing: gitleaks itself is not on every machine
     monkeypatch.setattr(session_module, "missing_tool", lambda name: str(leaks))
     monkeypatch.setattr(preparation, "prove", proven)
-    monkeypatch.setattr(session_module, "ClaudeCodeAdapter", lambda: FakeCli(script_path))
+    monkeypatch.setattr(
+        session_module, "adapter_for", lambda name, template=None: FakeCli(script_path)
+    )
     monkeypatch.setattr(session_module, "repo_python", lambda _repo: (sys.executable,))
     monkeypatch.setenv("FORJA_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("FORJA_CONFIG_HOME", str(tmp_path / "profile"))

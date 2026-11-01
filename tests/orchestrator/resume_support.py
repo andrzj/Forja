@@ -1,6 +1,7 @@
 """The scenario every resume test shares, and the facts that say two runs ended the same way."""
 
 import copy
+import re
 from typing import Any
 
 from forja.core.events import EventLog
@@ -84,3 +85,26 @@ def with_one_more_discarded_attempt(reference: dict[str, Any]) -> dict[str, Any]
     expected["attempts"]["discarded"] = expected["attempts"].get("discarded", 0) + 1
     expected["infra_failures"] += 1
     return expected
+
+
+NEWLINE = chr(10)
+ATTEMPT_LINE = re.compile(r"^(  - `)(.+)-a\d+(`.*)$")
+
+
+def without_discarded_in_summary(settled: dict[str, Any]) -> dict[str, Any]:
+    """The same facts with the summary read as if the interrupted call had never been listed.
+
+    The summary names every attempt, so the one a restart discards shows up in it and shifts the
+    numbers after it; `with_one_more_discarded_attempt` accounts for it in the counts instead.
+    """
+    counts: dict[str, int] = {}
+    kept = []
+    for line in settled["summary"].split(NEWLINE):
+        found = ATTEMPT_LINE.match(line)
+        if found and "descartada (infraestrutura)" in line:
+            continue
+        if found:
+            counts[found[2]] = counts.get(found[2], 0) + 1
+            line = f"{found[1]}{found[2]}-a{counts[found[2]]}{found[3]}"
+        kept.append(line)
+    return {**settled, "summary": NEWLINE.join(kept)}
