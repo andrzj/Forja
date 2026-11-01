@@ -64,4 +64,4 @@ Mandam sobre o texto acima onde divergirem. A 1 vem de decisão do dono (27/10).
 - Sem os geradores e fakes dos E2E (gate 6) e o autor de testes, não há casos e o check não executa (decisão do dono).
 - A comparação só vale para saídas determinísticas; o que não é determinístico precisa de regra declarada ou fica em quarentena.
 - Tempo e memória variam com a máquina; por isso mediana de várias execuções, razão em vez de valor absoluto e modo observação até haver dados.
-- Em POSIX o ramo do runner não foi exercitado em produção; a medida de memória lá só se verifica no gate de mutação (`scripts/mutate.py`) e no ponta a ponta.
+- Em POSIX o ramo do runner não foi exercitado em produção. (Fila 12, passo 4, 01/11: a memória lá passou a ser medida por amostragem do grupo de processos, `process/_sampling.py`, e não por `ru_maxrss`; ver `teste-diferencial.md`. Só foi executada no Windows.)

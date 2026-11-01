@@ -1,7 +1,4 @@
-import sys
 from pathlib import Path
-
-import pytest
 
 from forja.core.process import Outcome, ProcessSpec
 from tests.core.process.support import run_to_end, spec
@@ -15,14 +12,10 @@ def test_a_process_that_holds_memory_reports_a_peak_at_least_that_big(tmp_path: 
     result, _ = run_to_end(spec(CHILD), tmp_path / "op.log")
 
     assert result.outcome is Outcome.EXITED
-    if sys.platform == "win32":
-        assert result.peak_memory is not None
-        assert 200 * MB <= result.peak_memory < 400 * MB
-    else:
-        assert result.peak_memory is None
+    assert result.peak_memory is not None
+    assert 200 * MB <= result.peak_memory < 400 * MB
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="peak memory is measured with a Job Object")
 def test_the_peak_is_the_sum_held_at_once_by_the_whole_tree(tmp_path: Path) -> None:
     code = (
         HOLD.format(size=150)
@@ -37,7 +30,6 @@ def test_the_peak_is_the_sum_held_at_once_by_the_whole_tree(tmp_path: Path) -> N
     assert 350 * MB <= result.peak_memory < 600 * MB
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="peak memory is measured with a Job Object")
 def test_memory_held_one_after_another_is_not_summed(tmp_path: Path) -> None:
     code = (
         "import subprocess, sys; "
