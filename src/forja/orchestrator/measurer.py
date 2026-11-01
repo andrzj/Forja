@@ -498,9 +498,7 @@ class PipelineMeasurer:
             if self._classify(p) is FileClass.PRODUCTION
         ]
         brought = [
-            c.path
-            for c in changes.files
-            if c.kind in (ChangeKind.ADDED, ChangeKind.RENAMED) and c.exists_now
+            c.path for c in changes.files if c.kind in (ChangeKind.ADDED, ChangeKind.RENAMED)
         ]
         return found + new_modules(brought, old, production)
 
@@ -531,11 +529,10 @@ class PipelineMeasurer:
         )
         before = await read_before(git, changes, (), base)
         tracked = await git.lines("ls-files")
-        gone = {c.path for c in changes.files if not c.exists_now}
         others = {
             path: text
             for path in tracked
-            if dialect_of(path) is not None and path not in gone
+            if dialect_of(path) is not None
             if (text := _text_of(ctx.worktree / path)) is not None
         }
         found, unreadable = symbol_changes(changes, before, ctx.worktree, others)

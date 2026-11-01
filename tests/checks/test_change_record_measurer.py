@@ -152,3 +152,33 @@ def test_a_readme_already_in_the_repository_is_read_as_it_was_before_the_stage(
     found = next(run.result for run in outcome.runs if run.check_id == "readme")
     assert isinstance(found, Rejected)
     assert "README: the README has no section for build" in [f.message for f in found.findings]
+
+
+def test_a_removed_symbol_is_still_mentioned_by_a_file_the_same_task_changed(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    scene.write("src/sample/other.py", "def twice(a: int) -> int:\n    return add(a, a)\n")
+    commit_the_code(scene, repo, "")
+
+    text = record_of(scene, []).text
+
+    assert "ainda mencionado em" in text
+    assert "`src/sample/other.py`" in text
+
+
+def test_a_file_in_a_language_the_forja_does_not_read_is_not_searched_for_mentions(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    scene.write("notes.txt", "add is used by everyone\n")
+    repo.sh("add", "-A")
+    repo.sh("commit", "-m", "notes")
+    commit_the_code(scene, repo, "")
+
+    text = record_of(scene, []).text
+
+    assert "`tests/test_mod.py`" in text
+    assert "notes.txt" not in text

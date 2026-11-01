@@ -67,3 +67,20 @@ def test_a_directory_with_a_production_file_the_task_added_is_a_new_module(
     commit(repo)
 
     assert "new module `src/sample/net` (src/sample/net/client.py)" in report(scene)
+
+
+def test_the_dependencies_are_listed_in_the_order_of_the_manifests_that_declare_them(
+    repo: Repo,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    scene = Scene(repo, tmp_path / "scene")
+    scene.write(
+        "pyproject.toml",
+        SAMPLE["pyproject.toml"].replace("[project]\n", '[project]\ndependencies = ["zeta"]\n'),
+    )
+    scene.write("requirements.txt", "alpha\n")
+    commit(repo)
+
+    text = report(scene)
+
+    assert text.index("`zeta` (pyproject.toml)") < text.index("`alpha` (requirements.txt)")
