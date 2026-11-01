@@ -7,20 +7,26 @@ if sys.platform != "win32":
     from pathlib import Path
     from typing import Any
 
+    from forja.core.process._sampling import PeakSampler, Snapshot, default_snapshot
+
     class PosixGroup:
         """Own session and process group: ``killpg`` reaches the whole tree.
 
         Unlike the Windows Job Object, nothing kills the tree if the tool itself dies.
         """
 
-        def __init__(self) -> None:
+        def __init__(self, snapshot: Snapshot | None = None) -> None:
             self._pid: int | None = None
+            self._snapshot = snapshot or default_snapshot()
+            self._sampler: PeakSampler | None = None
 
         def spawn_kwargs(self) -> dict[str, Any]:
             return {"start_new_session": True}
 
         def attach(self, pid: int) -> None:
             self._pid = pid
+            self._sampler = PeakSampler(pid, self._snapshot)
+            self._sampler.start()
 
         def interrupt(self) -> None:
             self._signal(signal.SIGTERM)
@@ -29,9 +35,13 @@ if sys.platform != "win32":
             self._signal(signal.SIGKILL)
 
         def peak_memory(self) -> int | None:
-            return None  # no per-run measure: RUSAGE_CHILDREN is the whole Forja process's
+            """Most resident bytes the processes of the group held at once, sampled."""
+            return None if self._sampler is None else self._sampler.stop()
 
         def close(self) -> None:
+            if self._sampler is not None:
+                self._sampler.stop()
+                self._sampler = None
             self._pid = None
 
         def _signal(self, number: signal.Signals) -> None:
