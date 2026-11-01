@@ -341,3 +341,30 @@ def test_a_task_with_no_scope_still_keeps_the_implementer_to_production_files() 
     assert described(evaluate(modified("tests/test_a.py"), scope=())) == [
         "only production files may change in this stage (this is test) [tests/test_a.py]"
     ]
+
+
+def judged_with_manifests(role: Producer, *paths: str) -> Any:
+    task = TaskInfo("t1", "t1-s", "intent", ("src",), 8, 400, role, "tests")
+    data = GateInput(Path("."), "c" * 40, "t1", "t1-s", "t1-a1")
+    check = ScopeCheck(
+        modified(*paths), task, classify, is_manifest=lambda path: path.endswith("pyproject.toml")
+    )
+    return asyncio.run(check.evaluate(data))
+
+
+@pytest.mark.parametrize("role", [Producer.IMPLEMENTER, Producer.TEST_AUTHOR])
+def test_the_implementer_and_the_test_author_may_declare_a_dependency(role: Producer) -> None:
+    assert judged_with_manifests(role, "pyproject.toml") == Approved()
+
+
+@pytest.mark.parametrize("role", [Producer.DOCUMENTER, Producer.SPECIFIER, Producer.ARCHAEOLOGIST])
+def test_the_other_roles_may_not_change_a_manifest(role: Producer) -> None:
+    assert isinstance(judged_with_manifests(role, "pyproject.toml"), Rejected)
+
+
+def test_a_manifest_does_not_open_the_door_to_other_files() -> None:
+    result = judged_with_manifests(Producer.IMPLEMENTER, "pyproject.toml", "setup.cfg")
+
+    assert described(result) == [
+        "only production files may change in this stage (this is other) [setup.cfg]"
+    ]

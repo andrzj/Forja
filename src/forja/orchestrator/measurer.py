@@ -689,7 +689,12 @@ class PipelineMeasurer:
             ),
         )
         checks: list[Check] = [
-            ScopeCheck(changes, ctx.task, self._classify),
+            ScopeCheck(
+                changes,
+                ctx.task,
+                self._classify,
+                is_manifest=lambda path: is_manifest(manifests, path),
+            ),
             *await self._frozen(ctx, changes),
             SecretsCheck(
                 tools, worktree, changes, self._workdir / "secrets" / ctx.attempt_id, self._gitleaks

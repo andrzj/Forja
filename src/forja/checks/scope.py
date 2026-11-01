@@ -75,12 +75,16 @@ def _limit(task_value: int, data: GateInput, name: str) -> int:
 
 @dataclass(frozen=True)
 class ScopeCheck:
-    """The implementer may change only production files in the task's scope; tests stay frozen."""
+    """The implementer may change only production files in the task's scope; tests stay frozen.
+
+    A dependency manifest is the one other file the implementer and the test author may change:
+    the dependency it adds is examined by gate 10, and the Forja installs it only after that."""
 
     changes: Changes
     task: TaskInfo
     classify: Callable[[str], FileClass]
     declared: tuple[str, ...] = ()  # what the agent said it changed; empty means not asked
+    is_manifest: Callable[[str], bool] = lambda path: False  # a dependency manifest of a language
     id: str = "scope"
     gate: int = 1
     requires: frozenset[str] = frozenset()
@@ -112,6 +116,11 @@ class ScopeCheck:
         return findings
 
     def _by_role(self, path: str) -> Finding | None:
+        if self.is_manifest(path) and self.task.role in (
+            Producer.TEST_AUTHOR,
+            Producer.IMPLEMENTER,
+        ):
+            return None  # a new dependency is the agent's to declare; gate 10 examines it
         match self.task.role:
             case Producer.TEST_AUTHOR:
                 return self._author(path)
