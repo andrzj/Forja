@@ -111,7 +111,10 @@ class VirtualEnvironment:
         base_packages = await self._purelib(self._base)
         await self._run(self._base, "-m", "venv", str(self._directory))
         own_packages = await self._purelib(self.python[0])
-        (Path(own_packages) / _PTH).write_text(base_packages + "\n", encoding="utf-8")
+        # addsitedir also reads the .pth files of the base packages (an editable install of the
+        # repository lives in one); a plain path line in this .pth would only add the directory.
+        line = f"import site; site.addsitedir({base_packages!r})\n"
+        (Path(own_packages) / _PTH).write_text(line, encoding="utf-8")
         (self._directory / _READY).write_text("", encoding="utf-8")
 
     @property

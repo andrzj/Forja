@@ -23,7 +23,7 @@ A execução real 5 mostrou que o agente não conseguia adicionar dependência: 
 ## Consequências
 
 - **Instalar executa código do pacote.** Sem sandbox, com as permissões do usuário. Um pacote recém-registrado com nome plausível passa na existência, é instalado e só depois reprovado pelo gate 10. Risco aceito pelo dono.
-- **Instalação editável do próprio repositório não aparece** no ambiente (o `.pth` do interpretador base não é recursivo). Repositório em layout `src` com `pip install -e` pode falhar nos testes depois da primeira instalação.
+- **Instalação editável do próprio repositório aparece** no ambiente: o `forja-base.pth` chama `site.addsitedir` no `site-packages` base, que também processa os `.pth` dele (limite fechado na fila 12, passo 1; antes o `.pth` era só uma linha de caminho e não era recursivo). Prova em `test_an_editable_install_of_a_src_layout_repository_stays_visible`.
 - **Só o Python tem ambiente.** Nas outras linguagens a dependência passa pelos gates 1 e 10 e a ferramenta da linguagem a resolve; não há E2E delas.
 - **Testes.** `tests\checks\test_dependency_install.py`, `test_scope.py`, `test_new_dependency.py`, `tests\languages\test_manifests.py`, `tests\languages\python\test_environment.py`, `tests\executors\test_package.py` e `tests\cli\test_session_install_environment.py`.
 
