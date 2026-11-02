@@ -98,12 +98,24 @@ No GitHub, os checksums dos arquivos de release coincidem também com o campo `d
 
 **Fora do manifesto:** nenhuma das onze ficou de fora; todas tiveram checksum lido de fonte oficial e conferido. Assinaturas (PGP, sigstore, SLSA) não são verificadas: a decisão 3 pede o checksum.
 
+## Instalador (passo 3, feito em 02/11/2026)
+
+Código em `src\forja\toolchain\install.py`. Nomes públicos: `install_tool(manifest, nome, raiz, *, target=None, fetch=https_fetch, python=sys.executable)` (assíncrona; devolve `Installed(tool, version, directory, executable, already)`), `tools_dir()` (`<home>\tools`, onde a Forja guarda as ferramentas), `https_fetch`, `InstallError(tool, url, reason)` e `MARKER` (`.forja-installed`). `fetch` é injetável: os testes usam origem falsa, sem rede. O passo 3 não emite eventos; o passo 6 liga o instalador aos eventos do passo 5.
+
+- **Onde:** `<raiz>\<ferramenta>\<versão>\`. Versões diferentes ficam lado a lado; nada fora da pasta, nada no PATH.
+- **Ordem:** baixa para uma pasta temporária, confere **tamanho** e **checksum** do manifesto (`sha256` ou `sha512`) e só então desempacota. Arquivo que não confere não é aberto.
+- **Desempacotar:** zip recusa entrada que cairia fora da pasta; tar usa `filter="data"` (recusa caminho e link que escapam); `binary` é copiado para o `executable_path`; `wheel` ganha ambiente virtual próprio, feito no lugar final (os scripts do ambiente guardam o caminho dele) com `pip install` da wheel. No Linux o executável recebe o bit de execução (o zip do Gradle não o guarda).
+- **Sem instalação parcial:** o `MARKER` (versão e checksum) é escrito por último. Pasta sem marcador, com marcador de outro checksum ou sem o executável conta como não instalada e é refeita; qualquer falha apaga o que foi feito e levanta `InstallError` com ferramenta, origem e motivo (rede, tamanho, checksum, desempacotar, executável ausente, `pip`).
+- **Idempotente:** marcador igual e executável presente: devolve `already=True`, sem baixar.
+- **Limite aberto (dono):** as dependências do semgrep (cerca de 28) o `pip` resolve no PyPI sem checksum do manifesto, como já dito no passo 2. A wheel do semgrep é verificada; o que ela puxa, não. Resolver exigiria um arquivo de requisitos com hashes por plataforma, dado novo no manifesto; não foi acrescentado sem ordem.
+- **Não feito aqui:** instalar apenas as ferramentas de uma linguagem (passo 7), PATH dos processos lançados e `doctor` (passo 4), comando `forja instalar` e eventos (passo 6), gate de mutação (passo 9).
+
 ## Passos (um commit cada)
 
 0. **Feito (02/11):** **Ler o que falta, por inteiro:** para cada ferramenta da lista, a instrução oficial de instalação, a licença, como publica checksum ou assinatura, as plataformas suportadas e as versões mínimas que a Forja usa. Escrever o resultado aqui e corrigir as decisões que divergirem, em especial as 1 e 4.
 1. **ADR** que substitui a parte do ADR 0017 sobre instalação; atualizar `docs\adr\README.md` e `docs\estado.md`.
 2. **Feito (02/11):** **Manifesto de ferramentas** (dados): versão fixada, origem, checksum por plataforma, linguagem que exige a ferramenta. Testes do esquema. Ver "Manifesto de ferramentas" acima.
-3. **Instalador:** baixar, conferir o checksum, extrair na pasta da Forja, idempotente, sem instalação parcial. Testes sem rede, com origem falsa.
+3. **Feito (02/11):** **Instalador:** baixar, conferir o checksum, extrair na pasta da Forja, idempotente, sem instalação parcial. Testes sem rede, com origem falsa. Ver "Instalador" abaixo.
 4. **Resolução:** a pasta da Forja entra na frente do PATH dos processos lançados; o `doctor` diz quando a ferramenta é a instalada pela Forja.
 5. **Interface visual da instalação (decisão 10):** modelo de eventos da instalação e as três camadas da UI desenhando-os, testadas sem terminal e sem rede com fluxos de eventos falsos. Independe do instalador real.
 6. **Comando `forja instalar`** e a oferta dentro do `forja` guia (resumo e confirmação única), regra de CI da decisão 5, instalador emitindo os eventos do passo 5, mensagens `fix` do `doctor` apontando `forja instalar`.
