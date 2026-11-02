@@ -12,7 +12,14 @@ from typing import Any
 
 import pytest
 
-from forja.toolchain.install import MARKER, Installed, InstallError, install_tool, tools_dir
+from forja.toolchain.install import (
+    MARKER,
+    Installed,
+    InstallError,
+    https_fetch,
+    install_tool,
+    tools_dir,
+)
 from forja.toolchain.load import NoArtifactForPlatform, UnknownTool, parse_manifest
 from forja.toolchain.manifest import Manifest, Platform
 
@@ -88,7 +95,7 @@ class Origin:
         self.content = content
         self.calls: list[str] = []
 
-    def __call__(self, url: str, destination: Path) -> None:
+    def __call__(self, url: str, destination: Path, limit: int) -> None:
         self.calls.append(url)
         destination.write_bytes(self.content)
 
@@ -247,7 +254,7 @@ def test_a_wrong_size_installs_nothing(tmp_path: Path) -> None:
 def test_a_failed_download_installs_nothing(tmp_path: Path) -> None:
     content = zip_bytes({"bin/tool": b"run"})
 
-    def offline(url: str, destination: Path) -> None:
+    def offline(url: str, destination: Path, limit: int) -> None:
         destination.write_bytes(b"part")
         raise OSError("no network")
 
@@ -265,7 +272,7 @@ def test_a_failure_removes_a_partial_install_that_was_there(tmp_path: Path) -> N
     (partial / "tool").write_bytes(b"half")
     content = zip_bytes({"bin/tool": b"run"})
 
-    def offline(url: str, destination: Path) -> None:
+    def offline(url: str, destination: Path, limit: int) -> None:
         raise OSError("no network")
 
     with pytest.raises(InstallError):
@@ -374,3 +381,42 @@ def test_a_wheel_that_pip_refuses_installs_nothing(
 
 def test_the_tools_live_inside_the_forja_home(tmp_path: Path) -> None:
     assert tools_dir(environ={"FORJA_HOME": str(tmp_path)}) == tmp_path / "tools"
+
+
+class Response(io.BytesIO):
+    def __init__(self, data: bytes, announced: str | None) -> None:
+        super().__init__(data)
+        self.headers = {} if announced is None else {"Content-Length": announced}
+
+    def __enter__(self) -> "Response":
+        return self
+
+
+def serve(monkeypatch: pytest.MonkeyPatch, data: bytes, announced: str | None) -> None:
+    monkeypatch.setattr(
+        "forja.toolchain.install.urllib.request.urlopen",
+        lambda url, timeout: Response(data, announced),
+    )
+
+
+def test_the_fetch_saves_a_file_that_fits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    serve(monkeypatch, b"12345", "5")
+    https_fetch(URL, tmp_path / "f", 5)
+    assert (tmp_path / "f").read_bytes() == b"12345"
+
+
+def test_the_fetch_refuses_a_file_announced_too_long(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(monkeypatch, b"12345", "6")
+    with pytest.raises(OSError, match="announces 6"):
+        https_fetch(URL, tmp_path / "f", 5)
+    assert not (tmp_path / "f").exists()
+
+
+def test_the_fetch_stops_a_stream_longer_than_it_said(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(monkeypatch, b"123456", None)
+    with pytest.raises(OSError, match="more than the 5"):
+        https_fetch(URL, tmp_path / "f", 5)

@@ -33,8 +33,9 @@ PIP_TIMEOUT = 900.0
 _CHUNK = 1 << 20
 _TAIL = 5  # lines of the installer's output that go into the error
 
-Fetch = Callable[[str, Path], None]
-"""Saves the file at an https URL to a path; raises ``OSError`` when it cannot."""
+Fetch = Callable[[str, Path, int], None]
+"""Saves the file at an https URL to a path; raises ``OSError`` when it cannot, or when the file
+is longer than the given number of bytes (the size the manifest names)."""
 
 
 class InstallError(Exception):
@@ -61,12 +62,18 @@ def tools_dir(**kwargs: object) -> Path:
     return forja_home(**kwargs) / "tools"  # type: ignore[arg-type]
 
 
-def https_fetch(url: str, destination: Path) -> None:
-    with (
-        urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response,  # noqa: S310
-        destination.open("wb") as out,
-    ):
-        shutil.copyfileobj(response, out, _CHUNK)
+def https_fetch(url: str, destination: Path, limit: int) -> None:
+    with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response:  # noqa: S310
+        announced = response.headers.get("Content-Length")
+        if announced is not None and announced.isdigit() and int(announced) > limit:
+            raise OSError(f"the origin announces {announced} bytes, more than the {limit} expected")
+        total = 0
+        with destination.open("wb") as out:
+            while chunk := response.read(_CHUNK):
+                total += len(chunk)
+                if total > limit:
+                    raise OSError(f"the origin sent more than the {limit} bytes expected")
+                out.write(chunk)
 
 
 class _Collector:
@@ -201,7 +208,7 @@ async def install_tool(
         _clear(directory)
         staging.mkdir(parents=True)
         try:
-            await asyncio.to_thread(fetch, artifact.url, download)
+            await asyncio.to_thread(fetch, artifact.url, download, artifact.size)
         except OSError as error:
             raise InstallError(name, artifact.url, f"the download failed: {error}") from error
         if (reason := _verify(download, artifact)) is not None:
