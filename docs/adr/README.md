@@ -22,7 +22,7 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0014](0014-os-gates-leem-o-diff-da-tentativa-e-comparam-com-o-commit-pai.md) | Os gates leem o diff da tentativa e comparam com o commit pai | Aceito |
 | [0015](0015-git-em-memoria-para-testar-o-orquestrador.md) | Git em memória para testar o orquestrador | Aceito |
 | [0016](0016-claude-code-como-primeiro-executor.md) | Claude Code como primeiro executor e o runner de CLI | Aceito |
-| [0017](0017-o-comando-forja-guia-e-pergunta-pouco.md) | O comando `forja` guia, pergunta pouco e confirma uma vez | Aceito |
+| [0017](0017-o-comando-forja-guia-e-pergunta-pouco.md) | O comando `forja` guia, pergunta pouco e confirma uma vez | Aceito (a linha sobre instalação foi substituída pelo 0037) |
 | [0018](0018-a-forja-roda-no-ambiente-do-usuario-e-nao-cria-sandbox.md) | A Forja roda no ambiente do usuário e não cria sandbox | Aceito |
 | [0019](0019-a-medicao-2-decide-seguir-com-ressalvas.md) | A medição 2 decide seguir, com ressalvas | Aceito |
 | [0020](0020-a-mutacao-de-python-usa-motor-proprio.md) | A mutação de Python usa motor próprio | Substituído por 0021 |
@@ -42,3 +42,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0034](0034-a-mutacao-muta-a-funcao-inteira-sem-capacidade-incremental.md) | A mutação cobre a função inteira das funções tocadas, sem a capacidade incremental | Aceito |
 | [0035](0035-a-voz-e-instrucao-e-medida-nunca-bloqueio.md) | A voz é instrução e medida, nunca bloqueio | Aceito |
 | [0036](0036-dependencias-do-agente-em-ambiente-virtual-por-execucao.md) | Dependências do agente em ambiente virtual por execução | Aceito |
+| [0037](0037-a-forja-instala-as-ferramentas-externas-oss-exceto-o-git.md) | A Forja instala as ferramentas externas OSS, exceto o git | Aceito |

@@ -17,7 +17,7 @@ nunca pode alterar o que o usuário ainda não salvou.
 - Uma execução incompleta no repositório é oferecida para retomar ou descartar. Descartar marca
   `discarded` e **mostra** os comandos para remover as branches; a Forja não apaga nada.
 - Sem terminal (CI, `--config`), uma execução incompleta recusa a partida em vez de decidir sozinha.
-- `forja doctor` verifica e explica; não instala. A configuração da CLI do agente é do usuário.
+- `forja doctor` verifica e explica. A configuração da CLI do agente é do usuário. *(A frase "não instala" foi substituída pelo ADR 0037, de 02/11/2026: a Forja instala as ferramentas externas OSS, exceto o git.)*
 - Códigos de saída: 0 entregue, 1 falhou, 2 não pôde começar, 3 pausada com tudo salvo, 4 entregue
   sem nada integrado (todas as tarefas bloqueadas: a branch não tem mudanças), 130 interrompida
   pelo usuário.
