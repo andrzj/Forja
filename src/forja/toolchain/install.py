@@ -185,6 +185,19 @@ def _installed(directory: Path, tool: Tool, artifact: Artifact) -> Path | None:
     return executable if same and executable.is_file() else None
 
 
+def find_installed(
+    manifest: Manifest, name: str, root: Path, *, target: Platform | None = None
+) -> Installed | None:
+    """Where tool ``name`` is, when its pinned version is installed whole under ``root``."""
+    tool = find_tool(manifest, name)
+    artifact = artifact_for(manifest, name, current_platform() if target is None else target)
+    directory = root / name / tool.version
+    executable = _installed(directory, tool, artifact)
+    if executable is None:
+        return None
+    return Installed(name, tool.version, directory, executable, already=True)
+
+
 async def install_tool(
     manifest: Manifest,
     name: str,

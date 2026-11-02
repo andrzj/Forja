@@ -37,6 +37,7 @@ from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
 from forja.core.policy.config import PolicyConfigError
 from forja.orchestrator.outcome import ExitCode
+from forja.toolchain.resolve import with_installed_tools
 from forja.ui import terminal
 from forja.ui.full import FullRenderer
 from forja.ui.live import LiveRenderer
@@ -208,8 +209,10 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
 
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
+    environ = with_installed_tools(os.environ)
+    os.environ.update(environ)  # this process only: the user's own PATH is not touched
     try:
-        return asyncio.run(amain(args, TerminalConsole(), dict(os.environ)))
+        return asyncio.run(amain(args, TerminalConsole(), environ))
     except KeyboardInterrupt:
         return int(ExitCode.INTERRUPTED)
 

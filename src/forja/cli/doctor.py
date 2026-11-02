@@ -2,7 +2,8 @@
 
 The configuration of the agent CLI (login, model, gateway) is the person's and must be ready
 before; the doctor proves it works with a small task and says so when it does not. Nothing is
-installed here: for each missing tool the line says where its own instructions are.
+installed here: for each missing tool the line says where its own instructions are, and a tool
+found in the Forja's own folder is said to be the one the Forja installed.
 """
 
 import asyncio
@@ -21,6 +22,8 @@ from forja.cli.settings import Perfil
 from forja.core.adapters.executor import locate_in_path
 from forja.executors import DEFAULT_CLI, KNOWN_CLIS, adapter_for
 from forja.executors.probe import executable_version, version_problem
+from forja.toolchain.install import tools_dir
+from forja.toolchain.resolve import installed_by_forja
 
 SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
@@ -72,6 +75,14 @@ async def _pytest_in(repo: Path) -> Check:
     )
 
 
+def _where(command: str, environ: Mapping[str, str]) -> str:
+    """Where a tool that was found is: in the Forja's own folder, or on the PATH."""
+    found = locate_in_path(command, environ.get("PATH"))
+    if found is not None and installed_by_forja(found, tools_dir(environ=environ)):
+        return f"{command} instalado pela Forja ({found})"
+    return f"{command} no PATH"
+
+
 def _go_checks(environ: Mapping[str, str]) -> list[Check]:
     path = environ.get("PATH")
     found = locate_in_path("go", path) is not None
@@ -80,13 +91,13 @@ def _go_checks(environ: Mapping[str, str]) -> list[Check]:
         Check(
             "go",
             found,
-            "go no PATH" if found else "go ausente",
+            _where("go", environ) if found else "go ausente",
             "" if found else GO_HELP,
         ),
         Check(
             "golangci-lint",
             lint,
-            "golangci-lint no PATH"
+            _where("golangci-lint", environ)
             if lint
             else "golangci-lint ausente: o lint de Go fica não suportado",
             "" if lint else f"instale seguindo {GOLANGCI_HELP}",
@@ -101,7 +112,7 @@ def _node_checks(environ: Mapping[str, str]) -> list[Check]:
         Check(
             "node",
             found,
-            "node no PATH" if found else "node ausente",
+            _where("node", environ) if found else "node ausente",
             "" if found else NODE_HELP,
         )
     ]
@@ -113,7 +124,7 @@ def _dotnet_checks(environ: Mapping[str, str]) -> list[Check]:
         Check(
             "dotnet",
             found,
-            "dotnet no PATH" if found else "dotnet ausente",
+            _where("dotnet", environ) if found else "dotnet ausente",
             "" if found else DOTNET_HELP,
         )
     ]
@@ -124,7 +135,12 @@ def _java_checks(environ: Mapping[str, str], root: Path | None = None) -> list[C
     file is there (the adapter's own choice, ``pom.xml`` winning)."""
     java = locate_in_path("java", environ.get("PATH")) is not None
     checks = [
-        Check("java", java, "java no PATH" if java else "java ausente", "" if java else JAVA_HELP)
+        Check(
+            "java",
+            java,
+            _where("java", environ) if java else "java ausente",
+            "" if java else JAVA_HELP,
+        )
     ]
     if root is not None and not (root / "pom.xml").is_file():
         return [*checks, _gradle_check(environ, root)]
@@ -133,7 +149,7 @@ def _java_checks(environ: Mapping[str, str], root: Path | None = None) -> list[C
         Check(
             "maven",
             maven,
-            "mvn no PATH" if maven else "mvn ausente",
+            _where("mvn", environ) if maven else "mvn ausente",
             "" if maven else MAVEN_HELP,
         )
     )
@@ -148,7 +164,7 @@ def _gradle_check(environ: Mapping[str, str], root: Path) -> Check:
     return Check(
         "gradle",
         found,
-        "gradle no PATH" if found else "gradle ausente e o repositório não tem gradlew",
+        _where("gradle", environ) if found else "gradle ausente e o repositório não tem gradlew",
         "" if found else GRADLE_HELP,
     )
 
@@ -171,7 +187,7 @@ async def run_checks(
         Check(
             "gitleaks",
             detection.gitleaks,
-            "gitleaks no PATH" if detection.gitleaks else "gitleaks ausente",
+            _where("gitleaks", environ) if detection.gitleaks else "gitleaks ausente",
             "" if detection.gitleaks else f"instale seguindo {GITLEAKS_HELP}",
         ),
         Check(
@@ -208,7 +224,7 @@ async def run_checks(
             Check(
                 "semgrep",
                 found,
-                "semgrep no PATH" if found else "semgrep ausente",
+                _where("semgrep", environ) if found else "semgrep ausente",
                 "" if found else f"instale seguindo {SEMGREP_HELP}",
             )
         )
