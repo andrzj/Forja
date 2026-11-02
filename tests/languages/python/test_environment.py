@@ -67,6 +67,42 @@ def test_the_environment_has_its_own_interpreter_and_sees_the_base_packages(tmp_
     assert _imports(environment.python, "pytest")  # the base interpreter has it
 
 
+def test_an_editable_install_of_a_src_layout_repository_stays_visible(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    (repository / "src" / "srcprobe").mkdir(parents=True)
+    (repository / "src" / "srcprobe" / "__init__.py").write_text("", encoding="utf-8")
+    base = tmp_path / "base"
+    subprocess.run([sys.executable, "-m", "venv", str(base)], check=True, capture_output=True)
+    base_python = base / ("Scripts" if sys.platform == "win32" else "bin")
+    base_python /= "python.exe" if sys.platform == "win32" else "python"
+    purelib = subprocess.run(
+        [str(base_python), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    # what `pip install -e` leaves in the packages of the interpreter of a src-layout repository
+    (Path(purelib) / "__editable__.srcprobe.pth").write_text(
+        str(repository / "src") + "\n", encoding="utf-8"
+    )
+    assert _imports((str(base_python),), "srcprobe")
+    _wheel(tmp_path / "wheels")
+    env = dict(os.environ, PIP_NO_INDEX="1", PIP_FIND_LINKS=str(tmp_path / "wheels"))
+    environment = VirtualEnvironment(
+        tmp_path / "work" / "venv",
+        base_python=str(base_python),
+        env=env,
+        timeout=300,
+        log_dir=tmp_path / "logs",
+    )
+
+    asyncio.run(environment.create())
+    asyncio.run(environment.install([PACKAGE]))
+
+    assert _imports(environment.python, "srcprobe")
+    assert _imports(environment.python, PACKAGE)
+
+
 def test_a_package_installed_stays_in_the_environment(tmp_path: Path) -> None:
     _wheel(tmp_path / "wheels")
     environment = _environment(tmp_path, find_links=tmp_path / "wheels")

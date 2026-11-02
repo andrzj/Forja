@@ -129,4 +129,3 @@ O implementador e o autor de testes podem editar o manifesto, desde que a ediç�
 
 - **Instalar executa código do pacote.** Não há sandbox (ADR 0018): o código roda com as suas permissões. Um pacote recém-registrado com nome plausível passa na existência, é instalado e só depois o `new_dependency` o reprova por idade. Você escolheu aceitar isso (01/11/2026) em vez de exigir só wheels (`--only-binary`) ou de julgar a idade antes de instalar.
 - **O instalador não recebe chaves nem tokens.** Só PATH, pastas do usuário, certificados, proxy e variáveis `PIP_*`. O código do pacote ainda roda nos testes, com o ambiente dos testes.
-- **Instalação editável do repositório não aparece** no ambiente novo. Em layout `src` com `pip install -e`, os testes podem falhar depois da primeira dependência adicionada.
