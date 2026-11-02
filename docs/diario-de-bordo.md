@@ -32,7 +32,7 @@ As tentativas rejeitadas continuam sem commit de código; o diário as registra 
 - **Não guarda nada entre execuções.** Cada execução tem o seu, como os fatos.
 - **Não registra papel nem CLI por entrada.** O log guarda só o sufixo do id da etapa e a CLI vem da configuração.
 - **“Devolvida ao autor de testes” e “integração desfeita” não aparecem** como decisão própria: não têm transição no estado.
-- **O arquivo do ramo não passa pelo redator.** Ele traz a fala do agente e o motivo como estão no log, como o corpo do commit já traz. A redação cobre só o que a Forja envia a terceiros (ADR 0009), e a Forja nunca faz push (ADR 0013). Se o repositório for publicado, revise o arquivo antes.
+- **O arquivo do ramo passa pelo redator**, o mesmo do `.forja-agent/diary.md`: segredo é mascarado, o resto do texto fica inteiro. O corpo do commit, que também traz a fala do agente, não passa por ele.
 - **O gate de voz só observa o arquivo.** Ele julga as linhas adicionadas de toda documentação, mas está em modo observação.
 - **Skills e `CLAUDE.md` do usuário na chamada do Claude Code** (`--setting-sources user`, `--disable-slash-commands`): só uma chamada real diz o que entra. O efeito medido do diário pode se misturar com o das instruções do perfil.
 - **A seção do resumo lista todas as tarefas**, inclusive as integradas sem rejeição, com uma linha por tentativa.

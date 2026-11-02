@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 from forja.core.artifacts.models import Producer
+from forja.core.redaction import Redactor
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
+from forja.orchestrator.agent_runner import redacted_diary
 from forja.orchestrator.ports import PlannedTask
 from tests.orchestrator.fakes import (
     PASSED,
@@ -137,3 +139,32 @@ def test_the_log_book_of_the_task_goes_in_the_documenter_commit_beside_the_recor
     assert "> Split the long function in two." in diary
     assert "## Tentativa `t1-a2` da etapa `t1-s`: aprovada" in diary
     assert "t1-da1" not in diary
+
+
+class Masking(ScriptedAgent):
+    """A documenter whose runner redacts like the real one."""
+
+    def redact_diary(self, diary: str) -> str:
+        return redacted_diary(diary, Redactor())
+
+
+def test_the_diary_in_the_branch_has_no_secret_and_keeps_the_rest_of_the_text(
+    world: MemoryWorld,
+) -> None:
+    token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    world.run(
+        measurer=ScriptedMeasurer(verdicts=(REJECTED, PASSED, PASSED)),
+        agent=ScriptedAgent(edits=[CODE, CODE], reason=f"I used the key {token} to split f."),
+        agents={Producer.DOCUMENTER: Masking(edits=[README])},
+        planner=ScriptedPlanner((TASK,)),
+    )
+
+    memory = world.memory
+    tip = memory.branches[world.workspace.run_branch]
+    docs = [
+        c for c in map(memory.commits.get, memory.ancestors(tip)) if c and c.subject[:5] == "docs:"
+    ]
+    diary = docs[0].tree["docs/mudancas/t1-diario.md"]
+    assert token not in diary
+    assert "> I used the key " in diary and " to split f." in diary
+    assert "## Tentativa `t1-a2` da etapa `t1-s`: aprovada" in diary

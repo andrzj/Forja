@@ -274,6 +274,9 @@ class ScriptedAgent:
     def declared_claims(self, ctx: AttemptContext) -> tuple[Claim, ...]:
         return self.claims
 
+    def redact_diary(self, diary: str) -> str:
+        return diary
+
     def declared_output(self, ctx: AttemptContext) -> LlmOutput:
         return LlmOutput(
             claims=self.claims,

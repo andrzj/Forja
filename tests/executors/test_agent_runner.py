@@ -582,6 +582,21 @@ def test_the_diary_is_written_whole_in_the_agents_directory_when_there_is_one(
     assert not (rig(tmp_path / "b", GOOD).workcopy / ".forja-agent" / "diary.md").exists()
 
 
+def test_the_diary_the_branch_keeps_is_redacted_like_the_agents_copy_and_otherwise_whole(
+    tmp_path: Path,
+) -> None:
+    r = rig(tmp_path, GOOD)
+    token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    diary = f"# Diário de bordo: t1\n\n> key {token}\n" + "w" * 9000 + "\n"
+
+    kept = r.runner.redact_diary(diary)
+
+    assert token not in kept
+    assert kept.startswith("# Diário de bordo: t1\n\n> key ")
+    assert kept.endswith("w" * 9000 + "\n")
+    assert r.runner.redact_diary("") == ""
+
+
 def test_an_agent_that_changes_the_diary_has_its_work_rejected(tmp_path: Path) -> None:
     r = rig(tmp_path, GOOD)
     ctx = replace(r.ctx, diary="### Attempt `t1-a0`: rejected\n")
