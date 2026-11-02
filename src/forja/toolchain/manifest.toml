@@ -1,0 +1,292 @@
+# Manifest of the external tools the Forja installs (ADR 0037, docs/plano-instalacao.md).
+#
+# Every size and checksum below was read from the vendor's own published file (named in
+# `checksum_source`) and checked by downloading the artifact itself. Changing a version is a commit
+# that repeats that reading. Git is not here: the user installs it.
+schema_version = 1
+
+[[tools]]
+name = "gitleaks"
+executable = "gitleaks"
+purpose = "Procura segredos (chaves, senhas, tokens) no código e no histórico do repositório."
+license = "MIT"
+version = "8.30.1"
+needed_by = "always"
+
+[tools.artifacts.windows-x64]
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
+kind = "zip"
+size = 8438883
+algorithm = "sha256"
+checksum = "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+checksum_source = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt"
+executable_path = "gitleaks.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+kind = "tar.gz"
+size = 8230402
+algorithm = "sha256"
+checksum = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+checksum_source = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt"
+executable_path = "gitleaks"
+
+[[tools]]
+name = "osv-scanner"
+executable = "osv-scanner"
+purpose = "Procura vulnerabilidades conhecidas nas dependências do projeto (base OSV)."
+license = "Apache-2.0"
+version = "2.7.0"
+needed_by = "always"
+
+[tools.artifacts.windows-x64]
+url = "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_windows_amd64.exe"
+kind = "binary"
+size = 58999296
+algorithm = "sha256"
+checksum = "9964ed64ec9a387391eb4cc006ad5c531154821aef29b793e02c448de4686438"
+checksum_source = "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_SHA256SUMS"
+executable_path = "osv-scanner.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64"
+kind = "binary"
+size = 57725088
+algorithm = "sha256"
+checksum = "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b"
+checksum_source = "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_SHA256SUMS"
+executable_path = "osv-scanner"
+
+[[tools]]
+name = "jscpd"
+executable = "jscpd"
+purpose = "Mede código duplicado no repositório (gate de duplicação)."
+license = "MIT"
+version = "5.4.2"
+needed_by = "always"
+
+[tools.artifacts.windows-x64]
+url = "https://github.com/kucherenko/jscpd/releases/download/v5.4.2/jscpd-windows-x64-msvc.tar.gz"
+kind = "tar.gz"
+size = 8768343
+algorithm = "sha256"
+checksum = "a7927e3bbdd341a139459c684d3f5e0b6409b7b1660bae275d44523f63128d87"
+checksum_source = "https://github.com/kucherenko/jscpd/releases/download/v5.4.2/checksums.txt"
+executable_path = "jscpd.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://github.com/kucherenko/jscpd/releases/download/v5.4.2/jscpd-linux-x64-gnu.tar.gz"
+kind = "tar.gz"
+size = 9773190
+algorithm = "sha256"
+checksum = "216bae5de2b30c57f893286585c7a348e8af7cd36810949831f569d29f495a3b"
+checksum_source = "https://github.com/kucherenko/jscpd/releases/download/v5.4.2/checksums.txt"
+executable_path = "jscpd"
+
+[[tools]]
+name = "semgrep"
+executable = "semgrep"
+purpose = "Análise estática de segurança (SAST) com as regras do repositório."
+license = "LGPL-2.1-or-later"
+version = "1.183.0"
+needed_by = "always"
+
+[tools.artifacts.windows-x64]
+url = "https://files.pythonhosted.org/packages/ae/76/38c2f47f7173b6bd0fe1c52cc5fbc3d1b906dd925a1e65263a41f4102c6f/semgrep-1.183.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-win_amd64.whl"
+kind = "wheel"
+size = 59495454
+algorithm = "sha256"
+checksum = "8e9d96b976d6cb8e1240d454e50245decd52d1329d84540df26c7f06787439f7"
+checksum_source = "https://pypi.org/pypi/semgrep/1.183.0/json"
+executable_path = "Scripts/semgrep.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://files.pythonhosted.org/packages/c5/fd/85ac31a5ec53feee54ebdce933ab1c94af81695a2b244b0baefdbcdba92a/semgrep-1.183.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-manylinux_2_34_x86_64.whl"
+kind = "wheel"
+size = 72236947
+algorithm = "sha256"
+checksum = "f36115c4d0cb43056ceb308273421a2f6a35e055e7e029601e130850f836646e"
+checksum_source = "https://pypi.org/pypi/semgrep/1.183.0/json"
+executable_path = "bin/semgrep"
+
+[[tools]]
+name = "go"
+executable = "go"
+purpose = "Compilador e ferramentas do Go (com gofmt), para repositórios Go."
+license = "BSD-3-Clause"
+version = "1.27.3"
+needed_by = ["go"]
+
+[tools.artifacts.windows-x64]
+url = "https://go.dev/dl/go1.27.3.windows-amd64.zip"
+kind = "zip"
+size = 79010309
+algorithm = "sha256"
+checksum = "f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff"
+checksum_source = "https://go.dev/dl/?mode=json&include=all"
+executable_path = "go/bin/go.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz"
+kind = "tar.gz"
+size = 70588678
+algorithm = "sha256"
+checksum = "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+checksum_source = "https://go.dev/dl/?mode=json&include=all"
+executable_path = "go/bin/go"
+
+[[tools]]
+name = "golangci-lint"
+executable = "golangci-lint"
+purpose = "Lint de repositórios Go."
+license = "GPL-3.0"
+version = "2.15.0"
+needed_by = ["go"]
+
+[tools.artifacts.windows-x64]
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-windows-amd64.zip"
+kind = "zip"
+size = 15903887
+algorithm = "sha256"
+checksum = "cd7ea6063c95de245e17e5246e42bdc14bb221792c429dbd239ab3a6ade6ca6a"
+checksum_source = "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-checksums.txt"
+executable_path = "golangci-lint-2.15.0-windows-amd64/golangci-lint.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz"
+kind = "tar.gz"
+size = 15585535
+algorithm = "sha256"
+checksum = "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea"
+checksum_source = "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-checksums.txt"
+executable_path = "golangci-lint-2.15.0-linux-amd64/golangci-lint"
+
+[[tools]]
+name = "node"
+executable = "node"
+purpose = "Node.js (com npm), para repositórios JavaScript e TypeScript."
+license = "MIT"
+version = "26.13.0"
+needed_by = ["javascript", "typescript"]
+
+[tools.artifacts.windows-x64]
+url = "https://nodejs.org/dist/v26.13.0/node-v26.13.0-win-x64.zip"
+kind = "zip"
+size = 41157375
+algorithm = "sha256"
+checksum = "dcc60d59a0746999f99064a01c020445d54d84228c691cdbf25b49ac3b59150a"
+checksum_source = "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt"
+executable_path = "node-v26.13.0-win-x64/node.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-x64.tar.xz"
+kind = "tar.xz"
+size = 34083252
+algorithm = "sha256"
+checksum = "d28a96af6c38596f6d9d97c0ee531c13d238d757742387d1928de822d959e997"
+checksum_source = "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt"
+executable_path = "node-v26.13.0-linux-x64/bin/node"
+
+[[tools]]
+name = "dotnet-sdk"
+executable = "dotnet"
+purpose = "SDK do .NET, para repositórios C#."
+license = "MIT"
+version = "10.0.403"
+needed_by = ["csharp"]
+
+[tools.artifacts.windows-x64]
+url = "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-win-x64.zip"
+kind = "zip"
+size = 300745255
+algorithm = "sha512"
+checksum = "7a114c318fa7f1d9822991b534b2814d0e78386ceda816b371f5141acefe741d87ccb606ede06cadac8f9ac5070e32b708a67bbd1619ff5e5a7858a27874ef48"
+checksum_source = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json"
+executable_path = "dotnet.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-linux-x64.tar.gz"
+kind = "tar.gz"
+size = 240199984
+algorithm = "sha512"
+checksum = "b7b3d8461cf98b07d2552ce9199702fa3ad010ac2671a5f8cd5136f7534e50f6855ba7bbb02b11494563f1d04156276a31cda1103b900e5eecd0d9473dc7b9c5"
+checksum_source = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json"
+executable_path = "dotnet"
+
+[[tools]]
+name = "jdk"
+executable = "java"
+purpose = "JDK Temurin 21 (LTS), para repositórios Java."
+license = "GPL-2.0-only WITH Classpath-exception-2.0"
+version = "21.0.13+9"
+needed_by = ["java"]
+
+[tools.artifacts.windows-x64]
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip"
+kind = "zip"
+size = 205421281
+algorithm = "sha256"
+checksum = "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9"
+checksum_source = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip.sha256.txt"
+executable_path = "jdk-21.0.13+9/bin/java.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz"
+kind = "tar.gz"
+size = 207858352
+algorithm = "sha256"
+checksum = "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c"
+checksum_source = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz.sha256.txt"
+executable_path = "jdk-21.0.13+9/bin/java"
+
+[[tools]]
+name = "maven"
+executable = "mvn"
+purpose = "Maven, para construir e testar repositórios Java."
+license = "Apache-2.0"
+version = "3.10.0"
+needed_by = ["java"]
+
+[tools.artifacts.windows-x64]
+url = "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.zip"
+kind = "zip"
+size = 10102082
+algorithm = "sha512"
+checksum = "22d31676d5b92ed53308c19ecded3245d0efd0cddfec51ec7bab62f4f13ad70ddddceff8e62940e0e8e2421f3cde8106737f4becec0aa034ffeff2a754e88337"
+checksum_source = "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.zip.sha512"
+executable_path = "apache-maven-3.10.0/bin/mvn.cmd"
+
+[tools.artifacts.linux-x64]
+url = "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"
+kind = "tar.gz"
+size = 9979885
+algorithm = "sha512"
+checksum = "908b1501bfb420bf7c8affb855534a9c407fd6099367bfb9f2f2dcb8e9799102bffb84518cde74c679bd76870247c6528683abdd620581bffa90f95d92d175aa"
+checksum_source = "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.sha512"
+executable_path = "apache-maven-3.10.0/bin/mvn"
+
+[[tools]]
+name = "gradle"
+executable = "gradle"
+purpose = "Gradle, para repositórios Java que não trazem o gradlew."
+license = "Apache-2.0"
+version = "9.8.2"
+needed_by = ["java"]
+
+[tools.artifacts.windows-x64]
+url = "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip"
+kind = "zip"
+size = 151620138
+algorithm = "sha256"
+checksum = "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607"
+checksum_source = "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip.sha256"
+executable_path = "gradle-9.8.2/bin/gradle.bat"
+
+[tools.artifacts.linux-x64]
+url = "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip"
+kind = "zip"
+size = 151620138
+algorithm = "sha256"
+checksum = "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607"
+checksum_source = "https://services.gradle.org/distributions/gradle-9.8.2-bin.zip.sha256"
+executable_path = "gradle-9.8.2/bin/gradle"

@@ -42,7 +42,7 @@ Lida a documentação oficial de cada ferramenta e, no código da Forja, como ca
 - Não são da Forja, vêm do projeto alvo: prettier, eslint, typescript, vitest, jest e a cobertura Istanbul/c8 (a Forja chama os de `node_modules` do projeto); coverlet (pacote NuGet do projeto); JaCoCo e Checkstyle (o Maven ou o Gradle do projeto os baixa).
 - O `npm` só entra pelo pacote do Node, se vier dentro dele.
 
-**Em aberto para os passos 2 e 3:** npm dentro do pacote do Node; extração do Go sem administrador; semgrep em Windows nativo; algoritmo dos checksums de gitleaks e jscpd; o Python do semgrep sai do Python da própria Forja (3.12, acima do mínimo 3.10 do semgrep), em ambiente virtual próprio na pasta da Forja; Checkstyle e licença do Maven sem confirmação (fora do manifesto, não afeta).
+**Em aberto para os passos 2 e 3 (o que cabia ao passo 2 está resolvido em "Manifesto de ferramentas"):** npm dentro do pacote do Node; extração do Go sem administrador; semgrep em Windows nativo; algoritmo dos checksums de gitleaks e jscpd; o Python do semgrep sai do Python da própria Forja (3.12, acima do mínimo 3.10 do semgrep), em ambiente virtual próprio na pasta da Forja; Checkstyle e licença do Maven sem confirmação (fora do manifesto, não afeta).
 
 ## Decisões
 
@@ -58,11 +58,51 @@ Lida a documentação oficial de cada ferramenta e, no código da Forja, como ca
 11. **pytest e coverage ficam fora.** São do interpretador do repositório alvo (`repo_python`) ou do ambiente virtual da execução (ADR 0036); o `doctor` já diz como prepará-lo.
 10. **A instalação é visual.** Ordem do dono (02/11/2026): processo claro, compreensível e elaborado, com ótima interface no terminal. Cada ferramenta aparece com nome, para que serve, versão, origem, tamanho, etapa (baixando, conferindo checksum, extraindo, verificando) e resultado; um resumo final diz o que foi instalado, onde e o que falhou. Vale nas três camadas da UI existente (tela cheia, linha viva, texto simples), com os mesmos limites de largura. O instalador só emite eventos; quem desenha é a UI.
 
+## Manifesto de ferramentas (passo 2, feito em 02/11/2026)
+
+Código em `src\forja\toolchain\`: `manifest.py` (esquema pydantic, frozen, `extra="forbid"`), `load.py` (carregador) e `manifest.toml` (dados, dentro do pacote; o `hatchling` o inclui na wheel, como já faz com os `init_scripts` do Java). Testes em `tests\toolchain`.
+
+**Nomes públicos do carregador:** `load_manifest(path=None)` (o manifesto embarcado, ou o de `path`), `parse_manifest(text, source)`, `find_tool(manifest, nome)`, `artifact_for(manifest, nome, plataforma=None)` (a plataforma atual por padrão), `current_platform(system=None, machine=None)`; exceções `ManifestError` (lista todos os problemas de uma vez), `UnknownTool`, `UnsupportedPlatform`, `NoArtifactForPlatform`. Esquema: `Manifest`, `Tool`, `Artifact`, `Platform` (`windows-x64`, `linux-x64`).
+
+**O que o esquema recusa:** campo faltando ou desconhecido; URL (`url` ou `checksum_source`) que não seja `https`; checksum que não seja hexadecimal minúsculo do tamanho do algoritmo (`sha256` 64, `sha512` 128); tamanho que não seja inteiro positivo; tipo de artefato que não bata com o sufixo da URL; caminho do executável absoluto, com `..`, `\`, letra de unidade ou segmento vazio; `needed_by` que não seja `"always"` ou uma lista sem repetição de linguagens conhecidas; ferramenta repetida; plataforma fora de `windows-x64` e `linux-x64`; ferramenta sem plataforma; manifesto sem ferramentas. Nenhuma ferramenta entra sem checksum porque o campo é obrigatório.
+
+**Campos por ferramenta:** `name`, `executable`, `purpose` (português, a UI mostra), `license` (SPDX), `version`, `needed_by`. **Por plataforma:** `url`, `kind` (`zip`, `tar.gz`, `tar.xz`, `wheel`, `binary`), `size`, `algorithm`, `checksum`, `checksum_source` (de onde o valor foi lido) e `executable_path`. `binary` foi acrescentado aos tipos do plano porque o osv-scanner publica o executável avulso (o `executable_path` é o nome com que o instalador o grava). Para `wheel`, `executable_path` é relativo ao ambiente virtual (`Scripts/semgrep.exe`, `bin/semgrep`).
+
+**Leitura dos checksums.** Cada valor foi lido do arquivo oficial da ferramenta, e os 22 artefatos (21 arquivos distintos; o Gradle é o mesmo zip nas duas plataformas) foram **baixados e conferidos de fato**: o SHA bateu e o tamanho em bytes é o do arquivo baixado. Fonte e algoritmo:
+
+| Ferramenta | Versão | Algoritmo | Fonte do checksum | Windows x64 | Linux x64 |
+| --- | --- | --- | --- | --- | --- |
+| gitleaks | 8.30.1 | sha256 | `gitleaks_8.30.1_checksums.txt` do release | zip | tar.gz |
+| osv-scanner | 2.7.0 | sha256 | `osv-scanner_SHA256SUMS` do release | `.exe` avulso | binário avulso |
+| jscpd | 5.4.2 | sha256 | `checksums.txt` do release | tar.gz `windows-x64-msvc` | tar.gz `linux-x64-gnu` (glibc, serve no WSL) |
+| semgrep | 1.183.0 | sha256 | JSON do PyPI (`/pypi/semgrep/1.183.0/json`) | wheel `win_amd64` | wheel `manylinux_2_34_x86_64` |
+| go | 1.27.3 | sha256 | `go.dev/dl/?mode=json&include=all` | zip | tar.gz |
+| golangci-lint | 2.15.0 | sha256 | `golangci-lint-2.15.0-checksums.txt` | zip | tar.gz |
+| node | 26.13.0 | sha256 | `SHASUMS256.txt` | zip | tar.xz |
+| dotnet-sdk | 10.0.403 | sha512 | `releases.json` do canal 10.0 (campo `hash`) | zip | tar.gz |
+| jdk (Temurin) | 21.0.13+9 | sha256 | `.sha256.txt` do release no GitHub da Adoptium, igual ao campo `checksum` da API da Adoptium | zip | tar.gz |
+| maven | 3.10.0 | sha512 | `.sha512` ao lado do arquivo | zip | tar.gz |
+| gradle | 9.8.2 | sha256 | `.sha256` ao lado do arquivo (igual ao campo `checksum` de `services.gradle.org/versions/all`) | zip `bin` | o mesmo zip |
+
+No GitHub, os checksums dos arquivos de release coincidem também com o campo `digest` da API de releases.
+
+**Resolvido do que estava em aberto:**
+
+- **Algoritmo de gitleaks e jscpd:** sha256, nos dois (arquivo de checksums do release). golangci-lint, osv-scanner, Go, Node e Gradle também sha256; dotnet e Maven, sha512.
+- **Escolha do artefato:** Windows x64 e Linux x64 (a Forja no WSL é Linux glibc). jscpd: `msvc` no Windows e `gnu` no Linux, nunca `musl`. Node no Linux: `tar.xz` (menor). Maven no Linux: `tar.gz`, que guarda o bit de execução; o Gradle só publica zip, então o instalador (passo 3) tem de marcar o executável no Linux.
+- **npm dentro do pacote do Node:** sim, nas duas plataformas (`npm`, `npm.cmd` na raiz do zip; `bin/npm` no tar). Nada a instalar à parte.
+- **Go sem administrador:** o Go publica o zip e o tar.gz (pasta `go/` com `bin\go.exe` e `gofmt.exe`); é extrair numa pasta da Forja. O passo 3 faz isso.
+- **Semgrep no Windows nativo:** o PyPI tem a wheel `win_amd64` da 1.183.0 (traz `semgrep-core.exe`). Que ela funcione na prática só o passo 3 e o E2E mostram. **Limite:** o checksum fixa só a wheel do semgrep; as cerca de 28 dependências dela (`Requires-Dist`) o `pip` resolve no PyPI sem checksum do manifesto. O passo 3 decide como tratá-las (por exemplo `pip install` com arquivo de requisitos com hashes), sem fugir da decisão 3.
+- **Licenças** (SPDX, lidas do PyPI ou da API do GitHub): a do semgrep é `LGPL-2.1-or-later` (PyPI), a do golangci-lint `GPL-3.0` (como o GitHub a declara), o JDK `GPL-2.0-only WITH Classpath-exception-2.0`. O Maven é Apache-2.0 (GitHub declara), o que fecha a dúvida do passo 0.
+- **JDK 21.** Escolhido o LTS 21 (21.0.13+9, o mais recente da série 21 na API da Adoptium em 02/11/2026): o template Maven da Forja usa `release` 17 e os testes do projeto passam com o 21; o 21 cobre o `release` 17 e é aceito pelo Gradle 9.8.2 (JVM 17 a 27).
+
+**Fora do manifesto:** nenhuma das onze ficou de fora; todas tiveram checksum lido de fonte oficial e conferido. Assinaturas (PGP, sigstore, SLSA) não são verificadas: a decisão 3 pede o checksum.
+
 ## Passos (um commit cada)
 
 0. **Feito (02/11):** **Ler o que falta, por inteiro:** para cada ferramenta da lista, a instrução oficial de instalação, a licença, como publica checksum ou assinatura, as plataformas suportadas e as versões mínimas que a Forja usa. Escrever o resultado aqui e corrigir as decisões que divergirem, em especial as 1 e 4.
 1. **ADR** que substitui a parte do ADR 0017 sobre instalação; atualizar `docs\adr\README.md` e `docs\estado.md`.
-2. **Manifesto de ferramentas** (dados): versão fixada, origem, checksum por plataforma, linguagem que exige a ferramenta. Testes do esquema.
+2. **Feito (02/11):** **Manifesto de ferramentas** (dados): versão fixada, origem, checksum por plataforma, linguagem que exige a ferramenta. Testes do esquema. Ver "Manifesto de ferramentas" acima.
 3. **Instalador:** baixar, conferir o checksum, extrair na pasta da Forja, idempotente, sem instalação parcial. Testes sem rede, com origem falsa.
 4. **Resolução:** a pasta da Forja entra na frente do PATH dos processos lançados; o `doctor` diz quando a ferramenta é a instalada pela Forja.
 5. **Interface visual da instalação (decisão 10):** modelo de eventos da instalação e as três camadas da UI desenhando-os, testadas sem terminal e sem rede com fluxos de eventos falsos. Independe do instalador real.
