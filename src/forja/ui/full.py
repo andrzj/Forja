@@ -8,7 +8,7 @@ The app also is the source of the keys while it runs (``ctrl+k`` stops, ``t`` ch
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any, TextIO, cast
+from typing import Any, Protocol, TextIO, cast
 
 from rich.text import Text
 from textual import events
@@ -41,6 +41,12 @@ TITLES = {
 STOP_KEYS = ("ctrl+k", "ctrl+c")
 
 
+class LinesSource(Protocol):
+    """The app a ``Pane`` asks for lines: the run screen and the installation screen are two."""
+
+    def lines_for(self, key: str, width: int, height: int, offset: int) -> list[Text]: ...
+
+
 class Pane(Widget, can_focus=False):
     """One rectangle of the screen. It asks the app for lines that fit what it was given."""
 
@@ -60,13 +66,33 @@ class Pane(Widget, can_focus=False):
 
     def render(self) -> Text:
         width, height = self.content_size
-        screen = cast("ForjaApp", self.app)
+        screen = cast(LinesSource, self.app)
         lines = screen.lines_for(self.key, max(width, 1), max(height, 1), self.back)
         return Text(chr(10), no_wrap=True, overflow="ellipsis").join(lines)
 
     def action_scroll(self, step: int) -> None:
         self.back = 0 if step == 0 else max(0, self.back + step)
         self.refresh()
+
+
+def paint_panes(
+    app: App[None], theme: Theme, titles: dict[str, str], subjects: dict[str, Role]
+) -> None:
+    """Paint the screen and every pane in the colors and the border of the theme."""
+    background = Color.parse(theme.colors[Role.BACKGROUND])
+    text = Color.parse(theme.colors[Role.TEXT])
+    border = BORDERS.get(theme.glyphs.name, "round")
+    app.screen.styles.background = background
+    for pane in app.query(Pane):
+        pane.styles.background = background
+        pane.styles.color = text
+        if pane.key in titles:
+            role = subjects[pane.key] if theme.border_by_subject else Role.BORDER
+            pane.styles.border = cast(Any, (border, Color.parse(theme.colors[role])))
+            pane.border_title = titles[pane.key]
+            pane.styles.border_title_color = Color.parse(theme.colors[Role.ACCENT])
+            pane.styles.border_title_background = background
+        pane.refresh()
 
 
 class ForjaApp(App[None]):
@@ -192,21 +218,7 @@ class ForjaApp(App[None]):
     # -- colors --------------------------------------------------------------------------------
 
     def paint(self) -> None:
-        theme = self.theme_in_use
-        background = Color.parse(theme.colors[Role.BACKGROUND])
-        text = Color.parse(theme.colors[Role.TEXT])
-        border = BORDERS.get(theme.glyphs.name, "round")
-        self.screen.styles.background = background
-        for pane in self.query(Pane):
-            pane.styles.background = background
-            pane.styles.color = text
-            if pane.key in TITLES:
-                role = SUBJECTS[pane.key] if theme.border_by_subject else Role.BORDER
-                pane.styles.border = cast(Any, (border, Color.parse(theme.colors[role])))
-                pane.border_title = TITLES[pane.key]
-                pane.styles.border_title_color = Color.parse(theme.colors[Role.ACCENT])
-                pane.styles.border_title_background = background
-        self.refresh_panes()
+        paint_panes(self, self.theme_in_use, TITLES, SUBJECTS)
 
     def set_theme(self, theme: Theme) -> None:
         self.theme_in_use = theme

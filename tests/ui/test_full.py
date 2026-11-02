@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
+from textual.app import App
 from textual.geometry import Region
 
 from forja.ui.full import ForjaApp, Pane
@@ -36,7 +37,7 @@ async def nothing(app: ForjaApp, pilot: Any) -> None:
     return None
 
 
-def shown(app: ForjaApp) -> list[Pane]:
+def shown(app: App[None]) -> list[Pane]:
     return [
         pane
         for pane in app.query(Pane)
@@ -53,7 +54,7 @@ def overlap(a: Region, b: Region) -> bool:
     )
 
 
-def check_layout(app: ForjaApp, size: tuple[int, int]) -> None:
+def check_layout(app: App[None], size: tuple[int, int]) -> None:
     screen = Region(0, 0, *size)
     panes = shown(app)
     assert panes
