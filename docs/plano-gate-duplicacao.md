@@ -11,7 +11,7 @@ Estado: plano, nada implementado. Origem: o dono apontou em 02/11/2026 que a dup
 
 ## O que a ferramenta faz
 
-**Não lido ainda.** O `jscpd` é referência do dono (Especificação, linha 400) e é seguido como está. Nada abaixo sobre flags, formato de saída, linguagens suportadas ou códigos de saída vale antes do passo 0.
+**Leitura completa ainda não feita (passo 0 pendente).** Achados preliminares, vindos da leitura da fila 14 em 02/11/2026 e a conferir na versão fixada: a v5 (5.4.2) é binário nativo, sem Node; relatório JSON com `duplicates[]` (cada um com `firstFile` e `secondFile`, `lines`, `tokens`) e `statistics`; configuração em `.jscpd.json`; a página de códigos de saída é ambígua sobre se achar clones falha a execução; `jscpd .` respeita o `.gitignore`. O `jscpd` é referência do dono (Especificação, linha 400) e é seguido como está. Nada abaixo sobre flags, formato de saída, linguagens suportadas ou códigos de saída vale antes do passo 0.
 
 ## Decisões
 
@@ -39,4 +39,4 @@ Estado: plano, nada implementado. Origem: o dono apontou em 02/11/2026 que a dup
 ## Limites já conhecidos
 
 - O `jscpd` mede texto/tokens repetidos, não duplicação de intenção; abstrações diferentes com mesma função passam.
-- Se o `jscpd` exigir Node, repositório sem Node passa a precisar dele só para este check (a confirmar no passo 0).
+- A v5 do `jscpd` é binário autossuficiente (achado preliminar), então o requisito de Node que este plano temia não se aplica; a confirmar no passo 0.
