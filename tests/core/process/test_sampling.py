@@ -1,4 +1,8 @@
+import mmap
+import subprocess
 import sys
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -121,3 +125,50 @@ def test_ps_snapshot_sees_this_process_in_its_group() -> None:
     import os
 
     assert any(group == os.getpgrp() and size > 0 for group, size in _sampling.read_ps())
+
+
+def test_the_sampling_thread_does_not_keep_the_process_alive() -> None:
+    assert PeakSampler(10, Scripted([]))._thread.daemon
+
+
+def test_proc_snapshot_reads_each_numbered_entry_and_skips_the_unreadable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "7").mkdir()
+    (tmp_path / "7" / "stat").write_text(STAT)
+    (tmp_path / "7" / "statm").write_text("1000 25 3")
+    (tmp_path / "8").mkdir()  # ended between the listing and the read
+    (tmp_path / "self").mkdir()
+    monkeypatch.setattr(_sampling, "Path", lambda name: tmp_path if name == "/proc" else Path(name))
+
+    assert _sampling.read_proc() == [(777, 25 * mmap.PAGESIZE)]
+
+
+def test_ps_snapshot_asks_ps_for_group_and_resident_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_run(command: list[str], **options: object) -> SimpleNamespace:
+        calls.append((command, options))
+        return SimpleNamespace(stdout="  PGID RSS\n 10 4\n")
+
+    monkeypatch.setattr(_sampling.subprocess, "run", fake_run)
+
+    assert _sampling.read_ps() == [(10, 4096)]
+    assert calls == [
+        (
+            ["ps", "-axo", "pgid=,rss="],
+            {"capture_output": True, "text": True, "check": False, "timeout": 5},
+        )
+    ]
+
+
+@pytest.mark.parametrize("failure", [OSError("no ps"), subprocess.TimeoutExpired("ps", 5)])
+def test_ps_snapshot_is_empty_when_ps_cannot_be_read(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    def fake_run(command: list[str], **options: object) -> SimpleNamespace:
+        raise failure
+
+    monkeypatch.setattr(_sampling.subprocess, "run", fake_run)
+
+    assert _sampling.read_ps() == []
