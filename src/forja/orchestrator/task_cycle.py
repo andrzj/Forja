@@ -579,7 +579,9 @@ class TaskCycle:
             self._gates_passed(ctx.task.task_id),
             self._executors(),
         )
-        diary = task_diary(self._state, ctx.task.task_id, ctx.attempt_id)
+        diary = run.runner(ctx.task.role).redact_diary(
+            task_diary(self._state, ctx.task.task_id, ctx.attempt_id)
+        )
         for path, text in ((record.path, record.text), (diary_path(ctx.task.task_id), diary)):
             target = ctx.worktree / path
             target.parent.mkdir(parents=True, exist_ok=True)

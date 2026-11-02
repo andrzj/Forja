@@ -303,9 +303,14 @@ def _quote(text: str) -> str:
 
 def diary_document(ctx: AttemptContext, redactor: Redactor) -> str:
     """The file the agent is told to read: every earlier attempt, redacted like the rest."""
-    if not ctx.diary:
+    return redacted_diary(ctx.diary, redactor)
+
+
+def redacted_diary(diary: str, redactor: Redactor) -> str:
+    """A diary text through the redactor: secrets masked, the rest of the text whole."""
+    if not diary:
         return ""
-    result = redactor.redact([PackageItem(ItemKind.TEXT, DIARY_REPORT, ctx.diary)])
+    result = redactor.redact([PackageItem(ItemKind.TEXT, DIARY_REPORT, diary)])
     for dropped in result.dropped:
         return f"The earlier attempts were withheld ({dropped.reason.value}).\n"
     return result.items[0].content if result.items else ""
@@ -663,6 +668,10 @@ class ExecutorAgentRunner:
     def declared_output(self, ctx: AttemptContext) -> LlmOutput:
         """Everything the agent declared, for the roles whose answer holds more than files."""
         return _declared(workcopy_of(ctx))
+
+    def redact_diary(self, diary: str) -> str:
+        """The diary as the branch keeps it: through this run's redactor, like the agent's copy."""
+        return redacted_diary(diary, self._redactor)
 
     async def reconcile(self, operation: OpenOperation) -> Reconciliation:
         p: Any = operation.payload
