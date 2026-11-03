@@ -188,7 +188,7 @@ async def start(
                 return await _run(session, renderer_for(profile, saved, console), console)
             await _discard(pending[0], console)
     prepared = await prepare(args, detection, profile, home, console, environ, saved=saved)
-    to_install = missing_tools(environ)
+    to_install = missing_tools(environ, detection=detection)
     if to_install:
         console.say(offer_line(to_install, environ))
     if args.plan_only:
@@ -231,7 +231,9 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
                 semgrep_config=args.semgrep_config,
             )
         if args.command == "instalar":
-            return await instalar(console, environ, load_perfil(profile_dir(environ)))
+            return await instalar(
+                console, environ, load_perfil(profile_dir(environ)), detection=detection
+            )
         if args.command == "agente":
             return run_facade(args.agent, Path.cwd(), environ)
         if args.command == "revisao":

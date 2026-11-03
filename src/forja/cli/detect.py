@@ -41,6 +41,8 @@ class Detection:
     typescript: bool = False
     csharp: bool = False
     java: bool = False
+    maven: bool = False  # a pom.xml somewhere
+    gradle: bool = False  # a Gradle build in a directory that carries no wrapper
 
     @property
     def greenfield(self) -> bool:
@@ -95,6 +97,9 @@ def _languages_in(directory: Path) -> dict[str, bool]:
         "python": (directory / "pyproject.toml").is_file(),
         "go": (directory / "go.mod").is_file(),
         "java": any((directory / name).is_file() for name in ("pom.xml", *GRADLE_MANIFESTS)),
+        "maven": (directory / "pom.xml").is_file(),
+        "gradle": any((directory / name).is_file() for name in GRADLE_MANIFESTS)
+        and not any((directory / name).is_file() for name in ("gradlew", "gradlew.bat")),
         "csharp": any(directory.glob("*.sln")) or any(directory.glob("*.csproj")),
         "typescript": (directory / "package.json").is_file()
         and (directory / "tsconfig.json").is_file(),

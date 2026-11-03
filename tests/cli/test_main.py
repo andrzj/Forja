@@ -102,7 +102,7 @@ def test_the_plan_says_which_tools_would_be_installed(
     class Wanted:
         name, version = "gitleaks", "8.0.0"
 
-    monkeypatch.setattr(door, "missing_tools", lambda _environ: [Wanted()])
+    monkeypatch.setattr(door, "missing_tools", lambda _environ, **_: [Wanted()])
     talk = Talk()
     assert go(["refatorar", "--plano", "--escopo", "src"], talk, environ) == 0
     assert "Faltam ferramentas: gitleaks 8.0.0" in talk.text

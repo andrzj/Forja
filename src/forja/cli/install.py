@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from forja.cli.console import Console
+from forja.cli.detect import Detection
 from forja.cli.settings import Execucao, Perfil
 from forja.core.adapters.executor import locate_in_path
 from forja.orchestrator.outcome import ExitCode
@@ -57,9 +58,21 @@ POLL = 0.2  # seconds between two readings of how much was downloaded
 STAGES = {stage.value: stage for stage in Stage}
 
 
-def wanted(manifest: Manifest) -> list[Tool]:
-    """The tools every run needs, whatever the language of the repository."""
-    return [tool for tool in manifest.tools if tool.needed_by == "always"]
+def _needed(tool: Tool, detection: Detection | None) -> bool:
+    if tool.needed_by == "always":
+        return True
+    if detection is None:
+        return False
+    if tool.name == "maven":
+        return detection.maven
+    if tool.name == "gradle":
+        return detection.gradle
+    return any(getattr(detection, language, False) for language in tool.needed_by)
+
+
+def wanted(manifest: Manifest, detection: Detection | None = None) -> list[Tool]:
+    """The tools every run needs, plus those of the languages found in the repository."""
+    return [tool for tool in manifest.tools if _needed(tool, detection)]
 
 
 def is_present(manifest: Manifest, tool: Tool, root: Path, environ: Mapping[str, str]) -> bool:
@@ -69,7 +82,11 @@ def is_present(manifest: Manifest, tool: Tool, root: Path, environ: Mapping[str,
     return find_installed(manifest, tool.name, root) is not None
 
 
-def missing_tools(environ: Mapping[str, str], manifest: Manifest | None = None) -> list[Tool]:
+def missing_tools(
+    environ: Mapping[str, str],
+    manifest: Manifest | None = None,
+    detection: Detection | None = None,
+) -> list[Tool]:
     """What ``forja instalar`` would install. Empty on a platform the Forja installs nothing for."""
     manifest = load_manifest() if manifest is None else manifest
     root = tools_dir(environ=environ)
@@ -77,7 +94,11 @@ def missing_tools(environ: Mapping[str, str], manifest: Manifest | None = None) 
         current_platform()
     except UnsupportedPlatform:
         return []
-    return [tool for tool in wanted(manifest) if not is_present(manifest, tool, root, environ)]
+    return [
+        tool
+        for tool in wanted(manifest, detection)
+        if not is_present(manifest, tool, root, environ)
+    ]
 
 
 def offer_line(tools: list[Tool], environ: Mapping[str, str]) -> str:
@@ -227,6 +248,7 @@ async def instalar(
     profile: Perfil,
     saved: Execucao | None = None,
     *,
+    detection: Detection | None = None,
     manifest: Manifest | None = None,
     fetch: Fetch = https_fetch,
 ) -> int:
@@ -237,7 +259,7 @@ async def instalar(
         console.say(f"Nesta plataforma a Forja não instala ferramentas ({error}).")
         return int(ExitCode.INVALID_CONFIG)
     manifest = load_manifest() if manifest is None else manifest
-    tools = missing_tools(environ, manifest)
+    tools = missing_tools(environ, manifest, detection)
     if not tools:
         console.say("Nada a instalar: as ferramentas da Forja já estão no lugar.")
         return int(ExitCode.DELIVERED)
