@@ -98,3 +98,28 @@ def test_gradle_with_a_wrapper_wants_no_gradle(tmp_path: Path, wrapper: str) -> 
     (tmp_path / wrapper).write_text("", encoding="utf-8")
     seen = _languages_in(tmp_path)
     assert (seen["java"], seen["gradle"]) == (True, False)
+
+
+@pytest.mark.parametrize("name", ["app.sln", "app.csproj"])
+def test_csharp_is_found_by_a_solution_or_a_project(tmp_path: Path, name: str) -> None:
+    (tmp_path / name).write_text("", encoding="utf-8")
+
+    assert _languages_in(tmp_path)["csharp"] is True
+
+
+@pytest.mark.parametrize(
+    ("files", "found"),
+    [
+        (("package.json", "tsconfig.json"), True),
+        (("package.json",), False),
+        (("tsconfig.json",), False),
+        ((), False),
+    ],
+)
+def test_typescript_needs_both_the_package_and_its_tsconfig(
+    tmp_path: Path, files: tuple[str, ...], found: bool
+) -> None:
+    for name in files:
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+
+    assert _languages_in(tmp_path)["typescript"] is found

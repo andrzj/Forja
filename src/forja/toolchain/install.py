@@ -156,16 +156,20 @@ async def _install_wheel(tool: Tool, url: str, wheel: Path, destination: Path, p
             *("-m", "pip", "install", "--disable-pip-version-check", "--no-input", str(wheel)),
         ),
     )
-    for number, command in enumerate(steps, 1):
+    for command in steps:
         collector = _Collector()
         spec = ProcessSpec(command, destination.parent, os.environ, PIP_TIMEOUT)
-        log = destination.parent / f".{tool.name}-{number}.log"
-        result = await ProcessRunner(collector).run(f"install-{tool.name}-{number}", spec, log)
+        log = destination.parent / f".{tool.name}-install.log"
+        result = await ProcessRunner(collector).run(f"install-{tool.name}", spec, log)
         with suppress(OSError):
             log.unlink()
         if result.outcome is not Outcome.EXITED or result.exit_code != 0:
-            tail = " | ".join(collector.lines[-_TAIL:])
+            tail = last_lines(collector.lines)
             raise InstallError(tool.name, url, f"{' '.join(command[:4])} failed: {tail}")
+
+
+def last_lines(lines: list[str]) -> str:
+    return " | ".join(lines[-_TAIL:])
 
 
 def _venv_python(directory: Path) -> Path:

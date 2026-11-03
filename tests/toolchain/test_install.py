@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import json
+import shutil
 import sys
 import tarfile
 import zipfile
@@ -16,8 +17,10 @@ from forja.toolchain.install import (
     MARKER,
     Installed,
     InstallError,
+    _venv_python,
     https_fetch,
     install_tool,
+    last_lines,
     tools_dir,
 )
 from forja.toolchain.load import NoArtifactForPlatform, UnknownTool, parse_manifest
@@ -373,7 +376,7 @@ def test_a_wheel_that_pip_refuses_installs_nothing(
     content = b"not a wheel"
     manifest = manifest_for(content, "wheel", "bin/tool")
 
-    with pytest.raises(InstallError, match="failed"):
+    with pytest.raises(InstallError, match=r"failed: .+"):
         run(manifest, "tool", tmp_path, target=HERE, fetch=Origin(content))
 
     assert listing(tmp_path) == ["tool"]
@@ -420,3 +423,71 @@ def test_the_fetch_stops_a_stream_longer_than_it_said(
     serve(monkeypatch, b"123456", None)
     with pytest.raises(OSError, match="more than the 5"):
         https_fetch(URL, tmp_path / "f", 5)
+
+
+def test_a_failed_install_leaves_the_temporary_folder_gone_even_if_it_resists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = zip_bytes({"bin/tool": b"run"})
+    real = shutil.rmtree
+
+    def stubborn(path: Path, ignore_errors: bool = False) -> None:
+        if not ignore_errors:
+            raise OSError("in use")
+        real(path, ignore_errors=True)
+
+    monkeypatch.setattr(shutil, "rmtree", stubborn)
+
+    done = run(manifest_for(content), "tool", tmp_path, target=HERE, fetch=Origin(content))
+
+    assert done.executable.is_file()
+
+
+def test_a_failure_is_reported_even_if_the_partial_folder_resists_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = zip_bytes({"bin/other": b"run"})  # not the executable the manifest names
+    real = shutil.rmtree
+
+    def stubborn(path: Path, ignore_errors: bool = False) -> None:
+        if not ignore_errors:
+            raise OSError("in use")
+        real(path, ignore_errors=True)
+
+    monkeypatch.setattr(shutil, "rmtree", stubborn)
+
+    with pytest.raises(InstallError, match="is not in it"):
+        run(manifest_for(content), "tool", tmp_path, target=HERE, fetch=Origin(content))
+
+
+def test_the_executable_bit_is_set_only_where_the_system_has_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = zip_bytes({"bin/tool": b"run"})
+    modes: list[int] = []
+    real = Path.chmod
+
+    def spy(self: Path, mode: int, **kwargs: Any) -> None:
+        modes.append(mode)
+        real(self, mode, **kwargs)
+
+    monkeypatch.setattr(Path, "chmod", spy)
+
+    run(manifest_for(content), "tool", tmp_path, target=HERE, fetch=Origin(content))
+
+    assert bool(modes) is (sys.platform != "win32")
+
+
+def test_the_environment_python_of_a_wheel_is_the_one_of_this_system(tmp_path: Path) -> None:
+    expected = (
+        tmp_path / ("Scripts" if WINDOWS else "bin") / ("python.exe" if WINDOWS else "python")
+    )
+
+    assert _venv_python(tmp_path) == expected
+
+
+def test_only_the_last_lines_of_the_output_go_into_the_error() -> None:
+    lines = [f"line {n}" for n in range(1, 11)]
+
+    assert last_lines(lines) == "line 6 | line 7 | line 8 | line 9 | line 10"
+    assert last_lines(lines[:2]) == "line 1 | line 2"
