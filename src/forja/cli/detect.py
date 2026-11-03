@@ -43,6 +43,7 @@ class Detection:
     java: bool = False
     maven: bool = False  # a pom.xml somewhere
     gradle: bool = False  # a Gradle build in a directory that carries no wrapper
+    jscpd: bool = False
 
     @property
     def greenfield(self) -> bool:
@@ -64,7 +65,7 @@ async def _detect(cwd: Path, environ: Mapping[str, str], log_dir: Path) -> Detec
     free = shutil.disk_usage(cwd).free / 2**30
     base = dict(
         cwd=cwd, python=False, gitleaks=locate_in_path("gitleaks") is not None, git=git_found,
-        disk_free_gib=free,
+        disk_free_gib=free, jscpd=locate_in_path("jscpd") is not None,
     )  # fmt: skip
     if not git_found:
         return Detection(repo=None, has_commits=False, branch="", head="", changed=(), **base)  # type: ignore[arg-type]

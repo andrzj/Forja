@@ -41,6 +41,13 @@ def default_registry() -> CheckRegistry:
             PREMISE,
             thresholds=frozenset({"max_interface_ratio", "min_statements"}),
         ),
+        CheckSpec(
+            "duplication",
+            8,
+            Mode.OBSERVATION,
+            PREMISE,
+            limits=frozenset({"min_tokens", "min_lines"}),
+        ),
         CheckSpec("dependency_cycles", 9, Mode.OBSERVATION, BLOCK),
         CheckSpec("layer_rules", 9, Mode.OBSERVATION, BLOCK),
         CheckSpec(

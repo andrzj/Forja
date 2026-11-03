@@ -29,6 +29,7 @@ from forja.toolchain.resolve import installed_by_forja
 SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
 INSTALL_HINT = "rode `forja instalar`"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
+JSCPD_HELP = "https://github.com/kucherenko/jscpd (as instruções de instalação estão no README)"
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
@@ -191,6 +192,12 @@ async def run_checks(
             detection.gitleaks,
             _where("gitleaks", environ) if detection.gitleaks else "gitleaks ausente",
             "" if detection.gitleaks else f"{INSTALL_HINT} ou instale seguindo {GITLEAKS_HELP}",
+        ),
+        Check(
+            "jscpd",
+            detection.jscpd,
+            _where("jscpd", environ) if detection.jscpd else "jscpd ausente",
+            "" if detection.jscpd else f"{INSTALL_HINT} ou instale seguindo {JSCPD_HELP}",
         ),
         Check(
             "disco",

@@ -418,6 +418,7 @@ async def _context(
         semgrep=(missing_tool("semgrep"),),
         semgrep_config=rules,
         osv_scanner=(missing_tool("osv-scanner"),),
+        jscpd=(missing_tool("jscpd"),),
         forbidden_licenses=policy.forbidden_licenses,
         layers=policy.architecture,
         e2e_commands=e2e_commands(policy),

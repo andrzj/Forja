@@ -45,12 +45,14 @@ class DuplicationCheck:
     requires: frozenset[str] = frozenset()
 
     async def evaluate(self, data: GateInput) -> GateResult:
-        return await decided(self._judge())
+        return await decided(self._judge(data))
 
-    async def _judge(self) -> GateResult:
+    async def _judge(self, data: GateInput) -> GateResult:
         if not self.production:
             return Approved()
-        clones = await self._scan()
+        clones = await self._scan(
+            _limit(data, "min_tokens", self.min_tokens), _limit(data, "min_lines", self.min_lines)
+        )
         mine = frozenset(self.production)
         findings = [
             _finding(clone, side, other)
@@ -61,15 +63,13 @@ class DuplicationCheck:
         ]
         return rejected(findings) if findings else Approved()
 
-    async def _scan(self) -> tuple[Clone, ...]:
+    async def _scan(self, min_tokens: int, min_lines: int) -> tuple[Clone, ...]:
         self.reports.mkdir(parents=True, exist_ok=True)
         report = self.reports / REPORT
         report.unlink(missing_ok=True)
         config = self.reports / "jscpd.json"
         config.write_text(
-            json.dumps(
-                {"minTokens": self.min_tokens, "minLines": self.min_lines, "ignore": self.ignore}
-            ),
+            json.dumps({"minTokens": min_tokens, "minLines": min_lines, "ignore": self.ignore}),
             encoding="utf-8",
         )
         plan = CommandPlan(
@@ -97,6 +97,12 @@ class DuplicationCheck:
         if clones is None:
             raise _failed("duplication: the jscpd report cannot be read", execution.operation_id)
         return clones
+
+
+def _limit(data: GateInput, name: str, default: int) -> int:
+    limits = data.values.get("limits")
+    chosen = limits.get(name) if isinstance(limits, dict) else None
+    return chosen if isinstance(chosen, int) and not isinstance(chosen, bool) else default
 
 
 def _finding(clone: Clone, side: CloneSide, other: CloneSide) -> Finding:

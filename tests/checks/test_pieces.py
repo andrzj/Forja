@@ -122,6 +122,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "crap": (8, Mode.OBSERVATION, "premise"),
         "pass_through": (8, Mode.OBSERVATION, "premise"),
         "module_depth": (8, Mode.OBSERVATION, "premise"),
+        "duplication": (8, Mode.OBSERVATION, "premise"),
         "dependency_cycles": (9, Mode.OBSERVATION, "block"),
         "layer_rules": (9, Mode.OBSERVATION, "block"),
         "package_metrics": (9, Mode.OBSERVATION, "premise"),
@@ -143,6 +144,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
     assert specs["complexity"].thresholds == {"max_ccn"}
     assert specs["crap"].thresholds == {"max_crap"}
     assert specs["module_depth"].thresholds == {"max_interface_ratio", "min_statements"}
+    assert specs["duplication"].limits == {"min_tokens", "min_lines"}
     assert specs["red_green"].commands == {"test"}
     assert specs["tests"].commands == {"test"} and specs["build"].commands == {"build"}
     assert specs["format"].commands == {"format"} and specs["lint"].commands == {"lint"}

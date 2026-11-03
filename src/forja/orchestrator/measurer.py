@@ -166,6 +166,7 @@ class PipelineMeasurer:
         semgrep: tuple[str, ...] = ("semgrep",),
         semgrep_config: Path | None = None,
         osv_scanner: tuple[str, ...] = ("osv-scanner",),
+        jscpd: tuple[str, ...] = ("jscpd",),
         forbidden_licenses: Iterable[str] = (),
         layers: Iterable[ArchitectureLayer] = (),
         registry_get: HttpGet = urllib_get,
@@ -189,6 +190,7 @@ class PipelineMeasurer:
         self._semgrep = semgrep
         self._semgrep_config = semgrep_config
         self._osv_scanner = osv_scanner
+        self._jscpd = jscpd
         self._forbidden = frozenset(name.lower() for name in forbidden_licenses)
         self._layers = tuple(layers)
         self._registry_get = registry_get

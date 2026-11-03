@@ -8,12 +8,14 @@ from pathlib import Path
 
 import pytest
 
+from forja.cli import detect as detect_module
 from forja.cli import doctor as doctor_module
 from forja.cli import main as door
 from forja.cli import prepare as preparation
 from forja.cli.args import parse
 from forja.cli.detect import detect
 from forja.cli.settings import Execucao, ModeloCli, Perfil, load_perfil, save_perfil
+from forja.core.adapters.executor import locate_in_path
 from forja.core.states import ExecutionState
 from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
 from tests.cli.test_resume import make_run
@@ -318,6 +320,35 @@ def test_the_doctor_lists_what_is_missing_and_how_to_fix_it(
     assert code == 1
     assert "[FALTA] CLI claude-code" in talk.text
     assert "->" in talk.text
+
+
+def test_the_doctor_requires_jscpd_and_points_to_the_install(
+    repo: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(doctor_module, "installed_clis", lambda *args, **kwargs: [])
+    real = locate_in_path
+    monkeypatch.setattr(
+        detect_module, "locate_in_path", lambda name, *args: None if name == "jscpd" else real(name)
+    )
+    talk = Talk()
+
+    code = go(["doctor"], talk, {**environ, "FORJA_CONFIG_HOME": str(repo.parent / "sem-perfil")})
+
+    assert code == 1
+    assert not asyncio.run(detect(repo, os.environ)).jscpd
+    assert "[FALTA] jscpd" in talk.text
+    assert "https://github.com/kucherenko/jscpd" in talk.text
+
+
+def test_jscpd_on_the_path_is_found(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = locate_in_path
+    monkeypatch.setattr(
+        detect_module,
+        "locate_in_path",
+        lambda name, *args: Path(sys.executable) if name == "jscpd" else real(name),
+    )
+
+    assert asyncio.run(detect(repo, os.environ)).jscpd
 
 
 def test_an_invalid_settings_file_is_named(repo: Path, environ: dict[str, str]) -> None:

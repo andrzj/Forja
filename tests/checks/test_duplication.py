@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import JsonValue
 
 from forja.checks.duplication import DuplicationCheck
 from forja.checks.tooling import Tools
@@ -67,6 +68,7 @@ def judge(
     min_tokens: int = 50,
     min_lines: int = 5,
     base: str = "HEAD",
+    values: dict[str, JsonValue] | None = None,
 ) -> GateResult:
     tools = Tools(
         sinks=sinks,
@@ -87,7 +89,7 @@ def judge(
         ignore,
         base,
     )
-    data = GateInput(tmp_path / "work", "c" * 40, "t1", "t1-s", "t1-a1")
+    data = GateInput(tmp_path / "work", "c" * 40, "t1", "t1-s", "t1-a1", values=values or {})
     return asyncio.run(check.evaluate(data))
 
 
@@ -162,6 +164,32 @@ def test_jscpd_is_given_the_parent_commit_the_thresholds_and_the_ignored_paths(
     assert args[args.index("-o") + 1] == str(tmp_path / "reports")
     assert args[-1] == "."
     assert call["config"] == {"minTokens": 70, "minLines": 8, "ignore": ["tests/**"]}
+
+
+def _config(tmp_path: Path) -> dict[str, int]:
+    call = json.loads((tmp_path / "reports" / "argv.json").read_text(encoding="utf-8"))
+    return {key: call["config"][key] for key in ("minTokens", "minLines")}
+
+
+def test_the_limits_of_the_policy_replace_the_thresholds(
+    log: EventLog, tmp_path: Path, work: Path
+) -> None:
+    commit(work, **{"a.py": "x = 1\n"})
+
+    judge(log, tmp_path, ("a.py",), values={"limits": {"min_tokens": 90, "min_lines": 9}})
+
+    assert _config(tmp_path) == {"minTokens": 90, "minLines": 9}
+
+
+@pytest.mark.parametrize("limits", [{}, {"min_tokens": True, "min_lines": "9"}, "none"])
+def test_a_limit_that_is_missing_or_not_an_integer_leaves_the_threshold(
+    log: EventLog, tmp_path: Path, work: Path, limits: JsonValue
+) -> None:
+    commit(work, **{"a.py": "x = 1\n"})
+
+    judge(log, tmp_path, ("a.py",), min_tokens=70, min_lines=8, values={"limits": limits})
+
+    assert _config(tmp_path) == {"minTokens": 70, "minLines": 8}
 
 
 def test_an_ignored_path_is_not_scanned(log: EventLog, tmp_path: Path, work: Path) -> None:
