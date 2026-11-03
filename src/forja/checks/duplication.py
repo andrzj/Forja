@@ -1,8 +1,8 @@
 """Gate 8: the attempt adds no duplicated code to the production files it changed (the ratchet).
 
-jscpd does the ratchet itself: it is given the parent commit (``--baseline-from-ref HEAD``, the
-attempt's work being in the worktree) and marks a clone ``isNew`` when its content hash is not in
-that commit. Only a new clone with a side in a changed production file reproves: old duplication is
+jscpd does the ratchet itself: it is given the commit the work is read against (``HEAD`` unless a
+later stage judges code committed before it; the work itself is in the worktree) through
+``--baseline-from-ref`` and marks a clone ``isNew`` when its content hash is not in that commit. Only a new clone with a side in a changed production file reproves: old duplication is
 debt for the planner, not a reason to refuse someone else's improvement. The thresholds and the
 ignored paths go in a config file, as arrays, because the command line leaves their syntax open.
 """
@@ -38,6 +38,7 @@ class DuplicationCheck:
     min_tokens: int = 50
     min_lines: int = 5
     ignore: tuple[str, ...] = ()  # globs, relative to the worktree (the test root, for one)
+    base: str = "HEAD"  # the commit the work is read against, as for the other checks
     id: str = "duplication"
     gate: int = 8
     requires: frozenset[str] = frozenset()
@@ -80,7 +81,7 @@ class DuplicationCheck:
                 "-o",
                 str(self.reports),
                 "--baseline-from-ref",
-                "HEAD",
+                self.base,
                 ".",
             ),
             self.worktree,

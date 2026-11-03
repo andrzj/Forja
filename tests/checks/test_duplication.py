@@ -66,6 +66,7 @@ def judge(
     ignore: tuple[str, ...] = (),
     min_tokens: int = 50,
     min_lines: int = 5,
+    base: str = "HEAD",
 ) -> GateResult:
     tools = Tools(
         sinks=sinks,
@@ -84,6 +85,7 @@ def judge(
         min_tokens,
         min_lines,
         ignore,
+        base,
     )
     data = GateInput(tmp_path / "work", "c" * 40, "t1", "t1-s", "t1-a1")
     return asyncio.run(check.evaluate(data))
@@ -213,3 +215,14 @@ def test_a_jscpd_that_cannot_start_is_inconclusive(
 
     assert isinstance(result, Inconclusive)
     assert result.detail == "duplication: no-such-jscpd-anywhere could not start"
+
+
+def test_the_clone_is_new_against_the_base_it_is_given(
+    log: EventLog, tmp_path: Path, work: Path
+) -> None:
+    commit(work, **{"a.py": "x = 1\n", "b.py": CLONE})
+    git(work, "tag", "base")
+    commit(work, **{"a.py": CLONE})  # the implementer's committed code
+
+    assert judge(log, tmp_path, ("a.py",)) == Approved()
+    assert isinstance(judge(log, tmp_path, ("a.py",), base="base"), Rejected)
