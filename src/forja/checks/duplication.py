@@ -2,9 +2,10 @@
 
 jscpd does the ratchet itself: it is given the commit the work is read against (``HEAD`` unless a
 later stage judges code committed before it; the work itself is in the worktree) through
-``--baseline-from-ref`` and marks a clone ``isNew`` when its content hash is not in that commit. Only a new clone with a side in a changed production file reproves: old duplication is
-debt for the planner, not a reason to refuse someone else's improvement. The thresholds and the
-ignored paths go in a config file, as arrays, because the command line leaves their syntax open.
+``--baseline-from-ref`` and marks a clone ``isNew`` when its content hash is not in that commit.
+Only a new clone with a side in a changed production file reproves: old duplication is debt for the
+planner, not a reason to refuse someone else's improvement. The thresholds and the ignored paths go
+in a config file, as arrays, because the command line leaves their syntax open.
 """
 
 import json
