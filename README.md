@@ -63,6 +63,7 @@ Até agora a Forja só foi executada no Windows. Os ramos POSIX (`process/_posix
 - [Especificação](docs/Especifica%C3%A7%C3%A3o.md): visão, princípios e modos de operação.
 - [Plano de execução](docs/Plano%20de%20execu%C3%A7%C3%A3o.md): incrementos e questões abertas.
 - [Estado do incremento 0](docs/estado.md): como trabalhar, decisões que complementam a especificação, armadilhas e limitações conhecidas.
+- [Instalar a Forja](docs/instalacao.md): instalação, `forja instalar` (ferramentas externas), onde ficam, atualizar e remover.
 - [Segurança e dependências](docs/seguranca-e-dependencias.md): o gate 10, o que você precisa fornecer (regras do Semgrep, licenças proibidas) e os limites dos registros.
 - [Registros de decisão (ADRs)](docs/adr/README.md): índice das decisões de arquitetura.
 

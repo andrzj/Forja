@@ -120,7 +120,7 @@ Código em `src\forja\toolchain\install.py`. Nomes públicos: `install_tool(mani
 5. **Feito (02/11):** **Interface visual da instalação (decisão 10):** modelo de eventos da instalação e as três camadas da UI desenhando-os, testadas sem terminal e sem rede com fluxos de eventos falsos. Independe do instalador real.
 6. **Feito (02/11):** **Comando `forja instalar`** e a oferta dentro do `forja` guia (resumo e confirmação única), regra de CI da decisão 5, instalador emitindo os eventos do passo 5, mensagens `fix` do `doctor` apontando `forja instalar`.
 7. **Feito (02/11):** **Ferramentas por linguagem** (go, golangci-lint, node, SDK dotnet, JDK, Maven ou Gradle), instaladas só para as linguagens detectadas.
-8. **Instalação da Forja:** pacote construível, instalado em ambiente limpo e exercitado com `forja instalar` e `forja doctor`; documentação do usuário (instalar, atualizar, onde ficam as ferramentas, como removê-las).
+8. **Feito (02/11):** **Instalação da Forja:** pacote construível, instalado em ambiente limpo e exercitado com `forja instalar` e `forja doctor`; documentação do usuário (instalar, atualizar, onde ficam as ferramentas, como removê-las).
 9. **Gate de mutação** nos arquivos novos (`scripts\mutate.py`).
 10. **Ponta a ponta** em máquina limpa, no fecho (regra do dono: testes reais só no E2E final): instalar a Forja, `forja instalar` e uma execução, no Windows e no Linux via WSL.
 
