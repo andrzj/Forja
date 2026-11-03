@@ -325,12 +325,19 @@ def _fence(text: str) -> str:
 
 
 def build_package(
-    ctx: AttemptContext, redactor: Redactor, *, facade: bool = False, voice: str = ""
+    ctx: AttemptContext,
+    redactor: Redactor,
+    *,
+    facade: bool = False,
+    voice: str = "",
+    dry: str = "",
 ) -> str:
     """The text the agent receives: the task, the rules, the files in scope and the last verdict.
 
     ``voice`` is the Forja's own instruction on how to write (``voice_brief.brief``): fixed text,
-    so it does not pass through the redactor. Empty leaves the section out.
+    so it does not pass through the redactor. Empty leaves the section out. ``dry`` is the one on
+    duplication (``dry_brief.brief``), the same kind of text, given only to a role that changes
+    production code.
     """
     task = ctx.task
     items, notes = [], []
@@ -391,6 +398,8 @@ def build_package(
     ]
     if voice:
         parts.append(f"## Voice\n\n{voice}")
+    if dry and not (documenter or specifier or archaeologist or author):
+        parts.append(f"## Duplication\n\n{dry}")
     if specifier:
         listed = "\n".join(f"- {e.id}: {e.text}" for e in elements_of(task.intent))
         parts.append(f"## {ELEMENTS}\n\n{listed}\n")
@@ -514,6 +523,7 @@ class ExecutorAgentRunner:
         permissions: RolePermissions = RolePermissions(can_edit_files=True),  # noqa: B008
         model: str = "",
         voice: str = "",
+        dry: str = "",
         idle_limit: float = IDLE_LIMIT,
         poll: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
@@ -522,6 +532,7 @@ class ExecutorAgentRunner:
         self._sensitive = sensitive or SensitivePaths.with_defaults()
         self._redactor = redactor or Redactor(sensitive=self._sensitive)
         self._role, self._permissions, self._model, self._voice = role, permissions, model, voice
+        self._dry = dry
         self._idle_limit, self._poll, self._clock = idle_limit, poll, clock
 
     # -- the copy the agent works in ------------------------------------------------------------
@@ -543,6 +554,7 @@ class ExecutorAgentRunner:
                 self._redactor,
                 facade=bool(self._permissions.allowed_commands),
                 voice=self._voice,
+                dry=self._dry,
             )
             (agent_dir / PACKAGE).write_text(package, encoding="utf-8", newline="\n")
             if ctx.diary:

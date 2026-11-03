@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from forja.checks.duplication import MIN_LINES, MIN_TOKENS, limit_of
 from forja.checks.specs import default_registry
 from forja.checks.voice_markers import build_markers
 from forja.cli.security_notes import differential_notices, e2e_notices, security_notices
@@ -54,6 +55,7 @@ from forja.orchestrator.config import (
     RunConfig,
     load_config,
 )
+from forja.orchestrator.dry_brief import brief as dry_brief
 from forja.orchestrator.facts import Fact
 from forja.orchestrator.measurer import PipelineMeasurer
 from forja.orchestrator.operations import Journal
@@ -443,6 +445,11 @@ async def _context(
             commands = (*commands, "forja agente testar")
     sensitive = SensitivePaths.with_defaults(policy.sensitive_paths)
     voice = voice_brief(policy.voice_off, policy.voice_extra)
+    duplication = policy.values().get("duplication", {})
+    dry = dry_brief(
+        limit_of(duplication, "min_tokens", MIN_TOKENS),
+        limit_of(duplication, "min_lines", MIN_LINES),
+    )
 
     def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
         return ExecutorAgentRunner(
@@ -461,6 +468,7 @@ async def _context(
             ),
             model=executor.model,
             voice=voice,
+            dry=dry,
         )
 
     agents: dict[Producer, AgentRunner] = {

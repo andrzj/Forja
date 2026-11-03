@@ -268,6 +268,40 @@ def test_without_a_voice_instruction_the_package_has_no_voice_section(tmp_path: 
     assert "## Voice" not in package(tmp_path)
 
 
+def test_the_duplication_instruction_goes_only_to_the_roles_that_change_production_code(
+    tmp_path: Path,
+) -> None:
+    base = context(tmp_path, ("src/a.py",))
+    for role, given in (
+        (Producer.IMPLEMENTER, True),
+        (Producer.TEST_AUTHOR, False),
+        (Producer.SPECIFIER, False),
+        (Producer.ARCHAEOLOGIST, False),
+        (Producer.DOCUMENTER, False),
+    ):
+        ctx = replace(base, task=replace(base.task, role=role))
+
+        text = build_package(ctx, Redactor(), dry="Do not repeat code.")
+
+        assert ("## Duplication" in text) is given, role
+
+
+def test_a_fix_gets_the_duplication_instruction_and_it_comes_as_given(tmp_path: Path) -> None:
+    base = context(tmp_path, ("src/a.py",))
+    ctx = replace(base, task=replace(base.task, frozen_digest="abc"))
+
+    text = build_package(ctx, Redactor(), dry=f"Never write {TOKEN}.")
+
+    assert text.count("## Duplication") == 1
+    assert f"Never write {TOKEN}." in text
+
+
+def test_without_a_duplication_instruction_the_package_has_no_duplication_section(
+    tmp_path: Path,
+) -> None:
+    assert "## Duplication" not in package(tmp_path)
+
+
 def test_a_task_with_no_scope_says_any_production_file_may_change(tmp_path: Path) -> None:
     text = package(tmp_path, scope=())
 

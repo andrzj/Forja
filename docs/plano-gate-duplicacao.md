@@ -45,7 +45,7 @@ Fatos que o plano usa:
 2. **Feito (03/11):** check `duplication` (`checks\duplication.py`) com a catraca da decisão 3, `gate = 8`. O modo observação (`CheckSpec`) entra com o registro, nos passos 3 e 4.
 3. **Feito (03/11):** `CheckSpec` (modo observação) com os limites globais `min_tokens` e `min_lines` no `forja.toml`, descoberta do comando (`Detection.jscpd`, parâmetro `jscpd` do medidor), linha do `doctor`. A raiz de testes em `ignore` sai da classificação de testes do medidor e entra com o registro, no passo 4.
 4. **Feito (03/11):** integração: registro no `PipelineMeasurer.judge` depois de `module_depth`, resumo da preparação e da entrega. Atualizar as listas de checks dos testes (`EVERY_CHECK`, `GATES`, `standard` em `tests\checks\support.py`, ordens em `test_measurer.py` e `test_precision.py`, tabela de `test_pieces.py`).
-5. **Instruções ao agente:** o fragmento de DRY ligado ao detector (decisão 7).
+5. **Feito (03/11):** instruções ao agente: o fragmento de DRY ligado ao detector (decisão 7), em `orchestrator\dry_brief.py`; recebe os limites que o check usa.
 6. **Documentação do usuário e ADR:** documento de uso do gate (o que mede, como ajustar, como instalar o `jscpd`) e o ADR da decisão 1, com a emenda à tabela da Especificação.
 7. **Gate de mutação** nos arquivos novos (`scripts\mutate.py`).
 8. **Ponta a ponta** com o `jscpd` real, no fecho (regra do dono: testes reais só no E2E final): uma tarefa que introduz duplicação e uma que não introduz.

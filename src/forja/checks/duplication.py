@@ -9,8 +9,11 @@ in a config file, as arrays, because the command line leaves their syntax open.
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import JsonValue
 
 from forja.checks.base import Undecided, decided, rejected
 from forja.checks.duplication_report import Clone, CloneSide, read_clones
@@ -27,6 +30,8 @@ from forja.core.gates import (
 )
 
 REPORT = "jscpd-report.json"
+MIN_TOKENS = 50  # jscpd's own defaults; the check and the agent's brief start from the same two
+MIN_LINES = 5
 
 
 @dataclass(frozen=True)
@@ -36,8 +41,8 @@ class DuplicationCheck:
     production: tuple[str, ...]  # the changed production files that still exist
     reports: Path  # a directory outside the worktree for the config and the report
     jscpd: tuple[str, ...] = ("jscpd",)
-    min_tokens: int = 50
-    min_lines: int = 5
+    min_tokens: int = MIN_TOKENS
+    min_lines: int = MIN_LINES
     ignore: tuple[str, ...] = ()  # globs, relative to the worktree (the test root, for one)
     base: str = "HEAD"  # the commit the work is read against, as for the other checks
     id: str = "duplication"
@@ -51,7 +56,8 @@ class DuplicationCheck:
         if not self.production:
             return Approved()
         clones = await self._scan(
-            _limit(data, "min_tokens", self.min_tokens), _limit(data, "min_lines", self.min_lines)
+            limit_of(data.values, "min_tokens", self.min_tokens),
+            limit_of(data.values, "min_lines", self.min_lines),
         )
         mine = frozenset(self.production)
         findings = [
@@ -99,8 +105,9 @@ class DuplicationCheck:
         return clones
 
 
-def _limit(data: GateInput, name: str, default: int) -> int:
-    limits = data.values.get("limits")
+def limit_of(values: Mapping[str, JsonValue], name: str, default: int) -> int:
+    """A limit as the policy sets it, or ``default``; the agent's brief reads it the same way."""
+    limits = values.get("limits")
     chosen = limits.get(name) if isinstance(limits, dict) else None
     return chosen if isinstance(chosen, int) and not isinstance(chosen, bool) else default
 
