@@ -15,7 +15,7 @@ from forja.cli.install import instalar, install_all, missing_tools, offer_line, 
 from forja.cli.prepare import Refused
 from forja.cli.settings import Execucao, Perfil
 from forja.toolchain.install import Fetch
-from forja.toolchain.manifest import Manifest
+from forja.toolchain.manifest import Manifest, Tool
 from forja.ui.install_events import InstallView, Stage
 from tests.toolchain.test_install import manifest_for, zip_bytes
 
@@ -247,10 +247,10 @@ class Offer:
 
 
 def offered(
-    tools: list,
+    tools: list[Tool],
     saved: Execucao | None,
     *,
-    automatic: bool,  # type: ignore[type-arg]
+    automatic: bool,
 ) -> tuple[Mapping[str, str], Said]:
     said = Said()
     result = asyncio.run(
