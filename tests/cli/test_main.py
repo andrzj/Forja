@@ -96,6 +96,18 @@ def test_the_plan_shows_what_would_happen_and_changes_nothing(
     assert not (Path(environ["FORJA_HOME"]) / "runs").exists()
 
 
+def test_the_plan_says_which_tools_would_be_installed(
+    repo: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Wanted:
+        name, version = "gitleaks", "8.0.0"
+
+    monkeypatch.setattr(door, "missing_tools", lambda _environ: [Wanted()])
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--escopo", "src"], talk, environ) == 0
+    assert "Faltam ferramentas: gitleaks 8.0.0" in talk.text
+
+
 def test_unsaved_changes_stop_it_before_anything(repo: Path, environ: dict[str, str]) -> None:
     (repo / "novo.py").write_text("x = 1\n", encoding="utf-8")
     talk = Talk()

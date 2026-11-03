@@ -206,8 +206,10 @@ async def install_tool(
     target: Platform | None = None,
     fetch: Fetch = https_fetch,
     python: str = sys.executable,
+    on_stage: Callable[[str], None] = lambda _stage: None,
 ) -> Installed:
-    """Install tool ``name`` under ``root`` (``<root>/<name>/<version>``) and return where it is."""
+    """Install tool ``name`` under ``root`` (``<root>/<name>/<version>``) and return where it is.
+    ``on_stage`` hears each stage as it begins: downloading, checksum, extracting, verifying."""
     tool = find_tool(manifest, name)
     target = current_platform() if target is None else target
     artifact = artifact_for(manifest, name, target)
@@ -220,12 +222,15 @@ async def install_tool(
     try:
         _clear(directory)
         staging.mkdir(parents=True)
+        on_stage("downloading")
         try:
             await asyncio.to_thread(fetch, artifact.url, download, artifact.size)
         except OSError as error:
             raise InstallError(name, artifact.url, f"the download failed: {error}") from error
+        on_stage("checksum")
         if (reason := _verify(download, artifact)) is not None:
             raise InstallError(name, artifact.url, reason)
+        on_stage("extracting")
         if artifact.kind == "wheel":
             await _install_wheel(tool, artifact.url, download, directory, python)
         else:
@@ -234,6 +239,7 @@ async def install_tool(
                 _unpack(download, artifact, directory)
             except (OSError, zipfile.BadZipFile, tarfile.TarError) as error:
                 raise InstallError(name, artifact.url, f"cannot unpack it: {error}") from error
+        on_stage("verifying")
         executable = directory / artifact.executable_path
         if not executable.is_file():
             raise InstallError(name, artifact.url, f"{artifact.executable_path} is not in it")

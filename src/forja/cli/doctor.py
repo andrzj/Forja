@@ -2,8 +2,9 @@
 
 The configuration of the agent CLI (login, model, gateway) is the person's and must be ready
 before; the doctor proves it works with a small task and says so when it does not. Nothing is
-installed here: for each missing tool the line says where its own instructions are, and a tool
-found in the Forja's own folder is said to be the one the Forja installed.
+installed here: a missing tool the Forja installs points to ``forja instalar``, the others to
+their own instructions, and a tool found in the Forja's own folder is said to be the one the Forja
+installed.
 """
 
 import asyncio
@@ -26,6 +27,7 @@ from forja.toolchain.install import tools_dir
 from forja.toolchain.resolve import installed_by_forja
 
 SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
+INSTALL_HINT = "rode `forja instalar`"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
@@ -188,7 +190,7 @@ async def run_checks(
             "gitleaks",
             detection.gitleaks,
             _where("gitleaks", environ) if detection.gitleaks else "gitleaks ausente",
-            "" if detection.gitleaks else f"instale seguindo {GITLEAKS_HELP}",
+            "" if detection.gitleaks else f"{INSTALL_HINT} ou instale seguindo {GITLEAKS_HELP}",
         ),
         Check(
             "disco",
@@ -225,7 +227,7 @@ async def run_checks(
                 "semgrep",
                 found,
                 _where("semgrep", environ) if found else "semgrep ausente",
-                "" if found else f"instale seguindo {SEMGREP_HELP}",
+                "" if found else f"{INSTALL_HINT} ou instale seguindo {SEMGREP_HELP}",
             )
         )
     checks.append(await _agent_check(name, profile, environ, console, cache))

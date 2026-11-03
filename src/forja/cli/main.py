@@ -16,6 +16,14 @@ from forja.cli.console import Console, TerminalConsole, Unattended, choose, conf
 from forja.cli.detect import Detection, detect
 from forja.cli.doctor import doctor
 from forja.cli.facade import run_facade
+from forja.cli.install import (
+    instalar,
+    install_renderer_for,
+    missing_tools,
+    offer_line,
+    refresh_environment,
+    run_install,
+)
 from forja.cli.keys import terminal_keys
 from forja.cli.prepare import Prepared, Refused, confirmed, prepare, probe_cache
 from forja.cli.resume import Unfinished, discard, find_unfinished, removal_commands
@@ -37,6 +45,7 @@ from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
 from forja.core.policy.config import PolicyConfigError
 from forja.orchestrator.outcome import ExitCode
+from forja.toolchain.manifest import Tool
 from forja.toolchain.resolve import with_installed_tools
 from forja.ui import terminal
 from forja.ui.full import FullRenderer
@@ -133,6 +142,33 @@ async def _discard(latest: Unfinished, console: Console) -> None:
         console.say(f"  {command}")
 
 
+async def _install_offered(
+    tools: list[Tool],
+    saved: Execucao | None,
+    profile: Perfil,
+    console: Console,
+    environ: Mapping[str, str],
+    *,
+    automatic: bool,
+) -> Mapping[str, str]:
+    """Install what the person just confirmed (ADR 0037). Without a terminal, only when the
+    ``execucao.toml`` asks; the Forja never installs on its own."""
+    if not tools:
+        return environ
+    if automatic and not (saved and saved.instalar_ferramentas):
+        console.say(
+            "Sem terminal a Forja só instala com `instalar_ferramentas = true` no execucao.toml; "
+            "ou rode `forja instalar`. Seguindo sem instalar."
+        )
+        return environ
+    renderer = install_renderer_for(profile, saved, console)
+    if await run_install(tools, environ, renderer, console) != 0:
+        raise Refused(
+            "A instalação das ferramentas falhou. Nada foi começado; resolva e rode de novo."
+        )
+    return refresh_environment(environ)
+
+
 async def start(
     args: Arguments, console: Console, environ: Mapping[str, str], detection: Detection
 ) -> int:
@@ -152,6 +188,9 @@ async def start(
                 return await _run(session, renderer_for(profile, saved, console), console)
             await _discard(pending[0], console)
     prepared = await prepare(args, detection, profile, home, console, environ, saved=saved)
+    to_install = missing_tools(environ)
+    if to_install:
+        console.say(offer_line(to_install, environ))
     if args.plan_only:
         for line in prepared.summary:
             console.say(line)
@@ -160,6 +199,9 @@ async def start(
         console.say("Cancelado. Nada foi alterado.")
         return 0
     _remember(prepared, profile, console, home)
+    environ = await _install_offered(
+        to_install, saved, profile, console, environ, automatic=automatic
+    )
     config = prepared.config
     if config.create is not None:
         try:
@@ -188,6 +230,8 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
                 cli=args.cli,
                 semgrep_config=args.semgrep_config,
             )
+        if args.command == "instalar":
+            return await instalar(console, environ, load_perfil(profile_dir(environ)))
         if args.command == "agente":
             return run_facade(args.agent, Path.cwd(), environ)
         if args.command == "revisao":

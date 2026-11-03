@@ -104,6 +104,7 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--semgrep-config", metavar="CAMINHO", default=argparse.SUPPRESS)
         item.add_argument("--fatos", type=Path, metavar="ARQUIVO", default=argparse.SUPPRESS)
     sub.add_parser("doctor", help="verifica se o ambiente está pronto")
+    sub.add_parser("instalar", help="instala as ferramentas externas que faltam, na pasta da Forja")
     review = sub.add_parser(
         "revisao",
         help="depois do `git fetch`, diz o que de uma execução chegou à branch principal",

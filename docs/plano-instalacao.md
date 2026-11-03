@@ -117,8 +117,8 @@ Código em `src\forja\toolchain\install.py`. Nomes públicos: `install_tool(mani
 2. **Feito (02/11):** **Manifesto de ferramentas** (dados): versão fixada, origem, checksum por plataforma, linguagem que exige a ferramenta. Testes do esquema. Ver "Manifesto de ferramentas" acima.
 3. **Feito (02/11):** **Instalador:** baixar, conferir o checksum, extrair na pasta da Forja, idempotente, sem instalação parcial. Testes sem rede, com origem falsa. Ver "Instalador" abaixo.
 4. **Feito (02/11):** **Resolução** (`toolchain\resolve.py`; ferramenta de `wheel` vai no fim do PATH, para o `python` do ambiente dela não esconder o do repositório): a pasta da Forja entra na frente do PATH dos processos lançados; o `doctor` diz quando a ferramenta é a instalada pela Forja.
-5. **Interface visual da instalação (decisão 10):** modelo de eventos da instalação e as três camadas da UI desenhando-os, testadas sem terminal e sem rede com fluxos de eventos falsos. Independe do instalador real.
-6. **Comando `forja instalar`** e a oferta dentro do `forja` guia (resumo e confirmação única), regra de CI da decisão 5, instalador emitindo os eventos do passo 5, mensagens `fix` do `doctor` apontando `forja instalar`.
+5. **Feito (02/11):** **Interface visual da instalação (decisão 10):** modelo de eventos da instalação e as três camadas da UI desenhando-os, testadas sem terminal e sem rede com fluxos de eventos falsos. Independe do instalador real.
+6. **Feito (02/11):** **Comando `forja instalar`** e a oferta dentro do `forja` guia (resumo e confirmação única), regra de CI da decisão 5, instalador emitindo os eventos do passo 5, mensagens `fix` do `doctor` apontando `forja instalar`.
 7. **Ferramentas por linguagem** (go, golangci-lint, node, SDK dotnet, JDK, Maven ou Gradle), instaladas só para as linguagens detectadas.
 8. **Instalação da Forja:** pacote construível, instalado em ambiente limpo e exercitado com `forja instalar` e `forja doctor`; documentação do usuário (instalar, atualizar, onde ficam as ferramentas, como removê-las).
 9. **Gate de mutação** nos arquivos novos (`scripts\mutate.py`).
