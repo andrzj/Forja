@@ -42,7 +42,7 @@ Fatos que o plano usa:
 
 0. **Feito (03/11):** leitura da documentação oficial do `jscpd` (ver "O que a ferramenta faz"); decisões 3, 4 e 6 corrigidas.
 1. **Feito (03/11):** parser da saída do `jscpd` para um modelo de clones (`checks\duplication_report.py`). Testes com documentos JSON; a ferramenta falsa (molde: `FAKE_GITLEAKS`) entra no passo 2.
-2. **Check `duplication`** com a catraca da decisão 3, `gate = 8`, modo observação.
+2. **Feito (03/11):** check `duplication` (`checks\duplication.py`) com a catraca da decisão 3, `gate = 8`. O modo observação (`CheckSpec`) entra com o registro, nos passos 3 e 4.
 3. **Configuração e sessão:** limiares por linguagem e raiz de testes excluída no `execucao.toml`, descoberta do comando, linha do `doctor`, `Tools`.
 4. **Integração:** registro no `PipelineMeasurer.judge` depois de `module_depth`, resumo da preparação e da entrega. Atualizar as listas de checks dos testes (`EVERY_CHECK`, `GATES`, `standard` em `tests\checks\support.py`, ordens em `test_measurer.py` e `test_precision.py`, tabela de `test_pieces.py`).
 5. **Instruções ao agente:** o fragmento de DRY ligado ao detector (decisão 7).
