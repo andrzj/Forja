@@ -233,10 +233,14 @@ def test_the_number_of_runs_comes_from_the_policy(log: EventLog, tmp_path: Path)
         counter.write_text("", encoding="utf-8")
         return base
 
-    default = {"thresholds": {"python": {"max_time_ratio": 100, "max_memory_ratio": 100}}}
+    default: dict[str, JsonValue] = {
+        "thresholds": {"python": {"max_time_ratio": 100, "max_memory_ratio": 100}}
+    }
     judge(log, tmp_path / "a", runs, values=default, languages=("python",), alter=forget)
     after_default = counter.read_text(encoding="utf-8")
-    two = {"thresholds": {"python": {"max_time_ratio": 100, "max_memory_ratio": 100, "runs": 2}}}
+    two: dict[str, JsonValue] = {
+        "thresholds": {"python": {"max_time_ratio": 100, "max_memory_ratio": 100, "runs": 2}}
+    }
     judge(log, tmp_path / "b", runs, values=two, languages=("python",), alter=forget)
 
     assert (after_default, counter.read_text(encoding="utf-8")) == ("xxx", "xx")

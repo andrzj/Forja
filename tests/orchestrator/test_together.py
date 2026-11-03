@@ -10,10 +10,9 @@ from forja.core.events import EventLog
 from forja.core.states import ExecutionState, Level, TaskState
 from forja.orchestrator.config import RunConfig
 from forja.orchestrator.phases import Orchestrator
-from forja.orchestrator.planner import PlannedTask
-from forja.orchestrator.ports import AttemptContext
+from forja.orchestrator.ports import AgentResult, AttemptContext, PlannedTask
 from forja.orchestrator.task_cycle import TaskCycle
-from tests.orchestrator.fakes import AgentResult, ScriptedAgent, ScriptedPlanner
+from tests.orchestrator.fakes import ScriptedAgent, ScriptedPlanner
 from tests.orchestrator.harness import MemoryWorld
 
 APART = (

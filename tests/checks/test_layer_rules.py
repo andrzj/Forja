@@ -31,13 +31,14 @@ def judge(
     check = LayerRulesCheck(
         Snapshot("python", before), Snapshot("python", after), changed, layers, base
     )
-    data = GateInput(Path("."), "c" * 40, "t", "s", "a")  # type: ignore[arg-type]
+    data = GateInput(Path("."), "c" * 40, "t", "s", "a")
     return asyncio.run(check.evaluate(data))
 
 
 def test_the_check_belongs_to_gate_9_in_observation_and_blocks_when_it_cannot_measure() -> None:
     spec = default_registry().get("layer_rules")
 
+    assert spec.default_on_inconclusive is not None
     assert (spec.gate, spec.default_mode, spec.default_on_inconclusive.value) == (
         9,
         Mode.OBSERVATION,

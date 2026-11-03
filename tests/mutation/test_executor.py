@@ -216,9 +216,9 @@ def test_bytecode_caches_that_cannot_be_removed_do_not_stop_the_run(
     real = shutil.rmtree
     asked: list[object] = []
 
-    def spy(path: object, ignore_errors: bool = False, **kwargs: object) -> None:
+    def spy(path: Path, ignore_errors: bool = False) -> None:
         asked.append(ignore_errors)
-        real(path, ignore_errors=ignore_errors, **kwargs)  # type: ignore[arg-type]
+        real(path, ignore_errors=ignore_errors)
 
     monkeypatch.setattr(shutil, "rmtree", spy)
     (project / "__pycache__").mkdir()

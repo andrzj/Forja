@@ -166,14 +166,15 @@ def test_a_task_whose_merge_does_not_apply_is_blocked_and_the_run_goes_on(
 
     def clashing(task_id: str, subject: str) -> Step:
         if task_id != "t2":
-            return real(task_id, subject)
+            kept: Step = real(task_id, subject)
+            return kept
 
         async def run() -> None:
             raise IntegrationConflict(f"forja/{RUN}/t2 does not merge into the run branch")
 
         return Step.plain({}, run)
 
-    world.workspace.integrate_task = clashing  # type: ignore[method-assign]
+    world.workspace.integrate_task = clashing
     before = world.memory.base
 
     outcome, log = world.run(planner=ScriptedPlanner(TWO_TASKS))

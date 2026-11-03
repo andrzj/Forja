@@ -4,6 +4,7 @@ the resume leaves the task blocked, settles the intent as nothing applied, and m
 from pathlib import Path
 
 import pytest
+from pydantic import JsonValue
 
 from forja.core.events import Event, EventLog, LogUnusable
 from forja.core.states import ExecutionState, Level, TaskState
@@ -22,7 +23,7 @@ def clashing_on_t1(world: MemoryWorld) -> list[str]:
     built: list[str] = []
 
     def clashing(task_id: str, subject: str) -> Step:
-        step = real(task_id, subject)
+        step: Step = real(task_id, subject)
         if task_id != "t1":
             return step
         built.append(task_id)
@@ -32,7 +33,7 @@ def clashing_on_t1(world: MemoryWorld) -> list[str]:
 
         return Step(step.payload, run)
 
-    world.workspace.integrate_task = clashing  # type: ignore[method-assign]
+    world.workspace.integrate_task = clashing
     return built
 
 
@@ -60,7 +61,7 @@ def lines_until_blocked(root: Path) -> int:
     return found[0]
 
 
-def settled_effect(log: EventLog) -> dict[str, object] | None:
+def settled_effect(log: EventLog) -> dict[str, JsonValue] | None:
     return log.state.effect_of(MERGE)
 
 

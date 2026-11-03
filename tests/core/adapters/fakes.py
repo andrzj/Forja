@@ -29,6 +29,7 @@ from forja.core.adapters import (
     ProbeTask,
     Progress,
     ProgressParser,
+    ProjectTemplate,
     RolePermissions,
     TextActivity,
     ToolInfo,
@@ -173,6 +174,9 @@ class FakeLanguageAdapter:
         if operation is Operation.TEST and C.PROGRESS_REALTIME in self.capabilities:
             return _CountingProgress()
         return None
+
+    def template(self, name: str) -> ProjectTemplate:
+        return ProjectTemplate({"pyproject.toml": f'[project]\nname = "{name}"\n'})
 
 
 class FakeExecutorAdapter:

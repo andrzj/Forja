@@ -347,7 +347,8 @@ def test_the_test_author_runs_the_cli_chosen_for_it_when_a_fix_has_one(
     try:
         runner: Any = session.context.agents[Producer.TEST_AUTHOR]
         assert runner._executable == Path("author-cli")
-        assert session.context.agent._executable == Path("claude")
+        agent: Any = session.context.agent
+        assert agent._executable == Path("claude")
     finally:
         close(session)
 

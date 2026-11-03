@@ -42,7 +42,12 @@ def test_it_gives_it_up_when_the_run_fails(
 def test_a_refusal_is_not_given_up_and_not_claimed(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[int] = []
     monkeypatch.setattr(sys, "platform", "win32")
-    monkeypatch.setattr(awake, "_set_state", lambda flags: seen.append(flags) or 0)
+
+    def record(flags: int) -> int:
+        seen.append(flags)
+        return 0
+
+    monkeypatch.setattr(awake, "_set_state", record)
     with awake.keep_awake() as asked:
         assert asked is False
     assert len(seen) == 1

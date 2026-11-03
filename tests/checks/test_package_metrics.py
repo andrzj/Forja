@@ -34,6 +34,7 @@ def used_by_cli(store: str) -> dict[str, str]:
 def test_the_check_belongs_to_gate_9_in_observation_and_premises_when_it_cannot_measure() -> None:
     spec = default_registry().get("package_metrics")
 
+    assert spec.default_on_inconclusive is not None
     assert (spec.gate, spec.default_mode, spec.default_on_inconclusive.value) == (
         9,
         Mode.OBSERVATION,

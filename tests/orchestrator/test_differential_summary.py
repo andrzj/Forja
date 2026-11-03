@@ -17,7 +17,7 @@ from forja.orchestrator.summary import (
 from tests.checks.support import RUN
 from tests.core.events.support import FakeClock
 
-OUT = {(STDOUT, ""): b"x"}
+OUT: dict[tuple[str, str], bytes | None] = {(STDOUT, ""): b"x"}
 
 
 def case(*, unstable: tuple[str, ...] = (), memories: tuple[int, ...] = (1, 2)) -> BaseCase:

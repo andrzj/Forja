@@ -1,5 +1,7 @@
 """With one CLI chosen and others installed, the summary suggests another one for the tests."""
 
+from collections.abc import Callable
+
 import pytest
 
 from forja.cli import prepare as preparation
@@ -7,7 +9,7 @@ from forja.cli.prepare import suggest_author
 from forja.cli.settings import Perfil
 
 
-def installed(names: set[str]):
+def installed(names: set[str]) -> Callable[..., list[object]]:
     def find(name: str, *args: object, **kwargs: object) -> list[object]:
         return [object()] if name in names else []
 

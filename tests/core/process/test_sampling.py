@@ -1,8 +1,10 @@
+import importlib
 import mmap
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -90,7 +92,8 @@ def test_stopping_twice_keeps_the_peak() -> None:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the group is a POSIX process group")
 def test_a_posix_group_reports_the_sampled_peak_of_its_own_pid() -> None:
-    from forja.core.process._posix import PosixGroup
+    posix: Any = importlib.import_module("forja.core.process._posix")
+    PosixGroup = posix.PosixGroup
 
     group = PosixGroup(Scripted([(4321, 700), (1, 5)]))
     group.attach(4321)
@@ -102,7 +105,8 @@ def test_a_posix_group_reports_the_sampled_peak_of_its_own_pid() -> None:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the group is a POSIX process group")
 def test_a_posix_group_never_attached_has_no_measure() -> None:
-    from forja.core.process._posix import PosixGroup
+    posix: Any = importlib.import_module("forja.core.process._posix")
+    PosixGroup = posix.PosixGroup
 
     group = PosixGroup(Scripted([(1, 5)]))
 
@@ -114,17 +118,19 @@ def test_a_posix_group_never_attached_has_no_measure() -> None:
 def test_proc_snapshot_sees_this_process_in_its_group() -> None:
     import os
 
+    group = cast(Any, os).getpgrp()
     seen = dict(_sampling.read_proc())
 
-    assert os.getpgrp() in seen
-    assert seen[os.getpgrp()] > 0
+    assert group in seen
+    assert seen[group] > 0
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="reads ps")
 def test_ps_snapshot_sees_this_process_in_its_group() -> None:
     import os
 
-    assert any(group == os.getpgrp() and size > 0 for group, size in _sampling.read_ps())
+    mine = cast(Any, os).getpgrp()
+    assert any(group == mine and size > 0 for group, size in _sampling.read_ps())
 
 
 def test_the_sampling_thread_does_not_keep_the_process_alive() -> None:
@@ -151,7 +157,7 @@ def test_ps_snapshot_asks_ps_for_group_and_resident_size(monkeypatch: pytest.Mon
         calls.append((command, options))
         return SimpleNamespace(stdout="  PGID RSS\n 10 4\n")
 
-    monkeypatch.setattr(_sampling.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert _sampling.read_ps() == [(10, 4096)]
     assert calls == [
@@ -169,6 +175,6 @@ def test_ps_snapshot_is_empty_when_ps_cannot_be_read(
     def fake_run(command: list[str], **options: object) -> SimpleNamespace:
         raise failure
 
-    monkeypatch.setattr(_sampling.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert _sampling.read_ps() == []

@@ -19,13 +19,14 @@ def tree(**imports: str) -> dict[str, str]:
 
 def judge(before: dict[str, str], after: dict[str, str], changed: tuple[str, ...]) -> GateResult:
     check = DependencyCyclesCheck(Snapshot("python", before), Snapshot("python", after), changed)
-    data = GateInput(Path("."), "c" * 40, "t", "s", "a")  # type: ignore[arg-type]
+    data = GateInput(Path("."), "c" * 40, "t", "s", "a")
     return asyncio.run(check.evaluate(data))
 
 
 def test_the_check_belongs_to_gate_9_in_observation_and_blocks_when_it_cannot_measure() -> None:
     spec = default_registry().get("dependency_cycles")
 
+    assert spec.default_on_inconclusive is not None
     assert (spec.gate, spec.default_mode, spec.default_on_inconclusive.value) == (
         9,
         Mode.OBSERVATION,
@@ -137,7 +138,7 @@ def test_go_has_no_cycle_to_find() -> None:
     check = DependencyCyclesCheck(
         Snapshot("go", files, mod), Snapshot("go", files, mod), ("a/a.go",)
     )
-    data = GateInput(Path("."), "c" * 40, "t", "s", "a")  # type: ignore[arg-type]
+    data = GateInput(Path("."), "c" * 40, "t", "s", "a")
 
     assert isinstance(asyncio.run(check.evaluate(data)), Approved)
 
@@ -165,9 +166,9 @@ def test_go_has_no_cycle_to_find() -> None:
         ),
     ],
 )
-def test_a_new_cycle_is_found_in_the_other_languages(language, files) -> None:
+def test_a_new_cycle_is_found_in_the_other_languages(language: str, files: dict[str, str]) -> None:
     check = DependencyCyclesCheck(Snapshot(language, {}), Snapshot(language, files), tuple(files))
-    data = GateInput(Path("."), "c" * 40, "t", "s", "a")  # type: ignore[arg-type]
+    data = GateInput(Path("."), "c" * 40, "t", "s", "a")
 
     result = asyncio.run(check.evaluate(data))
 

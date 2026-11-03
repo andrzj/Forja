@@ -35,6 +35,9 @@ class Console:
     def say(self, text: str = "") -> None:
         pass
 
+    def ask(self, question: str, *, default: str = "") -> str:
+        return default
+
 
 def test_a_profile_describes_a_cli_in_a_table(tmp_path: Path) -> None:
     (tmp_path / "config.toml").write_text(
@@ -81,7 +84,7 @@ def test_the_generic_cli_is_found_where_the_file_says(tmp_path: Path) -> None:
         Perfil(),
         {},
         Console(),
-        templates=templates,  # type: ignore[arg-type]
+        templates=templates,
     )
     assert (name, choice.path, offer) == ("meu-agente", program, False)
 
@@ -90,7 +93,7 @@ def test_an_unknown_name_is_refused_and_the_generic_ones_are_listed() -> None:
     saved = Execucao(cli="nenhuma")
     templates = cli_templates(Perfil(clis={"meu-agente": MODEL}), None)
     with pytest.raises(Refused, match="meu-agente"):
-        choose_cli(parse([]), saved, Perfil(), {}, Console(), templates=templates)  # type: ignore[arg-type]
+        choose_cli(parse([]), saved, Perfil(), {}, Console(), templates=templates)
 
 
 def test_only_the_cli_the_run_uses_is_written_to_the_execution_file() -> None:
