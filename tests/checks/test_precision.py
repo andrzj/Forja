@@ -14,7 +14,7 @@ import pytest
 from forja.core.gates import GateInput, PipelineOutcome
 from forja.core.states import Level
 from forja.orchestrator.measurer import PipelineMeasurer
-from tests.checks.support import FAKE_GITLEAKS, FAKE_TOOLS, RUN, SAMPLE, Run, Scene
+from tests.checks.support import FAKE_GITLEAKS, FAKE_JSCPD, FAKE_TOOLS, RUN, SAMPLE, Run, Scene
 from tests.checks.test_measurer import MOD, edit_mod, judge, write_base
 from tests.core.idempotency.conftest import Repo
 
@@ -28,7 +28,7 @@ PYTEST = ("-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no")
 def tail(run: Run) -> tuple[str, ...]:
     """The command after the fake interpreter and script (and the tool's name for the fakes)."""
     command = run.command
-    if command[1] == str(FAKE_GITLEAKS):
+    if command[1] in (str(FAKE_GITLEAKS), str(FAKE_JSCPD)):
         return command[2:]
     assert command[:2] == (sys.executable, FAKE_TOOLS), command
     return command[3:]
@@ -60,6 +60,7 @@ def test_a_clean_attempt_starts_exactly_these_tools_in_this_order(scene: Scene) 
         "run_tool:t1-a1:complexity:1",
         "run_tool:t1-a1:complexity:1",
         "run_tool:t1-a1:complexity:1",
+        "run_tool:t1-a1:duplication:1",
     ]
     assert {r.where for r in runs} == {ATTEMPT}
     assert {r.timeout for r in runs} == {300.0}
@@ -309,7 +310,7 @@ def test_the_pipeline_gets_the_attempt_the_commit_and_what_the_adapter_can_do(
     assert spy.capabilities == [{"test_filter_by_file", "coverage", "structural_meters"}]
     assert [c.id for c in spy.checks] == [
         "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
-        "pass_through", "module_depth", "dependency_cycles", "layer_rules",
+        "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics", "sast", "dependency_audit", "new_dependency", "differential",
         "e2e", "test_data", "voice", "comments",
     ]  # fmt: skip

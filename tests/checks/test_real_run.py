@@ -80,6 +80,7 @@ def run(world: World, *edits: dict[str, str]):  # type: ignore[no-untyped-def]
             "crap": OBSERVATION,
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
+            "duplication": OBSERVATION,
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,

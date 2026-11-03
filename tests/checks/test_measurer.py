@@ -40,6 +40,7 @@ EVERY_GATE = [
     "crap",
     "pass_through",
     "module_depth",
+    "duplication",
     "dependency_cycles",
     "layer_rules",
     "package_metrics",
@@ -325,6 +326,7 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "crap",
             "pass_through",
             "module_depth",
+            "duplication",
             "dependency_cycles",
             "layer_rules",
             "package_metrics",
@@ -417,7 +419,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
 
     outcome = judge(scene)
 
-    assert ran(outcome) == EVERY_GATE[:-12]  # the gates after the one that stopped it do not run
+    assert ran(outcome) == EVERY_GATE[:-13]  # the gates after the one that stopped it do not run
     assert findings(outcome) == [
         "function branchy is too complex [src/sample/mod.py::branchy] measured 21, limit 15"
     ]

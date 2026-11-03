@@ -41,6 +41,7 @@ def extra_stage(scene: Scene) -> list[str]:
             "crap": OBSERVATION,
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
+            "duplication": OBSERVATION,
             "dependency_cycles": OBSERVATION,
             "layer_rules": OBSERVATION,
             "package_metrics": OBSERVATION,

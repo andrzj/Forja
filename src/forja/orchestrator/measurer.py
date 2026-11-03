@@ -49,6 +49,7 @@ from forja.checks.differential_base import load as load_differential_base
 from forja.checks.differential_base import measure_base as measure_differential_base
 from forja.checks.differential_inputs import MissingInput
 from forja.checks.doc_drift_gate import Base, DocDriftCheck, read_repository
+from forja.checks.duplication import DuplicationCheck
 from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
@@ -714,6 +715,7 @@ class PipelineMeasurer:
                 share=shares[id(a)],
             ),
         )
+        tracked_tests = await self.test_files(worktree)
         checks: list[Check] = [
             ScopeCheck(
                 changes,
@@ -734,6 +736,15 @@ class PipelineMeasurer:
             crap,
             PassThroughCheck(worktree, code, production, before_shapes),
             ModuleDepthCheck(worktree, code, production, before_shapes),
+            DuplicationCheck(
+                tools,
+                worktree,
+                production,
+                self._workdir / "duplication" / ctx.attempt_id,
+                self._jscpd,
+                ignore=tuple(dict.fromkeys((*tracked_tests, *changes.current(self.is_test)))),
+                base=base,
+            ),
             *await self._architecture(git, worktree, changes, everything, active),
             SastCheck(
                 tools,

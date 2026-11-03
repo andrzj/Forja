@@ -33,6 +33,7 @@ from tests.core.events.support import FakeClock
 from tests.core.idempotency.conftest import Repo
 
 FAKE_GITLEAKS = Path(__file__).with_name("fake_gitleaks.py")
+FAKE_JSCPD = Path(__file__).with_name("fake_jscpd.py")
 FAKE_TOOLS = str(Path(__file__).with_name("fake_tools.py"))
 LIZARD = (sys.executable, "-m", "lizard")
 BLOCKING = CheckSettings(Mode.BLOCKING, InconclusivePolicy.BLOCK)
@@ -177,6 +178,7 @@ class Scene:
             "crap": OBSERVATION,
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
+            "duplication": OBSERVATION,
             "dependency_cycles": OBSERVATION,
             "layer_rules": OBSERVATION,
             "package_metrics": OBSERVATION,
@@ -205,6 +207,7 @@ class Scene:
             values=values,
             lizard=self.lizard,
             gitleaks=gitleaks or (sys.executable, str(FAKE_GITLEAKS)),
+            jscpd=(sys.executable, str(FAKE_JSCPD)),
             timeouts=timeouts,
             **(gate_10 or {}),
         )
