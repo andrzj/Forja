@@ -43,3 +43,4 @@ Status: Aceito, Proposto (ainda sem revisão específica) ou Substituído.
 | [0035](0035-a-voz-e-instrucao-e-medida-nunca-bloqueio.md) | A voz é instrução e medida, nunca bloqueio | Aceito |
 | [0036](0036-dependencias-do-agente-em-ambiente-virtual-por-execucao.md) | Dependências do agente em ambiente virtual por execução | Aceito |
 | [0037](0037-a-forja-instala-as-ferramentas-externas-oss-exceto-o-git.md) | A Forja instala as ferramentas externas OSS, exceto o git | Aceito |
+| [0038](0038-a-duplicacao-e-medida-pelo-jscpd-no-gate-8-com-a-catraca-do-proprio-jscpd.md) | A duplicação é medida pelo jscpd no gate 8, com a catraca do próprio jscpd | Aceito |

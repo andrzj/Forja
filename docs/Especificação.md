@@ -351,7 +351,7 @@ Cada tarefa tem uma intenção, gera um commit por etapa aprovada, é integrada 
 | 5 | Testes | Algum teste falha, exceto os em quarentena; testes congelados foram alterados |
 | 6 | E2E | Falha, ou tentou acesso à rede (os E2E rodam com rede desligada) |
 | 7 | Cobertura e mutação | Score de mutação do código tocado abaixo do limiar da linguagem, ou linha nova que nenhum teste executa (esta volta ao autor de testes, ver *Linha nova sem teste*) |
-| 8 | Métricas estruturais | CRAP ou complexidade acima do limiar; métrica oposta piorou (*pass-through*, razão interface/implementação) |
+| 8 | Métricas estruturais | CRAP ou complexidade acima do limiar; métrica oposta piorou (*pass-through*, razão interface/implementação); duplicação nova em arquivo de produção alterado, medida pelo `jscpd` (modo observação por padrão; ADR 0038) |
 | 9 | Arquitetura | Ciclo de dependência novo; violação de regra de camada; piora nas métricas de pacote |
 | 10 | Segurança e dependências | Achado novo do Semgrep; vulnerabilidade ou licença proibida em dependência; dependência nova inexistente ou suspeita no registro oficial |
 | 11 | Teste diferencial | Saídas da versão nova diferem da antiga para as mesmas entradas, em tarefa de refatoração; regressão de tempo ou memória acima do limite |
