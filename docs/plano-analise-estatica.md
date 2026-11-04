@@ -1,0 +1,46 @@
+# Plano: análise estática de tipos do Python (`mypy`)
+
+Estado: plano escrito em 03/11/2026, nada implementado. Origem: ordem do dono (03/11/2026) na fila 15. Critério do dono: ferramenta barata, confiável e, se externa, OSS. Avaliado em 03/11: TypeScript (`tsc` no build), Java (`javac`, SpotBugs, PMD, Checkstyle), Go (compilador, `go vet`, golangci-lint) e C# (compilador e analisadores Roslyn) já têm análise de tipos; o Python só tem `ruff`, e a tabela de adaptadores da Especificação prevê "ruff, mypy" para o lint do Python. O `mypy` (MIT) passa no critério. Conferido: `src\forja\languages\python\adapter.py` só roda `ruff`; nenhum gate roda `mypy`.
+
+## O que a ferramenta faz
+
+Leitura do passo 0 feita em 03/11/2026 (`mypy` 2.4.1, enviado ao PyPI em 28/10/2026; páginas de `mypy.readthedocs.io/en/stable`: linha de comando, arquivo de configuração, execução, pacotes instalados, códigos de erro, configuração em linha, adoção em código existente, problemas comuns, daemon, extensão, mais a página do PyPI). **Não lido:** o changelog por inteiro (lido o trecho inicial, 100 mil de 377 mil caracteres). **Não documentado nas páginas:** códigos de saída, formato de saída e cache não têm página própria; os fatos abaixo vêm da página de linha de comando e do código-fonte (`main.py`, `error_formatter.py`).
+
+- **Licença e distribuição:** MIT; Python 3.10 ou superior; rodas para `win_amd64` e `manylinux` x86_64 (e outras), mais roda pura e fonte.
+- **Chamada:** `python -m mypy [opções] ARQUIVO...`. Arquivos passados na linha de comando são sempre verificados (`--exclude` só vale para varredura de diretório). Por padrão o `mypy` segue os imports e também reporta erros dos módulos seguidos; `--follow-imports=silent` usa os tipos deles e esconde os erros.
+- **`--python-executable <python>`** faz o `mypy` ler os pacotes instalados (PEP 561) daquele interpretador; o padrão é o interpretador que roda o `mypy`.
+- **Descoberta de configuração:** sobe do diretório de trabalho procurando `mypy.ini`, `.mypy.ini`, `pyproject.toml` (com `[tool.mypy]`), `setup.cfg` (com `[mypy]`); depois `~/.config/mypy/config` e `~/.mypy.ini`. Nunca mescla. `--config-file X` vence; `--config-file=` (vazio) desliga todos. Opção de linha de comando vence a opção global do arquivo; seção por módulo e comentário `# mypy:` no código vencem a linha de comando.
+- **Saída:** padrão `arquivo:linha: error: mensagem  [código]`; `--show-column-numbers` põe a coluna. `--output json` (a única escolha) imprime um objeto JSON por linha com `file`, `line`, `column`, `end_line`, `end_column`, `message`, `hint`, `code`, `severity`. Linhas `note` não são erros. Em execução limpa com `--output`, a saída provavelmente é vazia (não confirmado).
+- **Códigos de saída (do código-fonte, não de página):** 0 sem mensagens (ou só notas); 1 erros de tipo sem erro bloqueante; 2 erro bloqueante (sintaxe, fonte ilegível ou ausente) e erro de uso (configuração inexistente).
+- **Módulo que não se acha:** `import-not-found` e `import-untyped` (ambos sob `import`); o módulo vira `Any`. `--disable-error-code=import-not-found` e `=import-untyped` os desligam. `--ignore-missing-imports` global é desaconselhado pela própria documentação. `--install-types` roda `pip`: nunca usar.
+- **Cache:** `.mypy_cache` no diretório de trabalho por padrão; `--cache-dir DIR` muda; `--cache-dir=nul` (Windows) ou `/dev/null` não grava cache. Versão diferente do `mypy` invalida o cache. `dmypy` (daemon) não serve a CI.
+- **Segurança:** o `mypy` não executa o código verificado, mas **importa e executa os `plugins` da configuração** (módulo ou caminho `.py`), e um plugin dentro do repositório é execução arbitrária. Comentário `# mypy:` em linha muda opções por arquivo. Não há baseline no `mypy`; a documentação oferece `ignore_errors` por módulo e `# type: ignore[código]`.
+- **Identidade de erro estável:** número de linha e coluna mudam; a mensagem traz nomes de tipo e muda entre versões. Chave segura: (caminho relativo com barra normal, código), com contagem por arquivo.
+
+## Decisões
+
+1. **A análise de tipos do Python entra na catraca do lint**, no mesmo molde: só o erro novo em relação à base reprova, contado por (arquivo, código), como o `LintCheck` faz com (arquivo, regra). Os outros quatro adaptadores não mudam. Nasce em modo **observação**, como todo check novo, num check próprio (`types`, `gate = 3`), e não dentro do `lint`, que é bloqueante.
+2. **Uma operação nova, `Operation.TYPES`**, que os adaptadores respondem com `NotSupported` por padrão; só o Python a oferece. O `LintCheck` é generalizado numa catraca parametrizada pela operação (`lint` e `types`), em vez de copiado: duplicar a classe seria o defeito que a fila 13 mede.
+3. **Comando do Python:** `<mypy> --python-executable <python do repositório> --config-file= --follow-imports=silent --show-column-numbers --output json --cache-dir <nul|/dev/null> --disable-error-code=import-not-found --disable-error-code=import-untyped -- <arquivos mudados>`. O interpretador do repositório é o que o adaptador já recebe em `python` (`cli\session.py::repo_python`), então as dependências do repositório resolvem.
+4. **Configuração do repositório não vale por padrão** (`--config-file=`), por segurança (plugin é execução de código do repositório, que o agente escreve) e por determinismo (a base e o resultado usam as mesmas opções). Sem configuração o `mypy` roda no modo padrão, não no estrito. O repositório que quer opções suas as passa pelo `forja.toml` (`[checks.types.commands]`, o mesmo mecanismo de `overrides_from` do lint), que é política congelada da execução, não texto da tentativa.
+5. **Só entra erro (`severity` igual a `error`) em arquivo pedido.** `--follow-imports=silent` esconde erro de módulo seguido; nota não conta. Erro de import não achado é desligado: o ambiente do repositório pode não ter tudo, e isso não é defeito da tentativa.
+6. **Saída diferente de 0 ou 1, ou JSON ilegível, ou saída 1 sem nenhum erro lido: `Unparseable`**, logo `Inconclusive`, nunca aprovação (como `parse_lint`). Sem o `mypy`: `Inconclusive` (ferramenta ausente).
+7. **Sem cache:** `--cache-dir` para o dispositivo nulo. A base e a cabeça não se contaminam e nada cai na worktree. Custo: cada execução refaz a análise; aceito.
+8. **O `mypy` vem da Forja (fila 14):** entrada de `wheel` no `manifesto` (versão 2.4.1 fixada, checksum), instalada na pasta da Forja como o `semgrep`, `needed_by` o Python. A Forja o acha como acha o `semgrep` (`missing_tool("mypy")`); item no `doctor`. Limite que herda do passo 3 da fila 14: as dependências da roda (pip) não têm checksum no manifesto.
+9. **Limites aceitos:** `# type: ignore` e `# mypy:` no código da tentativa escondem erro (o `mypy` não tem opção para ignorá-los, ao contrário do `--ignore-noqa` do `ruff`); só a revisão pega. Erro novo pode aparecer por mudança de outro arquivo (a catraca é por arquivo mudado, como o lint). Mudança de versão do `mypy` muda mensagens, mas a chave é o código.
+10. **Fora do escopo:** modo estrito, `--warn-unused-ignores`, instalação de stubs, `pyright`, e instrução ao agente sobre tipos (nada foi pedido).
+
+## Passos (um commit cada)
+
+0. **Feito (03/11):** leitura da documentação do `mypy` (ver acima).
+1. **Operação e adaptador:** `Operation.TYPES` em `core\adapters\language.py`; os adaptadores respondem `NotSupported`; `PythonAdapter` ganha o parâmetro `mypy`, `tool_info`, `plan` (decisão 3) e `parse` (`languages\python\parsers.py::parse_types`, medida `types.<código>`). Ferramenta falsa de teste (molde: `tests\checks\fake_jscpd.py`). Atualizar `tests\core\adapters\conformance.py` e `tests\checks\test_precision.py`.
+2. **A catraca generalizada:** extrair de `LintCheck` a catraca parametrizada pela operação; `lint` continua igual; check `types` (`gate = 3`, modo observação, `CheckSpec` com `commands`) registrado no `PipelineMeasurer.judge`; listas de checks dos testes (`EVERY_CHECK`, `GATES`, `standard`, ordens de `test_measurer.py` e `test_precision.py`, `test_pieces.py`).
+3. **Instalação e sessão:** entrada do `mypy` no `toolchain\manifest.toml` (versão, rodas, tamanhos e checksums lidos do PyPI), `missing_tool("mypy")` em `cli\session.py`, item no `doctor`, `Detection.mypy`.
+4. **Documentação e ADR 0039:** documento de uso (o que mede, como ajustar, limites da decisão 9) e o ADR; a Especificação já prevê "ruff, mypy" e não precisa de emenda.
+5. **Gate de mutação** nos arquivos novos e nos trechos mudados (`scripts\mutate.py`).
+6. **Ponta a ponta** com o `mypy` real, no fecho (regra do dono: testes reais só no E2E final): uma tarefa que introduz erro de tipo e uma que não introduz.
+
+## Limites já conhecidos
+
+- Mede o que o `mypy` acha no modo padrão; código sem anotação quase não é verificado.
+- Em aberto para o E2E: o comportamento do `--python-executable` com o ambiente virtual da execução (`<run>\venv`) e com instalação editável; o JSON em execução limpa; o código de saída em Windows.
