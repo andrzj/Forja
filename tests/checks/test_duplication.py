@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from forja.checks.duplication import DuplicationCheck
+from forja.checks.duplication import DuplicationCheck, _finding
+from forja.checks.duplication_report import Clone, CloneSide
 from forja.checks.tooling import Tools
 from forja.core.events import EventLog
 from forja.core.gates import Approved, GateInput, GateResult, Inconclusive, InconclusiveReason
@@ -254,3 +255,13 @@ def test_the_clone_is_new_against_the_base_it_is_given(
 
     assert judge(log, tmp_path, ("a.py",)) == Approved()
     assert isinstance(judge(log, tmp_path, ("a.py",), base="base"), Rejected)
+
+
+def test_a_clone_side_that_starts_at_line_zero_is_located_at_line_one() -> None:
+    side = CloneSide("a.py", 0, 5)
+    other = CloneSide("b.py", 3, 8)
+
+    finding = _finding(Clone(side, other, 6, 60, True, "exact", "python"), side, other)
+
+    assert finding.location is not None
+    assert finding.location.line == 1

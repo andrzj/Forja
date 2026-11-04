@@ -47,7 +47,7 @@ Fatos que o plano usa:
 4. **Feito (03/11):** integração: registro no `PipelineMeasurer.judge` depois de `module_depth`, resumo da preparação e da entrega. Atualizar as listas de checks dos testes (`EVERY_CHECK`, `GATES`, `standard` em `tests\checks\support.py`, ordens em `test_measurer.py` e `test_precision.py`, tabela de `test_pieces.py`).
 5. **Feito (03/11):** instruções ao agente: o fragmento de DRY ligado ao detector (decisão 7), em `orchestrator\dry_brief.py`; recebe os limites que o check usa.
 6. **Feito (03/11):** `docs\duplicacao.md` e ADR 0038. Texto do passo: documento de uso do gate (o que mede, como ajustar, como instalar o `jscpd`) e o ADR da decisão 1, com a emenda à tabela da Especificação.
-7. **Gate de mutação** nos arquivos novos (`scripts\mutate.py`).
+7. **Feito (03/11):** gate de mutação nos arquivos novos (`scripts\mutate.py`).
 8. **Ponta a ponta** com o `jscpd` real, no fecho (regra do dono: testes reais só no E2E final): uma tarefa que introduz duplicação e uma que não introduz.
 
 ## Limites já conhecidos
