@@ -46,6 +46,7 @@ _FIXTURE_DIRECTORIES = frozenset({"fixtures", "testdata"})
 _TEST_DIRECTORIES = frozenset({"tests", "test"})
 _SOURCE_SUFFIXES = (".py", ".pyi")
 _RUFF_VERSION = r"ruff (\S+)"
+_MYPY_VERSION = r"mypy (\S+)"
 _PYTHON_VERSION = r"Python (\S+)"
 _COVERAGE_VERSION = r"Coverage\.py, version (\S+)"
 # Where the coverage report lands, relative to the repository (``target/`` is Forja's own
@@ -82,10 +83,12 @@ class PythonAdapter:
         *,
         python: tuple[str, ...] = (sys.executable,),
         ruff: tuple[str, ...] = (sys.executable, "-m", "ruff"),
+        mypy: tuple[str, ...] = (sys.executable, "-m", "mypy"),
         cache_dir: Path | None = None,
     ) -> None:
         self._python = python
         self._ruff = ruff
+        self._mypy = mypy
         self._cache = str(cache_dir or default_cache_dir())
 
     # -- finding and classifying ---------------------------------------------------------------
@@ -135,6 +138,9 @@ class PythonAdapter:
             case Operation.FORMAT | Operation.LINT | Operation.LINT_FIX:
                 ruff = VersionProbe(self._plan(here, (*self._ruff, "--version")), _RUFF_VERSION)
                 return ToolInfo("ruff", ruff, "python", python)
+            case Operation.TYPES:
+                mypy = VersionProbe(self._plan(here, (*self._mypy, "--version")), _MYPY_VERSION)
+                return ToolInfo("mypy", mypy, "python", python)
             case Operation.BUILD:
                 return ToolInfo("compileall", python, "python", python)
             case Operation.TEST:
@@ -183,6 +189,20 @@ class PythonAdapter:
                     "--",
                     *targets,
                 )
+            case Operation.TYPES:
+                # The repository's own configuration is not read (``--config-file=``): a mypy
+                # plugin in it would run code the attempt may have written.
+                argv = (
+                    *self._mypy,
+                    *("--python-executable", self._python[0]),
+                    *("--config-file=", "--follow-imports=silent"),
+                    *("--output", "json", "--cache-dir", os.devnull),
+                    "--disable-error-code=import-not-found",
+                    "--disable-error-code=import-untyped",
+                    "--",
+                    *targets,
+                )
+                return self._plan(request.root, argv)
             case Operation.BUILD:
                 argv = (
                     *self._python,
@@ -244,6 +264,8 @@ class PythonAdapter:
                 return parsers.parse_format(output)
             case Operation.LINT | Operation.LINT_FIX:
                 return parsers.parse_lint(output)
+            case Operation.TYPES:
+                return parsers.parse_types(output)
             case Operation.BUILD:
                 return parsers.parse_build(output)
             case Operation.TEST:

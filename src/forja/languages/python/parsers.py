@@ -1,10 +1,11 @@
-"""Reading what ruff, compileall and pytest print.
+"""Reading what ruff, mypy, compileall and pytest print.
 
 Every parser works from the text of the log and never raises: a line it does not understand is
 skipped, and output it cannot make sense of at all is ``Unparseable``, which the gate turns into an
 inconclusive result instead of a pass.
 """
 
+import json
 import re
 from collections import Counter
 
@@ -24,6 +25,7 @@ _SKIPPED = re.compile(r"^SKIPPED \[(?P<count>\d{1,9})\]")
 _SUMMARY = re.compile(r"^=+ short test summary info =+$")
 
 LINT_OK = (0, 1)
+MYPY_OK = (0, 1)  # 2 is a blocking error: a syntax error, an unreadable source, a bad option
 PYTEST_NO_TESTS = 5
 
 
@@ -58,6 +60,41 @@ def parse_lint(output: ToolOutput) -> ParseResult:
             for (path, code), count in sorted(counts.items())
         )
     )
+
+
+def parse_types(output: ToolOutput) -> ParseResult:
+    """Type errors per file and error code (``mypy --output json``: one object per line)."""
+    if output.exit_code not in MYPY_OK:
+        return Unparseable(f"mypy ended with {output.exit_code}")
+    counts: Counter[tuple[str, str]] = Counter()
+    for line in read_output_lines(output.log_path):
+        found = _mypy_error(line)
+        if found is not None:
+            counts[found] += 1
+    if output.exit_code == 1 and not counts:
+        return Unparseable("mypy reported errors in a form this parser does not know")
+    return Parsed(
+        tuple(
+            _draft(f"types.{code}", TargetKind.FILE, path, count, "errors")
+            for (path, code), count in sorted(counts.items())
+        )
+    )
+
+
+def _mypy_error(line: str) -> tuple[str, str] | None:
+    """The (file, code) of a line that is a mypy error object; ``None`` for any other line."""
+    if not line.startswith("{"):
+        return None
+    try:
+        data = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or data.get("severity") != "error":
+        return None
+    path, code = data.get("file"), data.get("code")
+    if not isinstance(path, str):
+        return None
+    return _path(path), code if isinstance(code, str) else "error"
 
 
 def parse_format(output: ToolOutput) -> ParseResult:

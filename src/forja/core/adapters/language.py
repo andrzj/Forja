@@ -24,6 +24,7 @@ class Operation(StrEnum):
     FORMAT = "format"
     LINT = "lint"
     LINT_FIX = "lint_fix"
+    TYPES = "types"
     BUILD = "build"
     TEST = "test"
     COVERAGE = "coverage"

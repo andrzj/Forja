@@ -1,5 +1,7 @@
 """The Python adapter: the shared promises, the commands it plans, and what it reads back."""
 
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -26,7 +28,9 @@ from forja.languages.python import PythonAdapter
 from forja.languages.python.adapter import COVERAGE_DRIVER, COVERAGE_REPORT, default_cache_dir
 from tests.core.adapters.conformance import language_problems
 
-ADAPTER = PythonAdapter(python=("py",), ruff=("rf",), cache_dir=Path("cache-for-tests"))
+ADAPTER = PythonAdapter(
+    python=("py",), ruff=("rf",), mypy=("mp",), cache_dir=Path("cache-for-tests")
+)
 
 
 @pytest.fixture
@@ -198,6 +202,7 @@ def test_each_operation_names_its_tool_and_how_to_ask_its_version() -> None:
         Operation.FORMAT: ("ruff", ("rf", "--version")),
         Operation.LINT: ("ruff", ("rf", "--version")),
         Operation.LINT_FIX: ("ruff", ("rf", "--version")),
+        Operation.TYPES: ("mypy", ("mp", "--version")),
         Operation.BUILD: ("compileall", ("py", "--version")),
         Operation.TEST: ("pytest", ("py", "-m", "pytest", "--version")),
         Operation.COVERAGE: ("coverage.py", ("py", "-m", "coverage", "--version")),
@@ -258,6 +263,95 @@ def test_lint_that_did_not_finish_normally_is_not_read(tmp_path: Path, code: int
 
 def test_violations_nobody_can_read_are_not_taken_for_a_clean_run(tmp_path: Path) -> None:
     result = ADAPTER.parse(Operation.LINT, ToolOutput(1, log_with(tmp_path, "something changed")))
+
+    assert isinstance(result, Unparseable)
+
+
+# -- types -----------------------------------------------------------------------------------------
+
+
+def test_types_run_mypy_on_the_files_with_the_repositorys_python_and_no_configuration(
+    project: Path,
+) -> None:
+    assert argv(Operation.TYPES, project, files=("a.py", "b.py")) == (
+        "mp",
+        "--python-executable", "py",
+        "--config-file=", "--follow-imports=silent",
+        "--output", "json", "--cache-dir", os.devnull,
+        "--disable-error-code=import-not-found",
+        "--disable-error-code=import-untyped",
+        "--", "a.py", "b.py",
+    )  # fmt: skip
+    assert argv(Operation.TYPES, project)[-2:] == ("--", ".")
+
+
+def error(path: str, code: str | None, severity: str = "error") -> str:
+    return json.dumps(
+        {
+            "file": path,
+            "line": 3,
+            "column": 4,
+            "message": "x: y",
+            "code": code,
+            "severity": severity,
+        }
+    )
+
+
+def test_types_count_errors_per_file_and_code(tmp_path: Path) -> None:
+    result = parsed(
+        Operation.TYPES,
+        tmp_path,
+        1,
+        error(r"pkg\m.py", "arg-type"),
+        error("pkg/m.py", "arg-type"),
+        error("pkg/m.py", "return-value"),
+        error("pkg/n.py", "arg-type"),
+        error("pkg/n.py", "note-only", severity="note"),
+        "plain text that is not an error",
+        "{not json",
+        '["a list"]',
+        '{"file": 3, "severity": "error"}',
+    )
+
+    assert facts(result) == [
+        ("types.arg-type", "pkg/m.py", 2),
+        ("types.return-value", "pkg/m.py", 1),
+        ("types.arg-type", "pkg/n.py", 1),
+    ]
+    assert {d.target.kind for d in result.drafts} == {TargetKind.FILE}
+    assert {d.unit for d in result.drafts} == {"errors"}
+
+
+def test_an_error_without_a_code_is_still_counted(tmp_path: Path) -> None:
+    result = parsed(Operation.TYPES, tmp_path, 1, error("a.py", None))
+
+    assert facts(result) == [("types.error", "a.py", 1)]
+
+
+def test_a_clean_types_run_has_nothing_to_report(tmp_path: Path) -> None:
+    assert parsed(Operation.TYPES, tmp_path, 0).drafts == ()
+
+
+def test_a_long_error_line_is_not_dropped(tmp_path: Path) -> None:
+    line = json.dumps(
+        {"file": "a.py", "message": "m" * 5000, "code": "arg-type", "severity": "error"}
+    )
+
+    assert facts(parsed(Operation.TYPES, tmp_path, 1, line)) == [("types.arg-type", "a.py", 1)]
+
+
+@pytest.mark.parametrize("code", [None, 2, 101])
+def test_types_that_did_not_finish_normally_are_not_read(tmp_path: Path, code: int | None) -> None:
+    result = ADAPTER.parse(
+        Operation.TYPES, ToolOutput(code, log_with(tmp_path, error("a.py", "x")))
+    )
+
+    assert isinstance(result, Unparseable)
+
+
+def test_errors_nobody_can_read_are_not_taken_for_a_clean_run(tmp_path: Path) -> None:
+    result = ADAPTER.parse(Operation.TYPES, ToolOutput(1, log_with(tmp_path, "something changed")))
 
     assert isinstance(result, Unparseable)
 
@@ -521,7 +615,8 @@ def test_the_real_tools_report_their_versions(sample: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "operation", [Operation.FORMAT, Operation.LINT, Operation.LINT_FIX, Operation.BUILD]
+    "operation",
+    [Operation.FORMAT, Operation.LINT, Operation.LINT_FIX, Operation.TYPES, Operation.BUILD],
 )
 def test_a_path_that_looks_like_an_option_stays_a_path(operation: Operation, project: Path) -> None:
     command = argv(operation, project, files=("--config=evil.toml",))

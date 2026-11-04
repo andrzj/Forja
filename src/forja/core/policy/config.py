@@ -43,7 +43,7 @@ NEVER_BLOCKING = frozenset({"voice", "comments"})
 # Kept in step with adapters.language.Operation (a test compares them); importing it here would
 # make the two packages import each other.
 ADAPTER_OPERATIONS = frozenset(
-    {"format", "lint", "lint_fix", "build", "test", "coverage", "mutation", "e2e"}
+    {"format", "lint", "lint_fix", "types", "build", "test", "coverage", "mutation", "e2e"}
 )
 
 Number = int | float
