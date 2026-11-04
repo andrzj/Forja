@@ -70,6 +70,7 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "secrets",
         "format",
         "lint",
+        "types",
         "build",
         "tests",
         "e2e",
@@ -241,6 +242,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
         for name in (
             "format",
             "lint",
+            "types",
             "mutation",
             "crap",
             "pass_through",
@@ -319,6 +321,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
         "secrets",
         "format",
         "lint",
+        "types",
         "build",
         "tests",
         "e2e",

@@ -10,7 +10,8 @@ from tests.checks.support import Scene, judge_with
 from tests.core.idempotency.conftest import Repo, repo  # noqa: F401 - re-exported as a fixture
 
 GATES = (
-    "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
+    "scope", "secrets", "format", "lint", "types", "build", "tests", "mutation", "complexity",
+    "crap",
     "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics",
     "sast", "dependency_audit", "new_dependency", "differential", "e2e", "test_data", "voice",

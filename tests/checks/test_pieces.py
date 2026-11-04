@@ -112,6 +112,7 @@ def test_the_checks_of_this_increment_are_registered_in_gate_order_with_their_de
         "dependency_install": (2, Mode.BLOCKING, "block"),
         "format": (3, Mode.BLOCKING, "block"),
         "lint": (3, Mode.BLOCKING, "block"),
+        "types": (3, Mode.OBSERVATION, "premise"),
         "build": (4, Mode.BLOCKING, "block"),
         "tests": (5, Mode.BLOCKING, "block"),
         "red_green": (5, Mode.BLOCKING, "block"),

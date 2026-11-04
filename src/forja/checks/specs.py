@@ -18,6 +18,7 @@ def default_registry() -> CheckRegistry:
         CheckSpec("dependency_install", 2, Mode.BLOCKING, BLOCK),
         CheckSpec("format", 3, Mode.BLOCKING, BLOCK, commands=frozenset({"format"})),
         CheckSpec("lint", 3, Mode.BLOCKING, BLOCK, commands=frozenset({"lint"})),
+        CheckSpec("types", 3, Mode.OBSERVATION, PREMISE, commands=frozenset({"types"})),
         CheckSpec("build", 4, Mode.BLOCKING, BLOCK, commands=frozenset({"build"})),
         CheckSpec("tests", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),
         CheckSpec("red_green", 5, Mode.BLOCKING, BLOCK, commands=frozenset({"test"})),

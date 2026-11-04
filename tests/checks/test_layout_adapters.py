@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.layout import FormatCheck, LintCheck, skip_git_and_links
+from forja.checks.layout import FormatCheck, LintCheck, TypesCheck, skip_git_and_links
 from forja.checks.tooling import Tools
 from forja.core.events import EventLog
 from forja.core.gates import Approved, GateInput, Inconclusive, NotApplicable, Rejected
@@ -152,6 +152,48 @@ def test_an_added_file_missing_from_the_copy_does_not_stop_the_old_side_lint(
     result = asyncio.run(check.evaluate(data()))
 
     assert isinstance(result, Rejected)
+
+
+def test_a_type_error_is_new_only_against_the_same_adapters_old_text(
+    tools: Tools, tmp_path: Path
+) -> None:
+    py = Stub(
+        "python",
+        ".py",
+        tmp_path,
+        after=(draft("types.arg-type", "a.py", 3), draft("types.return-value", "a.py", 1)),
+        before=(draft("types.arg-type", "a.py", 1),),
+    )
+    check = TypesCheck(tools, projects_of(py), tmp_path, changes_of("a.py"), {"a.py": "x\n"})
+
+    result = asyncio.run(check.evaluate(data()))
+
+    assert isinstance(result, Rejected)
+    assert [(f.message, f.target, f.measured, f.limit) for f in result.findings] == [
+        ("2 new arg-type error(s)", "a.py", 3, 1),
+        ("1 new return-value error(s)", "a.py", 1, 0),
+    ]
+
+
+def test_a_type_checker_that_cannot_run_on_the_old_text_is_inconclusive(
+    tools: Tools, tmp_path: Path
+) -> None:
+    py = Stub("python", ".py", tmp_path, after=(draft("types.x", "a.py"),), offers_before=False)
+    check = TypesCheck(tools, projects_of(py), tmp_path, changes_of("a.py"), {"a.py": "x\n"})
+
+    result = asyncio.run(check.evaluate(data()))
+
+    assert isinstance(result, Inconclusive)
+    assert result.detail == "types: the python type checker cannot run on the old files"
+
+
+def test_a_language_without_a_type_checker_makes_the_types_check_not_applicable(
+    tools: Tools, tmp_path: Path
+) -> None:
+    go = Stub("go", ".go", tmp_path, offers=False)
+    check = TypesCheck(tools, projects_of(go), tmp_path, changes_of("b.go"), {"b.go": "y\n"})
+
+    assert asyncio.run(check.evaluate(data())) == NotApplicable(missing_capability="types")
 
 
 def test_the_private_copy_leaves_out_git_and_each_link_on_its_own(tmp_path: Path) -> None:

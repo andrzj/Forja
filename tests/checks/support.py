@@ -154,7 +154,10 @@ class Scene:
         else:
             fake = (sys.executable, FAKE_TOOLS)
             self.adapter = PythonAdapter(
-                python=(*fake, "python"), ruff=(*fake, "ruff"), cache_dir=work / "pycache"
+                python=(*fake, "python"),
+                ruff=(*fake, "ruff"),
+                mypy=(*fake, "mypy"),
+                cache_dir=work / "pycache",
             )
             self.lizard = (*fake, "lizard")
         self.recorder = Recorder()
@@ -179,6 +182,7 @@ class Scene:
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
             "duplication": OBSERVATION,
+            "types": OBSERVATION,
             "dependency_cycles": OBSERVATION,
             "layer_rules": OBSERVATION,
             "package_metrics": OBSERVATION,

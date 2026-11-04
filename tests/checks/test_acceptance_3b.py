@@ -28,6 +28,7 @@ def blocking(scene: Scene, *checks: str) -> Scene:
             "pass_through",
             "module_depth",
             "duplication",
+            "types",
             "dependency_cycles",
             "layer_rules",
             "package_metrics",

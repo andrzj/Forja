@@ -54,7 +54,7 @@ from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layer_rules import LayerRulesCheck
-from forja.checks.layout import FormatCheck, LintCheck, own_files, violations
+from forja.checks.layout import FormatCheck, LintCheck, TypesCheck, own_files, violations
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.new_dependency import (
@@ -729,6 +729,7 @@ class PipelineMeasurer:
             ),
             FormatCheck(tools, active, worktree, changes),
             LintCheck(tools, active, worktree, changes, before),
+            TypesCheck(tools, active, worktree, changes, before),
             BuildCheck(tools, active, worktree),
             self._tests_check(ctx, tools, active, expectations, unstable, passing),
             mutation,

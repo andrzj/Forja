@@ -53,6 +53,8 @@ def test_a_clean_attempt_starts_exactly_these_tools_in_this_order(scene: Scene) 
         "run_tool:t1-a1:format:1",
         "run_tool:t1-a1:lint:1",
         "run_tool:t1-a1:lint_before:1",
+        "run_tool:t1-a1:types:1",
+        "run_tool:t1-a1:types_before:1",
         "run_tool:t1-a1:build:1",
         "run_tool:t1-a1:tests:1",
         "run_tool:t1-a1:coverage:1",
@@ -309,8 +311,8 @@ def test_the_pipeline_gets_the_attempt_the_commit_and_what_the_adapter_can_do(
     assert data.commit == scene.repo.sh("rev-parse", "HEAD")
     assert spy.capabilities == [{"test_filter_by_file", "coverage", "structural_meters"}]
     assert [c.id for c in spy.checks] == [
-        "scope", "secrets", "format", "lint", "build", "tests", "mutation", "complexity", "crap",
-        "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
+        "scope", "secrets", "format", "lint", "types", "build", "tests", "mutation", "complexity",
+        "crap", "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics", "sast", "dependency_audit", "new_dependency", "differential",
         "e2e", "test_data", "voice", "comments",
     ]  # fmt: skip

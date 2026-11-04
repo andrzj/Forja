@@ -113,11 +113,11 @@ def skip_git_and_links(directory: str, names: list[str]) -> set[str]:
     return {n for n in names if n == ".git" or (base / n).is_symlink() or (base / n).is_junction()}
 
 
-def violations(drafts: tuple[EvidenceDraft, ...]) -> Counter[tuple[str, str]]:
-    """Violations per (file, rule)."""
+def violations(drafts: tuple[EvidenceDraft, ...], family: str = "lint") -> Counter[tuple[str, str]]:
+    """Violations per (file, rule); ``family`` is the part of the measurement before the rule."""
     counts: Counter[tuple[str, str]] = Counter()
     for draft in drafts:
-        counts[(draft.target.id, draft.measurement.removeprefix("lint."))] += int(draft.value)
+        counts[(draft.target.id, draft.measurement.removeprefix(f"{family}."))] += int(draft.value)
     return counts
 
 
@@ -128,6 +128,9 @@ class LintCheck:
     A violation is counted per file and rule, so moving code inside a file, or renaming the file,
     does not make an old violation look new. An adapter whose linter runs on the new files but not
     on the old version has nothing to compare with: the answer is inconclusive, never a pass.
+
+    The same ratchet judges the type errors of an adapter that offers them (``TypesCheck``): only
+    the operation, the name of its runs and the words of the message change.
     """
 
     tools: Tools
@@ -138,6 +141,10 @@ class LintCheck:
     id: str = "lint"
     gate: int = 3
     requires: frozenset[str] = frozenset()
+    operation: Operation = Operation.LINT
+    name: str = "lint"  # the name of its tool runs and the family of its measurements
+    noun: str = "violation"
+    tool: str = "linter"
 
     async def evaluate(self, data: GateInput) -> GateResult:
         return await decided(self._judge(data))
@@ -152,7 +159,7 @@ class LintCheck:
             overrides = overrides_from(adapter, data.values)
             request = OperationRequest(root=self.worktree, files=own)
             parsed = await measured(
-                measure(self.tools, adapter, Operation.LINT, "lint", request, overrides)
+                measure(self.tools, adapter, self.operation, self.name, request, overrides)
             )
             if parsed is None:
                 continue
@@ -161,19 +168,22 @@ class LintCheck:
                 raise Undecided(
                     Inconclusive(
                         reason=InconclusiveReason.TOOL_FAILED,
-                        detail=f"lint: the {adapter.language} linter cannot run on the old files",
+                        detail=(
+                            f"{self.name}: the {adapter.language} {self.tool} "
+                            "cannot run on the old files"
+                        ),
                     )
                 )
             offered = True
-            for (path, rule), count in sorted(violations(parsed.drafts).items()):
+            for (path, rule), count in sorted(violations(parsed.drafts, self.name).items()):
                 old = was[(self._origin(path), rule)]
                 if count > old:
-                    message = f"{count - old} new {rule} violation(s)"
+                    message = f"{count - old} new {rule} {self.noun}(s)"
                     findings.append(
                         Finding(message=message, target=path, measured=count, limit=old)
                     )
         if not offered:
-            return NotApplicable(missing_capability=Operation.LINT.value)
+            return NotApplicable(missing_capability=self.operation.value)
         return rejected(findings) if findings else Approved()
 
     def _origin(self, path: str) -> str:
@@ -211,6 +221,19 @@ class LintCheck:
             write_files(texts, root)
             request = OperationRequest(root=root, files=tuple(sorted(texts)))
             parsed = await measured(
-                measure(self.tools, adapter, Operation.LINT, "lint_before", request, overrides)
+                measure(
+                    self.tools, adapter, self.operation, f"{self.name}_before", request, overrides
+                )
             )
-            return None if parsed is None else violations(parsed.drafts)
+            return None if parsed is None else violations(parsed.drafts, self.name)
+
+
+@dataclass(frozen=True)
+class TypesCheck(LintCheck):
+    """Only type errors the attempt added reprove, by file and error code (gate 3, observation)."""
+
+    id: str = "types"
+    operation: Operation = Operation.TYPES
+    name: str = "types"
+    noun: str = "error"
+    tool: str = "type checker"

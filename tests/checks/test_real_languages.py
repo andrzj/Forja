@@ -390,6 +390,7 @@ def repair(  # type: ignore[no-untyped-def]
             "pass_through": OBSERVATION,
             "module_depth": OBSERVATION,
             "duplication": OBSERVATION,
+            "types": OBSERVATION,
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,

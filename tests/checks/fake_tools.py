@@ -1,9 +1,10 @@
-"""Stand-ins for ruff, python -m compileall/pytest and lizard that read markers from the files.
+"""Stand-ins for ruff, mypy, python -m compileall/pytest and lizard that read markers from files.
 
 They print what the real tools print (the shapes the adapter's parsers were written against), so
 the checks can be tested in milliseconds. Markers, one per line, in comments:
 
     # LINT:F401        a lint violation with that code on this line
+    # TYPE:arg-type    a type error with that code on this line (mypy, one JSON object per line)
     # SYNTAX           a syntax error (lint reports it, format and compileall refuse the file)
     # UNFORMATTED      the formatter would change this file
     # NOCOMPILE        compileall cannot compile this file
@@ -12,10 +13,11 @@ the checks can be tested in milliseconds. Markers, one per line, in comments:
     # FLAKY            the test passes the first time it runs in a directory and fails after
     # VANISHES         the test is listed the first time it runs in a directory and not after
 
-Usage: ``fake_tools.py ruff|python|lizard ARGS...`` with the arguments the adapter plans.
+Usage: ``fake_tools.py ruff|mypy|python|lizard ARGS...`` with the arguments the adapter plans.
 """
 
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -66,6 +68,21 @@ def ruff_check(files: list[Path], exit_zero: bool) -> int:
                 found += 1
     print(f"Found {found} errors." if found else "All checks passed!")
     return 1 if found and not exit_zero else 0
+
+
+def mypy(args: list[str]) -> int:
+    if "--version" in args:
+        print("mypy 0.0.0-fake")
+        return 0
+    found = 0
+    for path in python_files(targets_of(args)):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if "# TYPE:" in line:
+                code = line.split("# TYPE:", 1)[1].split()[0]
+                error = {"file": shown(path), "line": number, "column": 1, "code": code}
+                print(json.dumps({**error, "message": "fake type error", "severity": "error"}))
+                found += 1
+    return 1 if found else 0
 
 
 def ruff_format(files: list[Path], check: bool) -> int:
@@ -160,4 +177,4 @@ if __name__ == "__main__":
     if os.environ.get("NO_COLOR") != "1" and "--version" not in rest:
         print("the environment lacks NO_COLOR=1")
         sys.exit(3)
-    sys.exit({"ruff": ruff, "python": python, "lizard": lizard}[tool](rest))
+    sys.exit({"ruff": ruff, "mypy": mypy, "python": python, "lizard": lizard}[tool](rest))

@@ -31,6 +31,7 @@ EVERY_GATE = [
     "secrets",
     "format",
     "lint",
+    "types",
     "build",
     "tests",
     "e2e",
@@ -327,6 +328,7 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "pass_through",
             "module_depth",
             "duplication",
+            "types",
             "dependency_cycles",
             "layer_rules",
             "package_metrics",
@@ -343,13 +345,39 @@ def observing(*names: str) -> dict[str, CheckSettings]:
     return {n: BLOCKING for n in ("scope", "secrets", "build", "tests", "complexity")} | watched
 
 
+def blocking_on_types(repo: Repo, tmp_path: Path) -> Scene:
+    settings = observing("format", "lint") | {"types": BLOCKING}
+    return Scene(repo, tmp_path / "scene", settings=settings)
+
+
+def test_a_new_type_error_is_rejected_when_the_repository_blocks_on_types(
+    repo: Repo, tmp_path: Path
+) -> None:
+    scene = blocking_on_types(repo, tmp_path)
+    edit_mod(scene, "X = 1  # TYPE:arg-type\n")
+
+    outcome = judge(scene)
+
+    assert ran(outcome) == ["scope", "secrets", "format", "lint", "types"]
+    assert findings(outcome) == ["1 new arg-type error(s) [src/sample/mod.py] measured 1, limit 0"]
+
+
+def test_a_type_error_the_base_already_had_does_not_reprove(repo: Repo, tmp_path: Path) -> None:
+    scene = blocking_on_types(repo, tmp_path)
+    commit_mod(scene, MOD + "\n\nX = 1  # TYPE:arg-type\n")
+
+    scene.write("src/sample/mod.py", MOD + "\n\nX = 1  # TYPE:arg-type\n\n\nY = 2\n")
+
+    assert judge(scene).verdict is Verdict.PASSED
+
+
 def test_a_file_that_does_not_compile_fails_the_build(repo: Repo, tmp_path: Path) -> None:
     scene = Scene(repo, tmp_path / "scene", settings=observing("format", "lint"))
     edit_mod(scene, "X = 1  # NOCOMPILE\n")
 
     outcome = judge(scene)
 
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build"]
+    assert ran(outcome) == ["scope", "secrets", "format", "lint", "types", "build"]
     assert findings(outcome) == ["the file does not compile [src/sample/mod.py]"]
 
 
@@ -358,7 +386,7 @@ def test_a_failing_test_is_rejected_by_name(scene: Scene) -> None:
 
     outcome = judge(scene)
 
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build", "tests"]
+    assert ran(outcome) == ["scope", "secrets", "format", "lint", "types", "build", "tests"]
     assert findings(outcome) == ["test failed [tests/test_mod.py::test_add]"]
 
 
