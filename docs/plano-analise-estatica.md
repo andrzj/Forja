@@ -37,7 +37,7 @@ Leitura do passo 0 feita em 03/11/2026 (`mypy` 2.4.1, enviado ao PyPI em 28/10/2
 2. **Feito (03/11):** a catraca generalizada (`TypesCheck`) e o registro, com a ferramenta falsa. Texto do passo: extrair de `LintCheck` a catraca parametrizada pela operação; `lint` continua igual; check `types` (`gate = 3`, modo observação, `CheckSpec` com `commands`) registrado no `PipelineMeasurer.judge`; listas de checks dos testes (`EVERY_CHECK`, `GATES`, `standard`, ordens de `test_measurer.py` e `test_precision.py`, `test_pieces.py`).
 3. **Feito (06/11):** instalação e sessão (roda pura `py3-none-any`; sem `Detection.mypy`, o `doctor` usa `locate_in_path`). Texto do passo: entrada do `mypy` no `toolchain\manifest.toml` (versão, rodas, tamanhos e checksums lidos do PyPI), `missing_tool("mypy")` em `cli\session.py`, item no `doctor`, `Detection.mypy`.
 4. **Feito (06/11):** documentação (`docs\tipos.md`) e ADR 0039. Texto do passo: documento de uso (o que mede, como ajustar, limites da decisão 9) e o ADR; a Especificação já prevê "ruff, mypy" e não precisa de emenda.
-5. **Gate de mutação** nos arquivos novos e nos trechos mudados (`scripts\mutate.py`).
+5. **Feito (06/11):** gate de mutação, sem sobrevivente nos trechos do passo (ver o Registro). Texto do passo: **Gate de mutação** nos arquivos novos e nos trechos mudados (`scripts\mutate.py`).
 6. **Ponta a ponta** com o `mypy` real, no fecho (regra do dono: testes reais só no E2E final): uma tarefa que introduz erro de tipo e uma que não introduz.
 
 ## Limites já conhecidos
