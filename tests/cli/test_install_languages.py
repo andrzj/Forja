@@ -16,10 +16,10 @@ def environ(tmp_path: Path) -> dict[str, str]:
     return {"PATH": "", "FORJA_HOME": str(tmp_path / "home")}
 
 
-def found(cwd: Path, **languages: bool) -> Detection:
+def found(cwd: Path, python: bool = False, **languages: bool) -> Detection:
     return Detection(
         cwd=cwd, repo=cwd, has_commits=True, branch="main", head="h", changed=(),
-        python=False, gitleaks=False, git=True, disk_free_gib=10.0, **languages,
+        python=python, gitleaks=False, git=True, disk_free_gib=10.0, **languages,
     )  # fmt: skip
 
 
@@ -35,6 +35,10 @@ def test_a_repository_of_no_such_language_wants_no_language_tool(
     tmp_path: Path, environ: dict[str, str]
 ) -> None:
     assert names(environ, found(tmp_path)) == ALWAYS
+
+
+def test_python_wants_mypy(tmp_path: Path, environ: dict[str, str]) -> None:
+    assert names(environ, found(tmp_path, python=True)) == [*ALWAYS, "mypy"]
 
 
 def test_go_wants_go_and_golangci_lint(tmp_path: Path, environ: dict[str, str]) -> None:

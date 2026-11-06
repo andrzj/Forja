@@ -30,6 +30,7 @@ SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgre
 INSTALL_HINT = "rode `forja instalar`"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
 JSCPD_HELP = "https://github.com/kucherenko/jscpd (as instruções de instalação estão no README)"
+MYPY_HELP = "https://mypy.readthedocs.io/en/stable/getting_started.html (pip install mypy)"
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
@@ -84,6 +85,17 @@ def _where(command: str, environ: Mapping[str, str]) -> str:
     if found is not None and installed_by_forja(found, tools_dir(environ=environ)):
         return f"{command} instalado pela Forja ({found})"
     return f"{command} no PATH"
+
+
+def _mypy_check(environ: Mapping[str, str]) -> Check:
+    found = locate_in_path("mypy", environ.get("PATH")) is not None
+    return Check(
+        "mypy",
+        found,
+        _where("mypy", environ) if found else "mypy ausente: a análise de tipos fica inconclusiva",
+        "" if found else f"{INSTALL_HINT} ou instale seguindo {MYPY_HELP}",
+        required=False,
+    )
 
 
 def _go_checks(environ: Mapping[str, str]) -> list[Check]:
@@ -219,6 +231,7 @@ async def run_checks(
         )
         if detection.python:
             checks.append(await _pytest_in(detection.repo))
+            checks.append(_mypy_check(environ))
         if detection.go:
             checks += _go_checks(environ)
         if detection.typescript:

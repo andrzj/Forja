@@ -120,10 +120,11 @@ def languages(
     uses when it is made, which changes once the run has an environment of its own."""
     registry = AdapterRegistry()
     python = repo_python(repo)
+    mypy = (missing_tool("mypy"),)
     lint = find_golangci_lint()
     registry.register_language(
-        PythonAdapter(python=python),
-        lambda: PythonAdapter(python=(python_of or (lambda: python))()),
+        PythonAdapter(python=python, mypy=mypy),
+        lambda: PythonAdapter(python=(python_of or (lambda: python))(), mypy=mypy),
     )
     registry.register_language(GoAdapter(golangci_lint=lint), lambda: GoAdapter(golangci_lint=lint))
     registry.register_language(TypeScriptAdapter(), TypeScriptAdapter)

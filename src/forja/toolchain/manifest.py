@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_v
 SCHEMA_VERSION = 1
 
 Platform = Literal["windows-x64", "linux-x64"]
-Language = Literal["java", "go", "csharp", "javascript", "typescript"]
+Language = Literal["python", "java", "go", "csharp", "javascript", "typescript"]
 # ``binary``: the release is the executable itself, saved under ``executable_path``.
 # ``wheel``: a PyPI wheel installed in a virtual environment of its own; ``executable_path`` is
 # then relative to that environment.

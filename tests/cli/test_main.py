@@ -448,6 +448,26 @@ def test_the_doctor_warns_when_golangci_lint_is_missing_but_does_not_require_it(
     assert "golangci-lint.run" in lint.fix
 
 
+def test_the_doctor_warns_when_mypy_is_missing_but_does_not_require_it(tmp_path: Path) -> None:
+    check = doctor_module._mypy_check({"PATH": str(tmp_path)})  # noqa: SLF001
+
+    assert not check.ok
+    assert not check.required
+    assert "inconclusiva" in check.detail
+    assert "forja instalar" in check.fix
+
+
+def test_the_doctor_finds_mypy_on_the_path(tmp_path: Path) -> None:
+    program = tmp_path / ("mypy.exe" if sys.platform == "win32" else "mypy")
+    program.write_text("x", encoding="utf-8")
+    program.chmod(0o755)
+
+    check = doctor_module._mypy_check({"PATH": str(tmp_path)})  # noqa: SLF001
+
+    assert check.ok
+    assert check.fix == ""
+
+
 def test_the_doctor_requires_node_for_a_typescript_project(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

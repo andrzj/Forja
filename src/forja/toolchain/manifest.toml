@@ -110,6 +110,32 @@ checksum_source = "https://pypi.org/pypi/semgrep/1.183.0/json"
 executable_path = "bin/semgrep"
 
 [[tools]]
+name = "mypy"
+executable = "mypy"
+purpose = "Análise estática de tipos do Python."
+license = "MIT"
+version = "2.4.1"
+needed_by = ["python"]
+
+[tools.artifacts.windows-x64]
+url = "https://files.pythonhosted.org/packages/21/5c/6e8010f8f2c4ad817364592d4b3883633417269b913fc9d5174fdeb7e565/mypy-2.4.1-py3-none-any.whl"
+kind = "wheel"
+size = 2801286
+algorithm = "sha256"
+checksum = "1784648d6ec8c2b5465e3f26241b845a0b3cb4e56c993c64abe16989e7698999"
+checksum_source = "https://pypi.org/pypi/mypy/2.4.1/json"
+executable_path = "Scripts/mypy.exe"
+
+[tools.artifacts.linux-x64]
+url = "https://files.pythonhosted.org/packages/21/5c/6e8010f8f2c4ad817364592d4b3883633417269b913fc9d5174fdeb7e565/mypy-2.4.1-py3-none-any.whl"
+kind = "wheel"
+size = 2801286
+algorithm = "sha256"
+checksum = "1784648d6ec8c2b5465e3f26241b845a0b3cb4e56c993c64abe16989e7698999"
+checksum_source = "https://pypi.org/pypi/mypy/2.4.1/json"
+executable_path = "bin/mypy"
+
+[[tools]]
 name = "go"
 executable = "go"
 purpose = "Compilador e ferramentas do Go (com gofmt), para repositórios Go."

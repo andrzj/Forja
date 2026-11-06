@@ -266,6 +266,7 @@ def test_a_problem_names_where_it_is(tmp_path: Path) -> None:
 # --- the manifest that ships ---------------------------------------------------------------
 
 LANGUAGE_TOOLS = {
+    "python": {"mypy"},
     "go": {"go", "golangci-lint"},
     "javascript": {"node"},
     "typescript": {"node"},
@@ -274,13 +275,14 @@ LANGUAGE_TOOLS = {
 }
 
 
-def test_the_shipped_manifest_lists_the_eleven_tools() -> None:
+def test_the_shipped_manifest_lists_the_twelve_tools() -> None:
     assert sorted(tool.name for tool in load_manifest().tools) == sorted(
         [
             "gitleaks",
             "osv-scanner",
             "jscpd",
             "semgrep",
+            "mypy",
             "go",
             "golangci-lint",
             "node",
