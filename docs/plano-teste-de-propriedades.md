@@ -76,7 +76,7 @@ Leitura do passo 0 feita em 06/11/2026, por subagentes de leitura de páginas (a
 
 0. **Feito (06/11):** leitura das ferramentas (ver acima, com o que não foi lido).
 1. **Feito (06/11):** leitura do código que roda testes e repete medições (ver "Decisões do passo 1").
-2. Instrução ao agente por linguagem no pacote do autor de testes.
+2. **Feito (06/11):** instrução ao agente por linguagem no pacote do autor de testes (Java fora, à espera do dono).
 3. Semente fixa e arquivos gravados pelas ferramentas, por linguagem (Python e Go primeiro).
 4. Check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
 5. Documentação (`docs\teste-de-propriedades.md`) e ADR 0040.

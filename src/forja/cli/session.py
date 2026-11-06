@@ -67,6 +67,7 @@ from forja.orchestrator.planner import (
     InvestigationPlanner,
 )
 from forja.orchestrator.ports import AgentRunner, Planner, RunContext
+from forja.orchestrator.properties_brief import brief as properties_brief
 from forja.orchestrator.voice_brief import brief as voice_brief
 from forja.orchestrator.workspace_git import (
     GitWorkspace,
@@ -451,6 +452,7 @@ async def _context(
         limit_of(duplication, "min_tokens", MIN_TOKENS),
         limit_of(duplication, "min_lines", MIN_LINES),
     )
+    properties = properties_brief(adapter.language for adapter, _ in registry.detect_all(repo))
 
     def runner(executor: ExecutorRef, role: Producer) -> ExecutorAgentRunner:
         return ExecutorAgentRunner(
@@ -470,6 +472,7 @@ async def _context(
             model=executor.model,
             voice=voice,
             dry=dry,
+            properties=properties,
         )
 
     agents: dict[Producer, AgentRunner] = {

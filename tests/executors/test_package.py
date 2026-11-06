@@ -286,6 +286,30 @@ def test_the_duplication_instruction_goes_only_to_the_roles_that_change_producti
         assert ("## Duplication" in text) is given, role
 
 
+def test_the_property_instruction_goes_only_to_the_test_author(tmp_path: Path) -> None:
+    base = context(tmp_path, ("src/a.py",))
+    for role, given in (
+        (Producer.IMPLEMENTER, False),
+        (Producer.TEST_AUTHOR, True),
+        (Producer.SPECIFIER, False),
+        (Producer.ARCHAEOLOGIST, False),
+        (Producer.DOCUMENTER, False),
+    ):
+        ctx = replace(base, task=replace(base.task, role=role))
+
+        text = build_package(ctx, Redactor(), properties=f"Never write {TOKEN}.")
+
+        assert ("## Property tests" in text) is given, role
+        assert (f"Never write {TOKEN}." in text) is given, role
+
+
+def test_without_a_property_instruction_the_package_has_no_such_section(tmp_path: Path) -> None:
+    base = context(tmp_path, ("src/a.py",))
+    ctx = replace(base, task=replace(base.task, role=Producer.TEST_AUTHOR))
+
+    assert "## Property tests" not in build_package(ctx, Redactor())
+
+
 def test_a_fix_gets_the_duplication_instruction_and_it_comes_as_given(tmp_path: Path) -> None:
     base = context(tmp_path, ("src/a.py",))
     ctx = replace(base, task=replace(base.task, frozen_digest="abc"))
