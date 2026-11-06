@@ -21,6 +21,8 @@ from forja.core.gates import (
     InconclusiveReason,
 )
 
+READ_LIMIT = 1_000_000  # bytes read of a test file: the library is named near the top
+
 
 @dataclass(frozen=True)
 class Library:
@@ -71,7 +73,11 @@ class PropertiesCheck:
             if library is None or library in used:
                 continue
             try:
-                text = (self.worktree / path).read_bytes().decode("utf-8", errors="replace")
+                where = self.worktree / path
+                if where.is_symlink() or where.is_junction():
+                    continue  # a link may lead out of the worktree; it counts for nothing
+                with where.open("rb") as handle:
+                    text = handle.read(READ_LIMIT).decode("utf-8", errors="replace")
             except OSError:  # what is in it is unknown, so it is never taken for a lack
                 unreadable.append(path)
                 continue

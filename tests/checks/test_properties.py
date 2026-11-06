@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from forja.checks.changes import Change, ChangeKind, Changes
-from forja.checks.properties import PropertiesCheck, library_of
+from forja.checks.properties import READ_LIMIT, PropertiesCheck, library_of
 from forja.core.gates import Approved, GateInput, GateResult, Inconclusive
 from forja.core.gates.models import Rejected
 
@@ -94,6 +94,23 @@ def test_an_unreadable_test_file_does_not_matter_when_the_library_was_found(
     tests = {"tests/test_a.py": "import hypothesis\n", "tests/test_b.py": None}
 
     assert isinstance(judge(tmp_path, ("src/a.py",), tests), Approved)
+
+
+def test_a_link_counts_for_nothing_and_a_read_stops_at_the_limit(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.py"
+    outside.write_text("import hypothesis\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    try:
+        (tmp_path / "tests" / "test_a.py").symlink_to(outside)
+    except OSError:
+        pytest.skip("no symbolic links here")
+
+    assert isinstance(judge(tmp_path, ("src/a.py",), {"tests/test_a.py": None}), Rejected)
+
+
+def test_a_read_stops_at_the_limit(tmp_path: Path) -> None:
+    late = "x" * READ_LIMIT + "import hypothesis\n"
+    assert isinstance(judge(tmp_path, ("src/a.py",), {"tests/test_b.py": late}), Rejected)
 
 
 def test_the_suffix_decides_the_library_whatever_its_case() -> None:
