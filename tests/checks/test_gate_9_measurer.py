@@ -14,8 +14,8 @@ GATES = (
     "crap",
     "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics",
-    "sast", "dependency_audit", "new_dependency", "differential", "e2e", "test_data", "voice",
-    "comments",
+    "sast", "dependency_audit", "new_dependency", "differential", "e2e", "test_data",
+    "properties", "voice", "comments",
 )  # fmt: skip
 
 

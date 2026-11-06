@@ -198,6 +198,7 @@ class Scene:
             "e2e": OBSERVATION,
             "differential": OBSERVATION,
             "test_data": OBSERVATION,
+            "properties": OBSERVATION,
             "voice": OBSERVATION,
             "comments": OBSERVATION,
         }

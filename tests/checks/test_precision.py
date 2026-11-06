@@ -314,7 +314,7 @@ def test_the_pipeline_gets_the_attempt_the_commit_and_what_the_adapter_can_do(
         "scope", "secrets", "format", "lint", "types", "build", "tests", "mutation", "complexity",
         "crap", "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics", "sast", "dependency_audit", "new_dependency", "differential",
-        "e2e", "test_data", "voice", "comments",
+        "e2e", "test_data", "properties", "voice", "comments",
     ]  # fmt: skip
 
 

@@ -18,6 +18,7 @@ EVERY_CHECK = (
     "pass_through", "module_depth", "duplication", "dependency_cycles", "layer_rules",
     "package_metrics", "sast", "dependency_audit", "new_dependency", "e2e", "differential",
     "test_data",
+    "properties",
     "voice",
     "comments",
 )  # fmt: skip

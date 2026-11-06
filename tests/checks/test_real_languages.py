@@ -397,6 +397,7 @@ def repair(  # type: ignore[no-untyped-def]
             "differential": OBSERVATION,
             "e2e": OBSERVATION,
             "test_data": OBSERVATION,
+            "properties": OBSERVATION,
             "voice": OBSERVATION,
             "comments": OBSERVATION,
         },

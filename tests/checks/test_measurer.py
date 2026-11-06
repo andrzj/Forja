@@ -36,6 +36,7 @@ EVERY_GATE = [
     "tests",
     "e2e",
     "test_data",
+    "properties",
     "mutation",
     "complexity",
     "crap",
@@ -338,6 +339,7 @@ def observing(*names: str) -> dict[str, CheckSettings]:
             "differential",
             "e2e",
             "test_data",
+            "properties",
             "voice",
             "comments",
         )

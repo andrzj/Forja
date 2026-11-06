@@ -38,6 +38,7 @@ def blocking(scene: Scene, *checks: str) -> Scene:
             "differential",
             "e2e",
             "test_data",
+            "properties",
             "voice",
             "comments",
         )

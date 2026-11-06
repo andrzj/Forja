@@ -75,6 +75,7 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "tests",
         "e2e",
         "test_data",
+        "properties",
         "mutation",
         "complexity",
         "crap",
@@ -254,6 +255,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
             "differential",
             "e2e",
             "test_data",
+            "properties",
             "voice",
             "comments",
         )
@@ -326,6 +328,7 @@ def test_a_function_above_the_limit_is_rejected_with_the_numbers(scene: Scene) -
         "tests",
         "e2e",
         "test_data",
+        "properties",
         "mutation",
         "complexity",
     ]

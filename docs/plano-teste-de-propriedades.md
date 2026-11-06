@@ -78,7 +78,7 @@ Leitura do passo 0 feita em 06/11/2026, por subagentes de leitura de páginas (a
 1. **Feito (06/11):** leitura do código que roda testes e repete medições (ver "Decisões do passo 1").
 2. **Feito (06/11):** instrução ao agente por linguagem no pacote do autor de testes (Java fora, à espera do dono).
 3. **Feito (06/11):** semente fixa e arquivos gravados pelas ferramentas. Go por `RAPID_SEED`/`RAPID_NOFAILFILE` no ambiente (flag quebraria pacote sem `rapid`); Python por `--hypothesis-seed` só quando o manifesto declara `hypothesis`; `.hypothesis` fora do índice em `stage_all`. TypeScript, Java e C#: sem forma documentada, a instrução do passo 2 manda fixar no teste.
-4. Check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
+4. **Feito (06/11):** check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
 5. Documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
 6. Gate de mutação nos arquivos novos e nos trechos mudados.
 7. Ponta a ponta com as ferramentas reais, no fecho (do dono).

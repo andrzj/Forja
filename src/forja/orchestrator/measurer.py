@@ -67,6 +67,7 @@ from forja.checks.new_dependency import (
 from forja.checks.package_metrics import PackageMetricsCheck
 from forja.checks.pass_through import PassThroughCheck
 from forja.checks.personal_data import PersonalDataCheck
+from forja.checks.properties import PropertiesCheck
 from forja.checks.readme import Signature, evaluate, signature
 from forja.checks.readme_gate import ReadmeCheck, exists_inside, read_readme, readme_path
 from forja.checks.red_green import RedGreenCheck
@@ -784,6 +785,7 @@ class PipelineMeasurer:
                 passing=e2e_passing,
             ),
             PersonalDataCheck(worktree, changes, test_texts, self.is_test),
+            PropertiesCheck(worktree, changes, production, self.is_test),
             VoiceCheck(worktree, changes, self._classify, self._markers, ctx.message),
             CommentsCheck(worktree, changes, everything, self._classify),
         ]
