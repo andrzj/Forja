@@ -4,6 +4,7 @@ The name is the start of the PEP 508 requirement string."""
 
 import re
 import tomllib
+from pathlib import Path
 
 from forja.core.adapters.manifests import file_name
 
@@ -25,6 +26,19 @@ def declared_dependencies(path: str, text: str) -> frozenset[str] | None:
     if _REQUIREMENTS.fullmatch(name):
         return _requirements(text)
     return None
+
+
+def declares_hypothesis(root: Path) -> bool:
+    """Whether a manifest at the top of ``root`` declares Hypothesis. Its pytest option exists
+    only when the library is installed, so the Forja passes the seed only then."""
+    for path in (root / "pyproject.toml", *root.glob("requirements*.txt")):
+        try:
+            names = declared_dependencies(path.name, path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if names and any(re.sub(r"[-_.]+", "-", name).lower() == "hypothesis" for name in names):
+            return True
+    return False
 
 
 def declared_requirements(path: str, text: str) -> frozenset[str]:

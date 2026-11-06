@@ -21,6 +21,7 @@ from forja.core.adapters import (
     Unparseable,
     read_output_lines,
 )
+from forja.core.adapters.common import PROPERTY_SEED
 from forja.core.evidence import TargetKind
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.core.reports.readers import read_coverage
@@ -153,6 +154,33 @@ def test_tests_run_in_the_repositorys_python_and_can_be_limited_to_files(project
         "py", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no",
     )  # fmt: skip
     assert one_file == (*everything, "--", "tests/test_a.py")
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("pyproject.toml", "[project]\nname = 'x'\ndependencies = ['Hypothesis>=6']\n"),
+        ("requirements-dev.txt", "pytest\nhypothesis[pytest]==6.1\n"),
+    ],
+)
+def test_the_seed_of_hypothesis_is_fixed_where_the_repository_declares_it(
+    project: Path, name: str, text: str
+) -> None:
+    (project / name).write_text(text, encoding="utf-8")
+    seed = f"--hypothesis-seed={PROPERTY_SEED}"
+
+    assert argv(Operation.TEST, project)[-1] == seed
+    assert argv(Operation.COVERAGE, project)[-1] == seed
+    assert argv(Operation.TEST, project, test_files=("t.py",))[-3:] == (seed, "--", "t.py")
+    assert argv(Operation.COVERAGE, project, test_files=("t.py",))[-3:] == (seed, "--", "t.py")
+
+
+def test_the_seed_is_left_out_where_hypothesis_is_not_declared(project: Path) -> None:
+    (project / "requirements.txt").write_text("pytest\n", encoding="utf-8")
+    (project / "requirements-bad.txt").write_bytes(b"\xff\xfe")
+
+    for operation in (Operation.TEST, Operation.COVERAGE):
+        assert not any("hypothesis" in part for part in argv(operation, project))
 
 
 def test_coverage_runs_pytest_under_the_driver_and_names_its_report(project: Path) -> None:

@@ -318,3 +318,16 @@ def test_the_dependencies_of_a_subproject_are_not_a_change(
 
     assert [c.path for c in changes.files] == ["web/fresh.ts"]
     assert changes.ignored == ()
+
+
+def test_the_example_database_of_hypothesis_is_not_a_change(repo: Repo) -> None:  # noqa: F811
+    repo.sh("commit", "-m", "start", "--allow-empty")
+    for where in (".hypothesis", "pkg/.hypothesis"):
+        (repo.path / where / "examples").mkdir(parents=True)
+        (repo.path / where / "examples" / "entry").write_text("x\n", encoding="utf-8")
+    (repo.path / "fresh.py").write_text("x\n", encoding="utf-8")
+
+    changes = asyncio.run(read_changes(repo.git))
+
+    assert [c.path for c in changes.files] == ["fresh.py"]
+    assert changes.ignored == ()

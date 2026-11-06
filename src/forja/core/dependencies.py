@@ -14,6 +14,9 @@ from typing import Protocol
 from forja.core.adapters.projects import project_directories
 
 DEPENDENCY_DIRS = ("node_modules",)
+# What a tool writes into the worktree while it runs the tests and the Forja must not count as a
+# change: Hypothesis keeps its example database here.
+TOOL_STATE_DIRS = (".hypothesis",)
 
 
 class _Git(Protocol):
@@ -26,7 +29,8 @@ async def stage_all(git: _Git) -> None:
     ignored)."""
     await git.lines("add", "-A")
     # the link itself, and what lies under it when it is a directory the platform lets git walk
-    pathspecs = (f":(glob)**/{name}{tail}" for name in DEPENDENCY_DIRS for tail in ("", "/**"))
+    names = (*DEPENDENCY_DIRS, *TOOL_STATE_DIRS)
+    pathspecs = (f":(glob)**/{name}{tail}" for name in names for tail in ("", "/**"))
     await git.lines("reset", "-q", "--", *pathspecs)
 
 

@@ -19,6 +19,7 @@ from forja.core.adapters import (
     ToolOutput,
     Unparseable,
 )
+from forja.core.adapters.common import PROPERTY_SEED
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.core.reports.readers import read_coverage
 from forja.languages.go import GoAdapter
@@ -105,6 +106,15 @@ def argv(operation: Operation, project: Path, **options: object) -> tuple[str, .
     answer = plan(LINTING, operation, project, **options)
     assert isinstance(answer, CommandPlan), answer
     return answer.argv
+
+
+def test_rapid_is_seeded_and_writes_no_fail_file_through_the_environment(project: Path) -> None:
+    answer = plan(LINTING, Operation.TEST, project)
+
+    assert isinstance(answer, CommandPlan)
+    assert answer.env_set["RAPID_SEED"] == str(PROPERTY_SEED)
+    assert answer.env_set["RAPID_NOFAILFILE"] == "true"
+    assert not any("rapid" in part for part in answer.argv)
 
 
 def test_format_lists_what_is_not_canonical_and_rewrites_only_when_asked(project: Path) -> None:

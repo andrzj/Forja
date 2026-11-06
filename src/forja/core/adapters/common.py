@@ -19,6 +19,9 @@ from forja.core.isolation import filter_environment
 from forja.core.process import ProcessSpec
 
 CONTRACT_VERSION = 1
+# The seed the Forja gives the property-testing libraries that take one from the command line or
+# the environment, so every repeated run of the tests draws the same cases.
+PROPERTY_SEED = 20261106
 
 
 @dataclass(frozen=True)

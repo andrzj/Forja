@@ -27,11 +27,13 @@ from forja.core.adapters import (
     Unparseable,
     VersionProbe,
 )
+from forja.core.adapters.common import PROPERTY_SEED
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.languages.python import parsers
 from forja.languages.python.manifest import (
     declared_dependencies,
     declared_requirements,
+    declares_hypothesis,
     only_dependencies_changed,
 )
 from forja.languages.python.template import template
@@ -55,6 +57,10 @@ COVERAGE_REPORT = "target/coverage/python/coverage.json"
 COVERAGE_DRIVER = Path(__file__).with_name("coverage_driver.py")
 _PYTEST_OPTIONS = ("-p", "no:cacheprovider", "-q", "--color=no")
 _PYTEST_VERSION = r"pytest (\S+)"
+
+
+def _seed(root: Path) -> tuple[str, ...]:
+    return (f"--hypothesis-seed={PROPERTY_SEED}",) if declares_hypothesis(root) else ()
 
 
 def default_cache_dir() -> Path:
@@ -220,6 +226,7 @@ class PythonAdapter:
                 argv = (
                     *self._python,
                     *("-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA", "--color=no"),
+                    *_seed(request.root),
                     *(("--", *request.test_files) if request.test_files else ()),
                 )
             case Operation.COVERAGE if request.tests:
@@ -230,6 +237,7 @@ class PythonAdapter:
                     str(COVERAGE_DRIVER),
                     *("--report", COVERAGE_REPORT, "--"),
                     *_PYTEST_OPTIONS,
+                    *_seed(request.root),
                     *(("--", *request.test_files) if request.test_files else ()),
                 )
             case _:

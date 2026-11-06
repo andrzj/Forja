@@ -26,6 +26,7 @@ from forja.core.adapters import (
     Unparseable,
     VersionProbe,
 )
+from forja.core.adapters.common import PROPERTY_SEED
 from forja.core.adapters.executor import locate_in_path
 from forja.core.adapters.ownership import says
 from forja.core.reports import ReportFormat, ReportSpec
@@ -46,6 +47,10 @@ CONFIG_FILES = (
 # ``go test`` cannot create the directory of its profile, so it lands at the root and is removed
 # once read.
 COVERAGE_REPORT = ".forja-cover.out"
+# rapid reads these when the test binary starts. Its flags exist only in a package that imports
+# rapid, so a flag on ``go test ./...`` would fail every other package; the variables are harmless
+# there.
+_RAPID = {"RAPID_SEED": str(PROPERTY_SEED), "RAPID_NOFAILFILE": "true"}
 _GO_VERSION = r"go version go(\S+)"
 _LINT_VERSION = r"version (\S+)"
 # What the Go tool chain reads from the environment beyond the generic list: the build cache
@@ -186,7 +191,7 @@ class GoAdapter:
             argv,
             root,
             env_allow=GO_ENVIRONMENT,
-            env_set={"NO_COLOR": "1"},
+            env_set={"NO_COLOR": "1", **_RAPID},
             config_files=config_files,
         )
 
