@@ -75,13 +75,32 @@ Leitura do passo 0 feita em 06/11/2026, por subagentes de leitura de páginas (a
 ## Passos (um commit cada)
 
 0. **Feito (06/11):** leitura das ferramentas (ver acima, com o que não foi lido).
-1. Leitura do código que roda testes e repete medições: executores por adaptador, linha de base e cabeça, mutação, diferencial; decidir (a) o texto da instrução ao agente e o papel que a recebe, (b) como fixar a semente em TypeScript, Java e C#, (c) o critério do check `properties` e o gate. Registrar as decisões neste plano.
+1. **Feito (06/11):** leitura do código que roda testes e repete medições (ver "Decisões do passo 1").
 2. Instrução ao agente por linguagem no pacote do autor de testes.
 3. Semente fixa e arquivos gravados pelas ferramentas, por linguagem (Python e Go primeiro).
 4. Check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
 5. Documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
 6. Gate de mutação nos arquivos novos e nos trechos mudados.
 7. Ponta a ponta com as ferramentas reais, no fecho (do dono).
+
+## Decisões do passo 1
+
+Leitura do código feita em 06/11/2026 por subagente Explore (só leitura; nada rodado). Caminhos relativos a `src\forja`.
+
+**Onde o código roda e repete teste.** Cada adaptador monta o argv em `plan()` (ramos TEST e COVERAGE; `core\adapters\common.py::build_spec` executa). `core\adapters\scoped.py::ScopedAdapter.plan` embrulha todos. `CommandPlan.env_set` entra no hash de configuração (`common.py`). `plan_with_override` (`core\adapters\language.py`) troca só o `argv` pelo `commands.test` do `forja.toml` e **mantém `env_set`**: flag no argv some com o override, variável de ambiente fica. `checks\mutation.py` (`AdapterRunner`) e `orchestrator\measurer.py` (~l.269) chamam `adapter.plan(TEST)` direto, sem override. Repetem teste: linha de base (duas vezes, `measurer.py`), gate 5 (`TestsCheck`), `RedGreen` do autor, etapa extra de teste, cobertura, mutação (gate 7) e E2E. O diferencial (gate 11) roda comandos do próprio caso, não `plan(TEST)`. A Forja nunca grava arquivo de configuração no repositório; só flag, `env_set` ou `-I` (init script do Gradle). Terceiro executor, `cli\facade.py` (`forja agente testar`, pytest `-x`), não passa pelo adaptador.
+
+**(b) Semente.**
+1. **Python:** `--hypothesis-seed=<n>` no argv de TEST e COVERAGE. **Go:** `RAPID_SEED` e `RAPID_NOFAILFILE` em `env_set` não foram confirmadas no código lido; usar as flags `-rapid.seed=<n>` e `-rapid.nofailfile` no argv (confirmadas no passo 0). Limite aceito: com `commands.test` no `forja.toml`, o argv some e a semente também.
+2. **TypeScript, Java e C#:** o passo 0 não achou forma documentada de fixar semente fora do código, e o código da Forja não injeta configuração de teste nessas linguagens. A Forja **não inventa flag** para elas: a instrução ao agente (a) manda fixar a semente **no próprio teste**, pela forma documentada de cada biblioteca (fast-check, parâmetro `seed`; jqwik, `@Property(seed = ...)`; FsCheck, `Replay`). Registrado como limite: a Forja não impõe, só instrui.
+3. A semente numérica é uma constante da Forja (valor escolhido no passo 3).
+
+**(a) Instrução.** Seção `## Property tests` no pacote, **só no autor de testes**, por linguagem ativa. Padrão de `dry_brief.py`: módulo novo `orchestrator\properties_brief.py` (`VERSION`, `brief(language)`, texto fixo, sem redator); `cli\session.py` monta o texto das linguagens ativas e passa ao `ExecutorAgentRunner`; `agent_runner.py::build_package` acrescenta a seção quando o papel é o autor. `TaskInfo` não traz linguagem: ela vem dos adaptadores ativos. Conteúdo: quando usar (função pura, par codificar/decodificar, invariante, comparação com modelo simples), a biblioteca da linguagem, dependência pelo manifesto (fila 11) e, em TypeScript, Java e C#, a semente fixa no teste.
+
+**(c) Check `properties`.** `CheckSpec("properties", 6, Mode.OBSERVATION, PREMISE)`, ao lado de `test_data`; classe nova no molde de `checks\personal_data.py::PersonalDataCheck`; registro no `PipelineMeasurer.judge` perto dele. Critério: **a tentativa muda arquivo de produção e nenhum arquivo de teste mudado cita a biblioteca da linguagem** (Python `hypothesis`; TypeScript `fast-check`; Java `net.jqwik`; Go `pgregory.net/rapid`; C# `FsCheck`) gera um achado de observação por tentativa. Só mede presença, nunca bloqueia. Java entra no check só depois da decisão do dono sobre o jqwik.
+
+**Arquivos gravados (decisão 5).** `.hypothesis\`, `testdata\rapid\*.fail` e `.jqwik-database` hoje contariam como mudança (`git add -A` em `core\dependencies.py::stage_all`) e o gate 1 os rejeitaria; nenhum `GITIGNORE` de template os cobre. Passo 3: no Go, `-rapid.nofailfile` evita a gravação; no Python, o diretório é tratado em `checks\scope.py` (`TOOL_CACHES` já traz `.hypothesis`, mas só vale para arquivo ignorado; incluir o caso não ignorado em `disposable`/`stage_all`); `.jqwik-database` fica com o passo Java.
+
+**Listas de teste a atualizar no passo 4:** `EVERY_CHECK`, `GATES`, `standard` em `tests\checks\support.py`, ordens em `test_measurer.py` e `test_precision.py`, `test_pieces.py`.
 
 ## Limites já conhecidos
 
