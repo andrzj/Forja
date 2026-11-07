@@ -81,7 +81,7 @@ O jqwik pede, em texto, que agentes de IA não o usem (nota da 1.10.1 e linha na
 4. **Feito (06/11):** check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
 4A. **Feito (06/11):** Java com QuickTheories na instrução (`properties_brief.py`) e no check (`.java`, `org.quicktheories`), pela decisão do dono.
 5. **Feito (06/11):** documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
-6. Gate de mutação nos arquivos novos e nos trechos mudados.
+6. **Feito (06/11):** gate de mutação nos arquivos novos e nos trechos mudados; sobreviventes do passo mortos, cinco antigos fora do passo (ver o Registro).
 7. Ponta a ponta com as ferramentas reais, no fecho (do dono).
 
 ## Decisões do passo 1

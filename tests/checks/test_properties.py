@@ -130,3 +130,20 @@ def test_the_suffix_decides_the_library_whatever_its_case() -> None:
     assert library_of("A.GO") is library_of("a.go")
     assert library_of("a.go") is not None
     assert library_of("Makefile") is None
+
+
+def test_a_changed_file_of_no_known_language_is_skipped_not_read(tmp_path: Path) -> None:
+    result = judge(tmp_path, ("src/a.py",), {"notes.txt": None})
+
+    assert isinstance(result, Rejected)
+
+
+@pytest.mark.parametrize("kind", ["is_symlink", "is_junction"])
+def test_a_symlink_or_a_junction_alone_counts_for_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    monkeypatch.setattr(Path, kind, lambda self: self.name == "test_a.py")
+
+    result = judge(tmp_path, ("src/a.py",), {"tests/test_a.py": "import hypothesis\n"})
+
+    assert isinstance(result, Rejected)
