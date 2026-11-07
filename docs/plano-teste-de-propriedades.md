@@ -68,9 +68,9 @@ Leitura do passo 0 feita em 06/11/2026, por subagentes de leitura de páginas (a
 6. **Gate:** check `properties`, modo observação (como todo check novo), que mede se a tentativa que muda lógica traz teste de propriedade da biblioteca da linguagem. O critério fino (o que conta como propriedade em cada linguagem, qual gate) sai do passo 1; **sem calibração de limiar** (dispensada pelo dono).
 7. **Fora do escopo:** teste com estado (`stateful`, `StateMachine`, máquinas de estado), fuzzing guiado por cobertura, `testing/quick`, geração de propriedade pela Forja sem agente.
 
-## Pendente do dono
+## Decisão do dono sobre o Java (06/11/2026)
 
-- **Java/jqwik.** A própria ferramenta pede, em texto, que agentes de IA não a usem (nota da 1.10.1 e linha na saída da 1.10), está em manutenção mínima e as próximas versões, se houver, exigirão Java 21. A Forja é justamente um agente escrevendo testes. Dizer se a Forja usa o jqwik assim mesmo (o texto é aviso, a licença EPL-2.0 não proíbe) ou se Java fica sem teste de propriedades por ora. Não li alternativa para Java. **Só o passo Java espera por isso; os outros quatro seguem.**
+O jqwik pede, em texto, que agentes de IA não o usem (nota da 1.10.1 e linha na saída da 1.10), está em manutenção mínima e as próximas versões, se houver, exigirão Java 21. **O dono mandou usar o QuickTheories** (Apache-2.0, sem texto sobre IA, Java 8, API `qt().forAll(...).check(...)`, semente por `withFixedSeed` ou `QT_SEED`, sem manutenção desde dez/2019). Alternativa avaliada e não escolhida: Kotest (`kotest-property`), API só em Kotlin. Verificado em 06/11: a 0.25 do Maven Central compila e roda num programa mínimo em JDK 17.0.21 e 21.0.13, a falha repete com `withFixedSeed(42L)`, `-DQT_SEED=7` é lido, e nada é gravado em disco; **não testado:** com JUnit, `QT_SEED` como variável de ambiente, geradores além de `integers()`. A biblioteca entra como `org.quicktheories`; a semente é fixada no teste (como TypeScript e C#): a Forja não injeta nada.
 
 ## Passos (um commit cada)
 
@@ -79,7 +79,8 @@ Leitura do passo 0 feita em 06/11/2026, por subagentes de leitura de páginas (a
 2. **Feito (06/11):** instrução ao agente por linguagem no pacote do autor de testes (Java fora, à espera do dono).
 3. **Feito (06/11):** semente fixa e arquivos gravados pelas ferramentas. Go por `RAPID_SEED`/`RAPID_NOFAILFILE` no ambiente (flag quebraria pacote sem `rapid`); Python por `--hypothesis-seed` só quando o manifesto declara `hypothesis`; `.hypothesis` fora do índice em `stage_all`. TypeScript, Java e C#: sem forma documentada, a instrução do passo 2 manda fixar no teste.
 4. **Feito (06/11):** check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
-5. Documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
+4A. **Feito (06/11):** Java com QuickTheories na instrução (`properties_brief.py`) e no check (`.java`, `org.quicktheories`), pela decisão do dono.
+5. **Feito (06/11):** documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
 6. Gate de mutação nos arquivos novos e nos trechos mudados.
 7. Ponta a ponta com as ferramentas reais, no fecho (do dono).
 

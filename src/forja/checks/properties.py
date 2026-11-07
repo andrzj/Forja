@@ -1,8 +1,8 @@
 """Gate 6: an attempt that changes production code brings a property test (observation only).
 
 The check looks for the property-testing library of the language in the test files the attempt
-changed: Hypothesis for Python, fast-check for TypeScript, rapid for Go, FsCheck for C#. Java is
-left out until the owner decides on jqwik. It measures that a property test is there, never how
+changed: Hypothesis for Python, fast-check for TypeScript, QuickTheories for Java, rapid for Go,
+FsCheck for C#. It measures that a property test is there, never how
 good it is, and it asks for one per language that had production code changed.
 """
 
@@ -32,11 +32,13 @@ class Library:
 
 PYTHON = Library("python", "hypothesis")
 TYPESCRIPT = Library("typescript", "fast-check")
+JAVA = Library("java", "org.quicktheories")
 GO = Library("go", "pgregory.net/rapid")
 CSHARP = Library("csharp", "FsCheck")
 LIBRARIES: dict[str, Library] = {
     **dict.fromkeys((".py", ".pyi"), PYTHON),
     **dict.fromkeys((".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"), TYPESCRIPT),
+    ".java": JAVA,
     ".go": GO,
     ".cs": CSHARP,
 }

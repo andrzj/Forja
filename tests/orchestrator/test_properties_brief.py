@@ -1,17 +1,18 @@
-"""The property-test instruction: the library of each language, and nothing for Java yet."""
+"""The property-test instruction: the library of each language."""
 
 import re
 
 from forja.checks.voice_markers import MARKERS
 from forja.orchestrator.properties_brief import brief
 
-SUPPORTED = ("python", "typescript", "go", "csharp")
+SUPPORTED = ("python", "typescript", "java", "go", "csharp")
 
 
 def test_each_supported_language_gets_its_own_library() -> None:
     for language, name, library in (
         ("python", "Python", "Hypothesis"),
         ("typescript", "TypeScript", "fast-check"),
+        ("java", "Java", "QuickTheories"),
         ("go", "Go", "pgregory.net/rapid"),
         ("csharp", "C#", "FsCheck"),
     ):
@@ -35,13 +36,17 @@ def test_several_languages_get_every_library() -> None:
     assert all(library in text for library in ("Hypothesis", "fast-check", "rapid", "FsCheck"))
 
 
-def test_java_and_unknown_languages_get_no_instruction() -> None:
-    assert brief(["java"]) == ""
-    assert brief(["java", "cobol"]) == ""
+def test_unknown_languages_get_no_instruction() -> None:
+    assert brief(["cobol"]) == ""
     assert brief([]) == ""
 
 
-def test_java_is_left_out_of_a_mixed_repository() -> None:
+def test_java_is_told_to_use_quicktheories_with_a_fixed_seed() -> None:
+    text = brief(["java"])
+
+    assert text.count("- Java: ") == 1
+    assert "org.quicktheories" in text
+    assert "`withFixedSeed`" in text
     assert "jqwik" not in brief(["java", "python"])
 
 

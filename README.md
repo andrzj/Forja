@@ -67,6 +67,7 @@ Até agora a Forja só foi executada no Windows. Os ramos POSIX (`process/_posix
 - [Segurança e dependências](docs/seguranca-e-dependencias.md): o gate 10, o que você precisa fornecer (regras do Semgrep, licenças proibidas) e os limites dos registros.
 - [Duplicação (DRY)](docs/duplicacao.md): o gate de código repetido (`jscpd`), o que mede, como ajustar e os limites.
 - [Tipos do Python](docs/tipos.md): o check de análise estática (`mypy`), o que mede, como ajustar e os limites.
+- [Teste de propriedades](docs/teste-de-propriedades.md): a biblioteca de cada linguagem, a semente, o check `properties` e os limites.
 - [Registros de decisão (ADRs)](docs/adr/README.md): índice das decisões de arquitetura.
 
 ## Licença

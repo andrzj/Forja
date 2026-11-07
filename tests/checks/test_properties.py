@@ -78,7 +78,20 @@ def test_each_language_with_changed_production_is_asked_once(tmp_path: Path) -> 
 
 
 def test_production_in_a_language_without_a_library_asks_for_nothing(tmp_path: Path) -> None:
-    assert isinstance(judge(tmp_path, ("src/A.java", "README.md"), {}), Approved)
+    assert isinstance(judge(tmp_path, ("src/a.rb", "README.md"), {}), Approved)
+
+
+def test_java_production_asks_for_quicktheories(tmp_path: Path) -> None:
+    result = judge(tmp_path, ("src/A.java",), {"src/ATest.java": "import org.junit.Test;\n"})
+
+    assert isinstance(result, Rejected)
+    assert [f.target for f in result.findings] == ["src/A.java"]
+
+
+def test_a_java_test_that_names_quicktheories_satisfies_it(tmp_path: Path) -> None:
+    text = "import static org.quicktheories.QuickTheory.qt;\n"
+
+    assert isinstance(judge(tmp_path, ("src/A.java",), {"src/ATest.java": text}), Approved)
 
 
 def test_a_test_file_the_check_cannot_read_leaves_it_inconclusive(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@
 
 A property test states a rule that holds for every input and lets a library try many inputs. It is
 an ordinary test of the language's runner. The text names, for each language of the repository,
-the library the Forja supports. Java has no entry: it waits for the owner's decision on jqwik.
+the library the Forja supports.
 
 Fixed text of the Forja: it does not pass through the redactor. Change it only with a new
 ``VERSION``.
@@ -47,9 +47,16 @@ unless told otherwise: set `Replay` on the attribute (`[Property(Replay = "123,4
 test gives the same result every run.
 """
 
+_JAVA = """\
+- Java: QuickTheories (`org.quicktheories`, `qt().forAll(integers().all()).check(...)` inside a \
+JUnit test). The library picks a random seed unless told otherwise: call `withFixedSeed` \
+(`qt().withFixedSeed(42L).forAll(...)`), so the test gives the same result every run.
+"""
+
 _BY_LANGUAGE = {
     "python": _PYTHON,
     "typescript": _TYPESCRIPT,
+    "java": _JAVA,
     "go": _GO,
     "csharp": _CSHARP,
 }
