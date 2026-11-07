@@ -22,16 +22,24 @@ GAUGE_CELLS = 10
 HINT = "ctrl+k interrompe"
 GATE_NAMES = {
     "scope": "escopo",
+    "freeze": "congel.",
     "secrets": "segredos",
+    "dependency_install": "instal.",
     "format": "formato",
     "lint": "lint",
+    "types": "tipos",
     "build": "build",
     "tests": "testes",
+    "red_green": "red/green",
+    "e2e": "e2e",
+    "test_data": "dados",
+    "properties": "prop.",
     "complexity": "complex.",
     "mutation": "mutacao",
     "crap": "crap",
     "pass_through": "pass.",
     "module_depth": "prof.",
+    "duplication": "dup.",
     "dependency_cycles": "ciclos",
     "layer_rules": "camadas",
     "package_metrics": "pacotes",
@@ -39,6 +47,8 @@ GATE_NAMES = {
     "dependency_audit": "auditoria",
     "new_dependency": "dep.nova",
     "differential": "difer.",
+    "voice": "voz",
+    "comments": "coment.",
 }
 Pieces = list[tuple[str, Style]]
 _COLOR_SYSTEM = {"truecolor": "truecolor", "256": "256", "16": "standard", "none": None}

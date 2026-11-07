@@ -1,6 +1,6 @@
 # Plano: gate de duplicação (DRY)
 
-Estado: plano, nada implementado. Origem: o dono apontou em 02/11/2026 que a duplicação (DRY) é vital e que o `jscpd`, previsto na Especificação, não foi implementado. Conferido em 02/11/2026: não há check de duplicação em `src\forja\checks` nem menção a `jscpd` no código; a Fila e o Registro não o dispensaram.
+Estado (07/11/2026): passos 0 a 7 feitos; falta só o passo 8, E2E com o `jscpd` real, que é do dono. Origem: o dono apontou em 02/11/2026 que a duplicação (DRY) é vital e que o `jscpd`, previsto na Especificação, não foi implementado. Conferido em 02/11/2026: não há check de duplicação em `src\forja\checks` nem menção a `jscpd` no código; a Fila e o Registro não o dispensaram.
 
 ## O que a Especificação diz
 

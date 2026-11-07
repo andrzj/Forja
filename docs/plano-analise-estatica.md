@@ -1,6 +1,6 @@
 # Plano: análise estática de tipos do Python (`mypy`)
 
-Estado: plano escrito em 03/11/2026, nada implementado. Origem: ordem do dono (03/11/2026) na fila 15. Critério do dono: ferramenta barata, confiável e, se externa, OSS. Avaliado em 03/11: TypeScript (`tsc` no build), Java (`javac`, SpotBugs, PMD, Checkstyle), Go (compilador, `go vet`, golangci-lint) e C# (compilador e analisadores Roslyn) já têm análise de tipos; o Python só tem `ruff`, e a tabela de adaptadores da Especificação prevê "ruff, mypy" para o lint do Python. O `mypy` (MIT) passa no critério. Conferido: `src\forja\languages\python\adapter.py` só roda `ruff`; nenhum gate roda `mypy`.
+Estado (07/11/2026): passos 0 a 5 feitos; falta só o passo 6, E2E com o `mypy` real, que é do dono. Plano escrito em 03/11/2026. Origem: ordem do dono (03/11/2026) na fila 15. Critério do dono: ferramenta barata, confiável e, se externa, OSS. Avaliado em 03/11: TypeScript (`tsc` no build), Java (`javac`, SpotBugs, PMD, Checkstyle), Go (compilador, `go vet`, golangci-lint) e C# (compilador e analisadores Roslyn) já têm análise de tipos; o Python só tem `ruff`, e a tabela de adaptadores da Especificação prevê "ruff, mypy" para o lint do Python. O `mypy` (MIT) passa no critério. Conferido: `src\forja\languages\python\adapter.py` só roda `ruff`; nenhum gate roda `mypy`.
 
 ## O que a ferramenta faz
 

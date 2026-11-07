@@ -20,16 +20,24 @@ from forja.ui.glyphs import clean
 
 GATES = (
     "scope",
+    "freeze",
     "secrets",
+    "dependency_install",
     "format",
     "lint",
+    "types",
     "build",
     "tests",
+    "red_green",
+    "e2e",
+    "test_data",
+    "properties",
     "complexity",
     "mutation",
     "crap",
     "pass_through",
     "module_depth",
+    "duplication",
     "dependency_cycles",
     "layer_rules",
     "package_metrics",
@@ -37,6 +45,8 @@ GATES = (
     "dependency_audit",
     "new_dependency",
     "differential",
+    "voice",
+    "comments",
 )
 _FEED = 60
 _REJECTIONS = 20

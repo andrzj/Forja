@@ -86,21 +86,24 @@ def test_the_pipeline_is_in_order_so_what_came_before_a_running_gate_passed() ->
 
     view.apply(tool("intent", "run_tool:t1-a1:lint:1"))
 
+    position = GATES.index("lint")
     assert statuses(view) == {
-        "scope": GateStatus.PASSED, "secrets": GateStatus.PASSED, "format": GateStatus.PASSED,
-        "lint": GateStatus.RUNNING, "build": GateStatus.PENDING, "tests": GateStatus.PENDING,
-        "complexity": GateStatus.PENDING, "mutation": GateStatus.PENDING,
-        "crap": GateStatus.PENDING,
-        "pass_through": GateStatus.PENDING,
-        "module_depth": GateStatus.PENDING,
-        "dependency_cycles": GateStatus.PENDING,
-        "layer_rules": GateStatus.PENDING,
-        "package_metrics": GateStatus.PENDING,
-        "sast": GateStatus.PENDING,
-        "dependency_audit": GateStatus.PENDING,
-        "new_dependency": GateStatus.PENDING,
-        "differential": GateStatus.PENDING,
-    }  # fmt: skip
+        name: GateStatus.PASSED
+        if index < position
+        else GateStatus.RUNNING
+        if index == position
+        else GateStatus.PENDING
+        for index, name in enumerate(GATES)
+    }
+
+
+def test_every_check_of_an_attempt_is_on_the_bar_with_a_short_name() -> None:
+    from forja.ui.live import GATE_NAMES
+
+    assert set(GATES) == set(GATE_NAMES)
+    assert len(set(GATES)) == len(GATES)
+    for check in ("types", "duplication", "properties", "red_green", "voice", "comments"):
+        assert check in GATES
 
 
 def test_the_checks_of_gates_9_to_11_are_on_the_bar_after_gate_8_and_run_in_order() -> None:
@@ -112,7 +115,8 @@ def test_the_checks_of_gates_9_to_11_are_on_the_bar_after_gate_8_and_run_in_orde
         "dependency_cycles", "layer_rules", "package_metrics", "sast", "dependency_audit",
         "new_dependency", "differential",
     }  # fmt: skip
-    assert list(GATES[-7:]) == [
+    start = GATES.index("dependency_cycles")
+    assert list(GATES[start : start + 7]) == [
         "dependency_cycles", "layer_rules", "package_metrics", "sast", "dependency_audit",
         "new_dependency", "differential",
     ]  # fmt: skip

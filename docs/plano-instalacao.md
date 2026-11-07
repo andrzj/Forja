@@ -1,6 +1,6 @@
 # Plano: instalação das ferramentas externas e instalação da Forja
 
-Estado: plano, nada implementado. Origem: ordem do dono em 02/11/2026. A Forja precisa **instalar** as ferramentas de terceiros de que o fluxo completo depende, e todas têm de ser software livre (OSS). O usuário deve instalar a Forja de uma forma só e depois usá-la por um comando ou pela UI, sem preparar o ambiente à mão. O que foi decidido e escrito antes em sentido contrário está invalidado por esta ordem.
+Estado (07/11/2026): passos 0 a 9 feitos; falta só o passo 10, E2E em máquina limpa, que é do dono. Origem: ordem do dono em 02/11/2026. A Forja precisa **instalar** as ferramentas de terceiros de que o fluxo completo depende, e todas têm de ser software livre (OSS). O usuário deve instalar a Forja de uma forma só e depois usá-la por um comando ou pela UI, sem preparar o ambiente à mão. O que foi decidido e escrito antes em sentido contrário está invalidado por esta ordem.
 
 ## O que esta ordem invalida
 

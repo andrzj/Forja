@@ -150,7 +150,7 @@ def tasks(view: View, theme: Theme, columns: int, rows: int) -> list[Text]:
 
 
 def gates_line(view: View, theme: Theme, columns: int) -> Text:
-    """The seven gates in order, with names while they fit and with symbols alone when not."""
+    """Every check of an attempt in order, with names while they fit and symbols alone when not."""
     marks = theme.glyphs.marks
     names = {name: name for name, _ in view.gates}
     for labels in (names, GATE_NAMES, {name: "" for name in names}):
