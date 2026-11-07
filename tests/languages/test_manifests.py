@@ -275,6 +275,18 @@ def test_python_refuses_an_edit_that_changes_more_than_the_dependencies(after: s
     assert only_dependencies_changed("pyproject.toml", DEMO_PYPROJECT, after) is False
 
 
+def test_python_refuses_an_archive_name_even_with_a_marker_after_it() -> None:
+    after = "a\npkg.whl; python_version < '3.9'\n"
+
+    assert only_dependencies_changed("requirements.txt", "a\n", after) is False
+
+
+def test_python_accepts_a_requirements_file_whose_continued_line_did_not_change() -> None:
+    text = "a\npkg \\\n    --hash=sha256:abc\n"
+
+    assert only_dependencies_changed("requirements.txt", text, text) is True
+
+
 def test_python_reads_a_requirements_edit_line_by_line() -> None:
     assert only_dependencies_changed("requirements.txt", "a\n", "a\nb>=1  # why\n") is True
     assert (
