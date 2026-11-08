@@ -231,7 +231,7 @@ TYPESCRIPT = Project(
                 }
             }
         ),
-        ".gitignore": "node_modules/\n.forja-coverage/\n",
+        ".gitignore": "node_modules\n.forja-coverage/\n",
         "calc.ts": TS_CALC,
         "zero.test.ts": TS_TEST.format(name="zero", a=0, b=0, want=0),
     },
@@ -391,6 +391,9 @@ def repair(  # type: ignore[no-untyped-def]
             "module_depth": OBSERVATION,
             "duplication": OBSERVATION,
             "types": OBSERVATION,
+            "dependency_cycles": OBSERVATION,
+            "layer_rules": OBSERVATION,
+            "package_metrics": OBSERVATION,
             "sast": OBSERVATION,
             "dependency_audit": OBSERVATION,
             "new_dependency": OBSERVATION,
