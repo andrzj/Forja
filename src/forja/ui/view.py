@@ -150,6 +150,7 @@ class View:
     tasks_running: int = 0  # tasks in progress; the screen follows the first of them
     task_number: int = 0  # place in the plan of the task on the screen; 0 = the next to finish
     task_tokens: int = 0  # tokens spent by the task on the screen
+    log: tuple[FeedLine, ...] = ()  # every line of the feed since the start, and each check begun
 
     @property
     def number(self) -> int:
@@ -191,6 +192,7 @@ class ViewModel:
     rejections: deque[str] = field(default_factory=lambda: deque(maxlen=_REJECTIONS))
     tokens_used: int = 0
     task_tokens: dict[str, int] = field(default_factory=dict)  # task id -> tokens it spent
+    log: list[FeedLine] = field(default_factory=list)  # never cut: the ``l`` screen shows it all
     seconds_before: float = 0.0
     feed_total: int = 0
     rejections_total: int = 0
@@ -217,7 +219,7 @@ class ViewModel:
         if event.type == "transition":
             self._transition(event.level, event.target_id, event.to_state, event.payload)
         elif event.type in ("intent", "effect"):
-            self._tool(event.type, event.operation, event.operation_id)
+            self._tool(event.type, event.operation, event.operation_id, event.time)
         elif event.type == "progress":
             self._progress(event.time, event.payload, event.target_id)
 
@@ -290,13 +292,16 @@ class ViewModel:
         if found and found["check"] in self.gates:
             self._advance_to(found["check"], GateStatus.FAILED)
 
-    def _tool(self, kind: str, operation: str, operation_id: str) -> None:
+    def _tool(self, kind: str, operation: str, operation_id: str, moment: str) -> None:
         found = _RUN_TOOL.match(operation_id) if operation == "run_tool" else None
         if not found:
             return
         check = found["check"].removesuffix("_before")
         if check in self.gates and kind == "intent" and not self._foreign(found["target"]):
             self._advance_to(check, GateStatus.RUNNING)
+            self.log.append(
+                FeedLine(moment[11:19], "note", f"mede {check} (gate {GATE_OF[check]})")
+            )
 
     def _advance_to(self, check: str, status: GateStatus) -> None:
         """The pipeline is in order and stops at the first failure: what came before passed."""
@@ -343,7 +348,9 @@ class ViewModel:
             self._add(FeedLine(clock, "error", str(payload.get("message", ""))))
 
     def _add(self, line: FeedLine) -> None:
-        self.feed.append(replace(line, text=clean(line.text)))
+        cleaned = replace(line, text=clean(line.text))
+        self.feed.append(cleaned)
+        self.log.append(cleaned)
         self.feed_total += 1
 
     def _reject(self, text: str) -> None:
@@ -382,6 +389,7 @@ class ViewModel:
             tasks_blocked=sum(1 for s in self.tasks.values() if s == TaskState.BLOCKED),
             task_number=self._number_on_screen(),
             task_tokens=self.task_tokens.get(self.task_id, 0),
+            log=tuple(self.log),
             tasks_running=sum(1 for s in self.tasks.values() if s == TaskState.IN_PROGRESS),
             task_rows=tuple(
                 (task, self.intents.get(task, ""), state) for task, state in self.tasks.items()

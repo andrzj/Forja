@@ -8,7 +8,7 @@ from forja.core.states import AttemptState, ExecutionState, Level, TaskState
 from forja.ui.view import GATE_OF, GATES, GateStatus, ViewModel, blank_view, gate_groups
 from tests.orchestrator.fakes import PASSED, REJECTED, ScriptedMeasurer, ScriptedPlanner
 from tests.orchestrator.harness import TWO_TASKS, MemoryWorld
-from tests.ui.support import activity, model, progress, tool, transition
+from tests.ui.support import TIME, activity, model, progress, tool, transition
 
 
 def statuses(view_model: ViewModel) -> dict[str, GateStatus]:
@@ -469,3 +469,30 @@ def test_the_number_counts_the_place_of_the_task_followed_among_all_the_tasks() 
     view.apply(transition(Level.TASK, "t4", TaskState.IN_PROGRESS))
 
     assert (view.snapshot().task_id, view.snapshot().number) == ("t3", 3)
+
+
+def test_the_log_keeps_every_line_of_the_feed_and_each_check_begun() -> None:
+    view = model()
+    for number in range(100):
+        view.apply(activity("text", text=f"linha {number}"))
+    view.apply(tool("intent", "run_tool:t1-a1:lint:1"))
+    view.apply(tool("effect", "run_tool:t1-a1:lint:1"))
+
+    snapshot = view.snapshot()
+
+    assert len(snapshot.feed) == 60
+    assert [line.text for line in snapshot.log[:2]] == ["linha 0", "linha 1"]
+    assert len(snapshot.log) == 101
+    assert snapshot.log[-1].kind == "note"
+    assert snapshot.log[-1].text == "mede lint (gate 3)"
+    assert snapshot.log[-1].time == TIME[11:19]
+
+
+def test_the_log_leaves_out_what_another_task_did() -> None:
+    view = two_running()
+    for target in ("t1-a1", "t2-a1"):
+        event = activity("text", text=f"from {target}")
+        view.apply(event.model_copy(update={"target_id": target}))
+    view.apply(tool("intent", "run_tool:t2-a1:lint:1"))
+
+    assert [line.text for line in view.snapshot().log] == ["from t1-a1"]

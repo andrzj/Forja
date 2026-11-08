@@ -32,6 +32,7 @@ SUBJECTS = {
     "final": Role.ACCENT,
     "help": Role.ACCENT,
     "details": Role.ACCENT,
+    "log": Role.ACTIVITY,
 }
 TITLES = {
     "tasks": "Tarefas",
@@ -40,9 +41,14 @@ TITLES = {
     "final": "Fim da execução",
     "help": "Ajuda",
     "details": "Detalhes da tarefa",
+    "log": "Log da atividade",
 }
 STOP_KEYS = ("ctrl+k", "ctrl+c")
-OVERLAYS = {"help": "helping", "details": "detailing"}  # pane -> class of the screen that shows it
+OVERLAYS = {  # pane -> class of the screen that shows it
+    "help": "helping",
+    "details": "detailing",
+    "log": "logging",
+}
 TOP_FIRST = 10**9  # a scroll back that the pane clamps to its first line
 
 
@@ -112,7 +118,7 @@ class ForjaApp(App[None]):
     #tasks { width: 34; }
     #attempt { width: 1fr; }
     #rej { height: 6; }
-    #final, #help, #details { display: none; }
+    #final, #help, #details, #log { display: none; }
     #foot { height: 1; }
     Screen.stopping #band { display: block; }
     Screen.finished #body, Screen.finished #rej { display: none; }
@@ -121,6 +127,8 @@ class ForjaApp(App[None]):
     Screen.helping #help { display: block; }
     Screen.detailing #body, Screen.detailing #rej, Screen.detailing #final { display: none; }
     Screen.detailing #details { display: block; }
+    Screen.logging #body, Screen.logging #rej, Screen.logging #final { display: none; }
+    Screen.logging #log { display: block; }
     Screen.narrow #tasks { width: 24; }
     Screen.compact #tasks { display: none; }
     Screen.compact #head { height: 3; }
@@ -133,6 +141,7 @@ class ForjaApp(App[None]):
         Binding("t", "theme", show=False),
         Binding("question_mark", "help", show=False),
         Binding("d", "details", show=False),
+        Binding("l", "log", show=False),
         Binding("q", "quit_or_stop", show=False),
         Binding("escape", "leave", show=False),
     ]
@@ -169,6 +178,7 @@ class ForjaApp(App[None]):
         yield Pane("final")
         yield Pane("help")
         yield Pane("details", scrolls=True)
+        yield Pane("log", scrolls=True)
         yield Pane("foot")
 
     def on_mount(self) -> None:
@@ -224,6 +234,8 @@ class ForjaApp(App[None]):
             return panels.help_lines(theme, width)
         if key == "details":
             return self._window(key, panels.details(view, theme, width), height)
+        if key == "log":
+            return self._window(key, panels.log_lines(view, theme, width), height)
         return [panels.footer(theme, width, finished=self.finished, stopping=self.stopping)]
 
     def _window(self, key: str, lines: list[Text], height: int) -> list[Text]:
@@ -266,6 +278,9 @@ class ForjaApp(App[None]):
 
     def action_details(self) -> None:
         self._toggle("details", back=TOP_FIRST)
+
+    def action_log(self) -> None:
+        self._toggle("log")
 
     def _toggle(self, key: str, *, back: int = 0) -> None:
         """Open the pane over the run, closing any other, or close it when it is open."""

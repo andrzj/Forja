@@ -38,7 +38,7 @@ def full(**changes: object) -> View:
         tasks_running=1, feed=FEED, feed_total=8, gates=MIXED,
         rejections=("a: gate 4 (lint): 2 new", "b: gate 6 (tests): 1 failed", "c", "d", "e"),
         rejections_total=5, tokens_used=1_234_567, tokens_limit=3_000_000, elapsed=3725.0,
-        task_tokens=45_000,
+        task_tokens=45_000, log=(*FEED, FeedLine("12:00:09", "error", "erro " + "w" * 120)),
     )  # fmt: skip
     return busy(**{**base, **changes})
 
@@ -113,6 +113,7 @@ def scenarios() -> dict[str, list[Text]]:
         for name in ("full", "blank", "rejected"):
             for columns in (*range(1, 13), 30, 50, 90):
                 out[f"{key} details {name} {columns}"] = panels.details(VIEWS[name], theme, columns)
+                out[f"{key} log {name} {columns}"] = panels.log_lines(VIEWS[name], theme, columns)
     report = ["Entregue", "segunda linha do relatorio", "terceira"]
     for name in ("full", "delivered", "blank", "failed", "idle", "late"):
         view = VIEWS[name]

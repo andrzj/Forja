@@ -242,7 +242,7 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
     options: tuple[str, ...]
     if finished:
         options = (
-            " q sair   d detalhes   t tema   ? ajuda",
+            " q sair   d detalhes   l log   t tema   ? ajuda",
             " q sair   t tema   ? ajuda",
             " q sair   t tema",
             " q sair",
@@ -255,9 +255,9 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
         )
     else:
         options = (
-            " q parar e salvar   d detalhes   t tema   tab painel   setas rolam   ? ajuda",
-            " q parar   d detalhes   t tema   tab painel   ? ajuda",
-            " q parar   d detalhes   t tema   ? ajuda",
+            " q parar e salvar   d detalhes   l log   t tema   tab painel   setas rolam   ? ajuda",
+            " q parar   d detalhes   l log   t tema   tab painel   ? ajuda",
+            " q parar   d detalhes   l log   t tema   ? ajuda",
             " q parar   t tema   ? ajuda",
             " q parar",
         )
@@ -318,15 +318,28 @@ def window(lines: list[Text], rows: int, offset: int) -> list[Text]:
     return lines[max(0, end - room) : end]
 
 
-def _wrapped_lines(text: str, lead: str, role: Role, theme: Theme, columns: int) -> list[Text]:
+def _wrapped_lines(
+    text: str, lead: str, role: Role, theme: Theme, columns: int, text_role: Role = Role.TEXT
+) -> list[Text]:
     """The text whole, over as many lines as it takes, the lead on the first one only."""
     room = max(1, columns - 1 - width(lead))
     out = []
     for number, piece in enumerate(wrapped(text, room)):
         line = _line(columns)
         _put(line, " " + (lead if number == 0 else " " * width(lead)), theme.style(role))
-        _put(line, piece, theme.style(Role.TEXT))
+        _put(line, piece, theme.style(text_role))
         out.append(_finish(line, columns))
+    return out
+
+
+def log_lines(view: View, theme: Theme, columns: int) -> list[Text]:
+    """Every line of activity since the start of the run, whole. The caller shows a window."""
+    if not view.log:
+        return [_title("nenhuma atividade até agora", theme, columns)]
+    out: list[Text] = []
+    for entry in view.log:
+        role = FEED_ROLES.get(entry.kind, Role.MUTED)
+        out += _wrapped_lines(entry.text, f"{entry.time} ", Role.MUTED, theme, columns, role)
     return out
 
 
@@ -366,6 +379,7 @@ def help_lines(theme: Theme, columns: int) -> list[Text]:
             "para, salva tudo e deixa a execução para retomar; de novo sai na hora",
         ),
         ("d", "mostra a tarefa atual inteira; de novo fecha"),
+        ("l", "mostra toda a atividade desde o início; de novo fecha"),
         ("t", "troca o tema"),
         ("tab", "muda o painel em foco"),
         ("setas, pgup, pgdn", "rolam o painel em foco; end volta ao fim"),

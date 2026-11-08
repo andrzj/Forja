@@ -26,6 +26,7 @@ def view(**changes: object) -> View:
     )
     base: dict[str, object] = dict(
         task_rows=rows, feed=feed, tasks_integrated=1, tasks_blocked=1,
+        log=(*feed, FeedLine("12:01:00", "error", "falhou " + "z" * 150)),
         rejections=("t2-a1: format " + "y" * 200, "t2-a2: lint"),
         tokens_used=680_000, tokens_limit=2_000_000, elapsed=761.0,
     )  # fmt: skip
@@ -63,6 +64,7 @@ def every_panel(
         *panels.final(list(report), shown, theme, columns, rows),
         *panels.help_lines(theme, columns),
         *panels.details(shown, theme, columns),
+        *panels.log_lines(shown, theme, columns),
     ]
 
 
@@ -242,3 +244,20 @@ def test_a_window_shows_the_rows_that_end_offset_lines_before_the_last(
     lines = [Text(char) for char in "abcde"]
 
     assert [line.plain for line in panels.window(lines, rows, offset)] == shown
+
+
+def test_the_log_has_every_line_whole_with_its_time() -> None:
+    lines = [line.plain for line in panels.log_lines(view(), THEMES["escuro"], 50)]
+
+    assert lines[0] == " 12:00:00 leu src/a0.py"
+    assert lines[39] == " 12:00:39 leu src/a39.py"
+    assert lines[40].startswith(" 12:01:00 falhou zzz")
+    assert "".join(line.strip() for line in lines[41:]).count("z") == 150 - lines[40].count("z")
+    assert all(line.startswith(" " * 10) for line in lines[41:])
+    assert all(len(line) <= 50 for line in lines)
+
+
+def test_an_empty_log_says_so() -> None:
+    lines = panels.log_lines(blank_view(), THEMES["escuro"], 60)
+
+    assert [line.plain for line in lines] == [" nenhuma atividade até agora"]

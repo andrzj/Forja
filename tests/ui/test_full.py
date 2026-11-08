@@ -213,6 +213,39 @@ def test_the_help_opens_and_closes() -> None:
     drive(THEMES["escuro"], (80, 24), scenario)
 
 
+def test_l_opens_the_log_at_its_end_scrolls_it_and_closes_it() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("l")
+        await pilot.pause()
+        keys = {pane.key for pane in shown(app)}
+        assert "log" in keys and not {"tasks", "attempt", "rej", "details"} & keys
+        check_layout(app, (80, 24))
+        pane = app.query_one("#log", Pane)
+        assert app.focused is pane and pane.back == 0
+        size = pane.content_size
+        last = app.lines_for("log", size.width, size.height, pane.back)[-1].plain
+        assert "zzz" in last
+        await pilot.press("pageup")
+        await pilot.pause()
+        assert pane.back == 8
+        await pilot.press("l")
+        await pilot.pause()
+        assert "log" not in {pane.key for pane in shown(app)}
+
+    app = drive(THEMES["escuro"], (80, 24), scenario)
+    assert app._keys.empty()
+
+
+@pytest.mark.parametrize("size", SIZES)
+def test_the_log_keeps_the_layout_at_every_size(size: tuple[int, int]) -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("l")
+        await pilot.pause()
+        check_layout(app, size)
+
+    drive(THEMES["escuro"], size, scenario)
+
+
 def test_d_opens_the_details_from_the_top_scrolls_them_and_closes_them() -> None:
     async def scenario(app: ForjaApp, pilot: Any) -> None:
         app.show(VIEWS["rejected task"])
