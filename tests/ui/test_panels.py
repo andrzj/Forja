@@ -235,7 +235,7 @@ def test_with_no_task_the_details_say_so() -> None:
     [
         (3, 0, ["c", "d", "e"]), (3, 1, ["b", "c", "d"]), (3, 2, ["a", "b", "c"]),
         (3, 99, ["a", "b", "c"]), (3, -1, ["c", "d", "e"]), (9, 0, list("abcde")),
-        (0, 0, ["e"]), (1, 4, ["a"]),
+        (0, 0, ["e"]), (1, 4, ["a"]), (9, 2, list("abcde")), (5, 1, list("abcde")),
     ],
 )  # fmt: skip
 def test_a_window_shows_the_rows_that_end_offset_lines_before_the_last(
@@ -261,3 +261,22 @@ def test_an_empty_log_says_so() -> None:
     lines = panels.log_lines(blank_view(), THEMES["escuro"], 60)
 
     assert [line.plain for line in lines] == [" nenhuma atividade até agora"]
+
+
+def test_with_ascii_symbols_the_details_and_the_log_cut_with_the_ascii_ellipsis() -> None:
+    theme = with_ascii(THEMES["escuro"])
+    for columns in range(10, 61):
+        drawn = [
+            *panels.details(view(task_id="t2"), theme, columns),
+            *panels.log_lines(view(), theme, columns),
+        ]
+        for line in drawn:
+            assert "…" not in line.plain and line.cell_len <= columns, (columns, line.plain)
+
+
+def test_the_log_keeps_the_time_while_three_cells_are_left_for_the_text() -> None:
+    def first(columns: int) -> str:
+        return panels.log_lines(view(), THEMES["escuro"], columns)[0].plain
+
+    assert first(13) == " 12:00:00 leu"
+    assert first(12) == " leu"

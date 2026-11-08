@@ -78,8 +78,8 @@ class Pane(Widget, can_focus=False):
     def render(self) -> Text:
         width, height = self.content_size
         screen = cast(LinesSource, self.app)
-        lines = screen.lines_for(self.key, max(width, 1), max(height, 1), self.back)
-        return Text(chr(10), no_wrap=True, overflow="ellipsis").join(lines)
+        lines = screen.lines_for(self.key, width, height, self.back)  # Textual skips empty panes
+        return Text(chr(10)).join(lines)  # every line already fits its width
 
     def action_scroll(self, step: int) -> None:
         self.back = 0 if step == 0 else max(0, self.back + step)
@@ -241,7 +241,7 @@ class ForjaApp(App[None]):
     def _window(self, key: str, lines: list[Text], height: int) -> list[Text]:
         """The part of a long pane in view, its scroll kept between its first and last line."""
         pane = self.query_one(f"#{key}", Pane)
-        pane.back = min(pane.back, max(0, len(lines) - max(height, 1)))
+        pane.back = min(pane.back, max(0, len(lines) - height))
         return panels.window(lines, height, pane.back)
 
     # -- colors --------------------------------------------------------------------------------

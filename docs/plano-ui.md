@@ -1,6 +1,6 @@
 # Plano: melhorias da interface de terminal
 
-Estado (08/11/2026): plano escrito, nada implementado. Origem: ordem expressa do dono (08/11/2026), fora da fila, para as melhorias da UI registradas em `NOTAS.md`. Referência: Especificação, "Interface de terminal e acompanhamento" (conteúdo da tela: cabeçalho com objetivo, branch e tempo; atalhos `d` detalhes, `l` log completo, `q` interromper com segurança) e a tabela "Gates, em ordem" (gates 1 a 14).
+Estado (08/11/2026): passos 0 a 6 feitos; falta só o E2E real, que é do dono. Origem: ordem expressa do dono (08/11/2026), fora da fila, para as melhorias da UI registradas em `NOTAS.md`. Referência: Especificação, "Interface de terminal e acompanhamento" (conteúdo da tela: cabeçalho com objetivo, branch e tempo; atalhos `d` detalhes, `l` log completo, `q` interromper com segurança) e a tabela "Gates, em ordem" (gates 1 a 14).
 
 ## Como está hoje (lido em `src\forja\ui` e `src\forja\cli\keys.py`)
 

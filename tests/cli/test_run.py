@@ -1,6 +1,7 @@
 """A run with the screen and the keys: shown while it goes, stopped by ctrl+k, left resumable."""
 
 import asyncio
+import dataclasses
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from forja.cli.run import Ended, ForcedExit, closing_lines, execute
+from forja.cli.run import Ended, ForcedExit, _wait, closing_lines, execute
 from forja.cli.session import Session
 from forja.core.states import ExecutionState, Level
 from forja.orchestrator.outcome import ExitCode
@@ -111,6 +112,7 @@ def test_a_run_that_ends_is_shown_from_start_to_stop_and_reports_the_delivery(
     assert any(line.startswith(f"Branch da entrega: forja-run/{RUN}") for line in lines)
     assert any("resumo.md" in line for line in lines)
     assert any("nada foi enviado" in line for line in lines)
+    assert not any("Nenhuma tarefa foi integrada" in line for line in lines)
 
 
 def run_with_keys(
@@ -191,3 +193,77 @@ def test_a_paused_run_says_how_to_resume(tmp_path: Path) -> None:
     lines = closing_lines(cast(Session, session), paused)
 
     assert "retomar" in lines[-1]
+
+
+def delivered_session(tmp_path: Path, notices: tuple[str, ...]) -> tuple[FakeSession, Ended]:
+    world = MemoryWorld(tmp_path)
+    session, _ = make_session(world, ScriptedAgent())
+    session.context = dataclasses.replace(session.context, notices=notices)
+    ended = asyncio.run(execute(cast(Session, session), Recorder(), None, refresh=0.01))
+    return session, ended
+
+
+def test_the_notices_of_the_run_are_told_after_a_delivery(tmp_path: Path) -> None:
+    session, ended = delivered_session(tmp_path, ("aviso do gate 11",))
+
+    assert closing_lines(cast(Session, session), ended)[-1] == "aviso do gate 11"
+
+
+def test_the_notices_are_not_told_when_the_run_did_not_deliver(tmp_path: Path) -> None:
+    session, ended = delivered_session(tmp_path, ("aviso do gate 11",))
+    session.view.state = "paused"
+
+    assert "aviso do gate 11" not in closing_lines(cast(Session, session), ended)
+
+
+def test_a_delivery_with_nothing_integrated_says_the_branch_has_no_change(tmp_path: Path) -> None:
+    session, ended = delivered_session(tmp_path, ())
+    session.view.tasks = dict.fromkeys(session.view.tasks, "blocked")
+
+    lines = closing_lines(cast(Session, session), ended)
+
+    assert "Nenhuma tarefa foi integrada: a branch não tem mudanças." in lines
+
+
+@dataclass
+class Swallowing(ScriptedAgent):
+    """Takes the first cancellation in and goes on, as a run that ends on its own after a press."""
+
+    began: asyncio.Event | None = None
+    calls: int = 0
+
+    async def call(self, ctx: AttemptContext, operation_id: str, sink: Any) -> AgentResult:
+        self.calls += 1
+        if self.calls == 1:
+            if self.began is not None:
+                self.began.set()
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                asyncio.current_task().uncancel()  # type: ignore[union-attr]
+        return await super().call(ctx, operation_id, sink)
+
+
+def test_a_press_counts_as_a_stop_even_when_the_run_still_ends_on_its_own(tmp_path: Path) -> None:
+    world = MemoryWorld(tmp_path)
+    session, _ = make_session(world, Swallowing())
+
+    ended = asyncio.run(
+        execute(cast(Session, session), Recorder(), Scripted((0.2, "q")), refresh=0.01)
+    )
+
+    assert ended == Ended(None, True)
+
+
+def test_a_second_press_after_the_run_is_over_does_not_force_the_exit() -> None:
+    async def scenario() -> None:
+        async def done() -> Any:
+            return "outcome"
+
+        run = asyncio.create_task(done())
+        await run
+        forced = asyncio.Event()
+        forced.set()
+        await _wait(run, forced)
+
+    asyncio.run(scenario())

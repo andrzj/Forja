@@ -8,7 +8,9 @@ import pytest
 from textual.app import App
 from textual.geometry import Region
 
-from forja.ui.full import ForjaApp, Pane
+from forja.ui import panels
+from forja.ui.full import ForjaApp, FullRenderer, Pane
+from forja.ui.terminal import Capabilities
 from forja.ui.theme import THEMES, Theme, with_ascii
 from tests.ui.test_panels import VIEWS
 
@@ -260,7 +262,8 @@ def test_d_opens_the_details_from_the_top_scrolls_them_and_closes_them() -> None
         first = app.lines_for("details", pane.content_size.width, height, pane.back)
         assert first[0].plain.startswith(" tarefa t2")
         top = pane.back
-        assert top > 0
+        whole = panels.details(VIEWS["rejected task"], app.theme_in_use, pane.content_size.width)
+        assert top == len(whole) - height > 0
         await pilot.press("down")
         await pilot.pause()
         assert pane.back == top - 1
@@ -352,3 +355,58 @@ def test_the_run_reaches_the_screen_as_it_changes() -> None:
         assert "130%" in text
 
     drive(THEMES["escuro"], (120, 36), scenario)
+
+
+def test_short_details_open_with_no_scroll_left() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("d")
+        await pilot.pause()
+        pane = app.query_one("#details", Pane)
+        size = pane.content_size
+        assert len(panels.details(VIEWS["busy"], app.theme_in_use, size.width)) < size.height
+        assert pane.back == 0
+
+    drive(THEMES["escuro"], (120, 50), scenario)
+
+
+def test_only_the_panes_that_scroll_can_take_the_focus() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        focusable = {pane.key for pane in app.query(Pane) if pane.can_focus}
+        assert focusable == {"attempt", "rej", "details", "log"}
+
+    drive(THEMES["escuro"], (120, 36), scenario)
+
+
+def test_the_end_of_the_run_takes_down_the_notice_of_a_stop() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("q")
+        await pilot.pause()
+        app.conclude(["fim"])
+        await pilot.pause()
+        assert not app.stopping
+        assert "band" not in {pane.key for pane in shown(app)}
+        footer = app.lines_for("foot", 80, 1, 0)[0].plain
+        assert footer.startswith(" q sair")
+
+    drive(THEMES["escuro"], (80, 24), scenario)
+
+
+def test_the_full_screen_runs_in_the_terminal_unless_asked_to_run_headless() -> None:
+    caps = Capabilities(
+        interactive=True, colors="truecolor", unicode=True, columns=80, rows=24,
+        program="test", dark_background=None, can_resize=False, reduced_motion=False,
+    )  # fmt: skip
+    renderer = FullRenderer(THEMES["escuro"], caps, resize=False)
+    asked: list[object] = []
+
+    async def run_async(**options: object) -> None:
+        asked.append(options.get("headless"))
+
+    renderer.keys_source.run_async = run_async  # type: ignore[method-assign]
+
+    async def go() -> None:
+        renderer.start(VIEWS["busy"])
+        await renderer.closed()
+
+    asyncio.run(go())
+    assert asked == [False]

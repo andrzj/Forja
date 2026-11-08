@@ -211,7 +211,8 @@ def attempt(
 
 def _title(text: str, theme: Theme, columns: int) -> Text:
     line = _line(columns)
-    _put(line, " " + fit(text, max(1, columns - 1)), theme.style(Role.MUTED))
+    shown = fit(text, max(1, columns - 1), ellipsis=theme.glyphs.marks.ellipsis)
+    _put(line, " " + shown, theme.style(Role.MUTED))
     return _finish(line, columns)
 
 
@@ -321,7 +322,10 @@ def window(lines: list[Text], rows: int, offset: int) -> list[Text]:
 def _wrapped_lines(
     text: str, lead: str, role: Role, theme: Theme, columns: int, text_role: Role = Role.TEXT
 ) -> list[Text]:
-    """The text whole, over as many lines as it takes, the lead on the first one only."""
+    """The text whole, over as many lines as it takes, the lead on the first one only (none
+    when the window has no room for it and a character after the indent of ``wrapped``)."""
+    if columns - 1 - width(lead) < 3:
+        lead = ""
     room = max(1, columns - 1 - width(lead))
     out = []
     for number, piece in enumerate(wrapped(text, room)):
@@ -359,9 +363,11 @@ def details(view: View, theme: Theme, columns: int) -> list[Text]:
     for name, status in view.gates:
         kind, role = _GATE_MARKS[status]
         line = _line(columns)
-        _put(line, f" {getattr(marks, kind)} ", theme.style(role))
+        lead = f" {getattr(marks, kind)} "
+        _put(line, lead, theme.style(role))
         text = f"gate {GATE_OF[name]:>2} {marks.bullet} {name}"
-        _put(line, fit(text, max(1, columns - 3), ellipsis=marks.ellipsis), theme.style(Role.TEXT))
+        room = max(1, columns - width(lead))
+        _put(line, fit(text, room, ellipsis=marks.ellipsis), theme.style(Role.TEXT))
         out.append(_finish(line, columns))
     own = [text for text in view.rejections if text.split("-", 1)[0] == view.task_id]
     out += [Text(end=""), _title("rejeições desta tarefa", theme, columns)]
