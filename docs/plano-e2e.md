@@ -1,6 +1,6 @@
 # Plano — E2E reais executados pelo LLM (fila 18)
 
-Estado (08/11/2026): plano escrito; passos 1 a 10 (E2E 1 a 10) feitos, próximo o passo 11 (fechar). Origem: ordem expressa do dono (08/11/2026): o E2E real deixa de ser do dono; o LLM o executa. Isso muda a regra 6 do Plano de execução e o "é do dono" das filas 13 a 17 e dos itens concluídos que dizem "falta só o E2E real".
+Estado (08/11/2026): plano escrito; passos 1 a 11 feitos (E2E 1 a 10 e fecho); concluído em 08/11/2026. Origem: ordem expressa do dono (08/11/2026): o E2E real deixa de ser do dono; o LLM o executa. Isso muda a regra 6 do Plano de execução e o "é do dono" das filas 13 a 17 e dos itens concluídos que dizem "falta só o E2E real".
 
 ## Escopo
 
