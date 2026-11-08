@@ -88,7 +88,10 @@ def run_facade(argv: Sequence[str], cwd: Path, environ: Mapping[str, str]) -> in
         done = subprocess.run(  # noqa: S603
             command,
             cwd=cwd,
-            env={k: v for k, v in environ.items() if k.upper() in SAFE_ENVIRONMENT},
+            env={
+                **{k: v for k, v in environ.items() if k.upper() in SAFE_ENVIRONMENT},
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
             capture_output=True,
             text=True,
             encoding="utf-8",

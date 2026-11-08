@@ -103,3 +103,9 @@ def test_the_facade_does_not_run_git_or_anything_it_does_not_name(
 ) -> None:
     assert run_facade([what], tmp_path, {}) == 2
     assert "uso:" in capsys.readouterr().out
+
+
+def test_the_tests_leave_no_compiled_files_in_the_copy(tmp_path: Path) -> None:
+    (tmp_path / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    run_facade(["testar", "test_ok.py"], tmp_path, {"PATH": os.environ["PATH"]})
+    assert not list(tmp_path.rglob("*.pyc"))
