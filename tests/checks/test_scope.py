@@ -384,10 +384,8 @@ def test_a_dependency_edit_outside_the_task_scope_is_refused() -> None:
     assert described(result) == ["outside the task scope [pyproject.toml]"]
 
 
-def test_a_dependency_edit_outside_the_test_directory_is_refused() -> None:
-    result = judged_with_dependencies(Producer.TEST_AUTHOR, "pyproject.toml")
-
-    assert described(result) == ["outside the test directory [pyproject.toml]"]
+def test_the_test_author_may_edit_the_dependencies_of_the_root_manifest() -> None:
+    assert judged_with_dependencies(Producer.TEST_AUTHOR, "pyproject.toml") == Approved()
 
 
 def test_a_dependency_edit_does_not_open_the_door_to_other_files() -> None:

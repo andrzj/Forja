@@ -78,9 +78,10 @@ class ScopeCheck:
     """The implementer may change only production files in the task's scope; tests stay frozen.
 
     The dependencies a manifest declares are the one other thing the implementer and the test
-    author may change, in a manifest inside what each may touch (the task scope; the test
-    directory): the dependency it adds is examined by gate 10, and the Forja installs it only
-    after that. The rest of the manifest stays out of reach."""
+    author may change; the implementer only in a manifest inside the task scope, the test author
+    in any manifest (the library of its tests is declared at the root). The dependency it adds is
+    examined by gate 10, and the Forja installs it only after that.
+    The rest of the manifest stays out of reach."""
 
     changes: Changes
     task: TaskInfo
@@ -124,8 +125,7 @@ class ScopeCheck:
                 if self.task.scope and not in_scope(path, self.task.scope):
                     return Finding(message="outside the task scope", target=path)
             case Producer.TEST_AUTHOR:
-                if self.task.test_root and not in_scope(path, (self.task.test_root,)):
-                    return Finding(message="outside the test directory", target=path)
+                pass  # its library is declared at the root, outside the test directory
             case _:
                 return self._by_role(path)
         return None  # a new dependency is the agent's to declare; gate 10 examines it
