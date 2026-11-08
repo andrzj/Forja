@@ -222,13 +222,13 @@ class LiveRenderer:
 
     def update(self, view: View) -> None:
         new = min(view.feed_total - self._printed, len(view.feed))
-        for line in view.feed[len(view.feed) - new :] if new > 0 else ():
+        for line in view.feed[len(view.feed) - new :]:
             if line.kind in ("edit", "error", "command"):
                 role = Role.ERROR if line.kind == "error" else Role.MUTED
                 self.say(f"{line.time} {line.text}", role)
         self._printed = view.feed_total
         fresh = min(view.rejections_total - self._rejected, len(view.rejections))
-        for rejection in view.rejections[len(view.rejections) - fresh :] if fresh > 0 else ():
+        for rejection in view.rejections[len(view.rejections) - fresh :]:
             self.say(f"{self.theme.glyphs.marks.failed} {rejection}", Role.ERROR)
         self._rejected = view.rejections_total
         if self._live is not None:

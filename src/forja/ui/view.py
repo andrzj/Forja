@@ -330,7 +330,7 @@ class ViewModel:
 
 
 def _count(value: object) -> int:
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+    return max(value, 0) if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 def blank_view(**changes: object) -> View:

@@ -169,3 +169,59 @@ file = "src/forja/checks/comments.py"
 function = "CommentsCheck._judge"
 change = "and -> or"
 reason = "added_lines never gives a line number of None, so the only difference is a None key in a dict that is read only by the path of a changed file, which is never None."
+
+# Approved by the person who owns the repository on 2026-11-07: equivalent min/max that the final cut or _finish equals.
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "tasks"
+change = "0 -> 1"
+reason = "The first visible row is bounded by the final slice to the room; a bound of 1 instead of 0 shows the same rows."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "tasks"
+change = "- -> +"
+reason = "The window start is bounded by the final slice of the rows to the room, which gives the same lines."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "attempt"
+change = "0 -> 1"
+reason = "The room left after the head is cut to the rows by the final finish step, so a floor of 1 shows the same lines."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "attempt"
+change = "- -> +"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "attempt"
+change = "1 -> 0"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "_title"
+change = "- -> +"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "_title"
+change = "1 -> 0"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "rejections"
+change = "- -> +"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
+
+[[suppress]]
+file = "src/forja/ui/panels.py"
+function = "rejections"
+change = "1 -> 0"
+reason = "The width given to fit() is cut again to the columns by the final cut of the line, so the shown text is the same."
