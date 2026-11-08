@@ -82,9 +82,13 @@ def test_a_clean_change_inside_the_scope_passes_every_gate_in_order(scene: Scene
         "pass_through",
         "module_depth",
         "duplication",
+        "dependency_cycles",
+        "layer_rules",
+        "package_metrics",
         "sast",
         "dependency_audit",
         "new_dependency",
+        "differential",
         "voice",
         "comments",
     ]
@@ -249,6 +253,9 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
             "pass_through",
             "module_depth",
             "duplication",
+            "dependency_cycles",
+            "layer_rules",
+            "package_metrics",
             "sast",
             "dependency_audit",
             "new_dependency",
@@ -265,7 +272,7 @@ def test_a_file_that_does_not_compile_fails_the_build_when_nothing_before_it_doe
 
     outcome = judge(scene)
 
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build"]
+    assert ran(outcome) == ["scope", "secrets", "format", "lint", "types", "build"]
     assert findings(outcome) == ["the file does not compile [src/sample/mod.py]"]
 
 
@@ -274,7 +281,7 @@ def test_a_failing_test_is_rejected_by_name(scene: Scene) -> None:
 
     outcome = judge(scene)
 
-    assert ran(outcome) == ["scope", "secrets", "format", "lint", "build", "tests"]
+    assert ran(outcome) == ["scope", "secrets", "format", "lint", "types", "build", "tests"]
     assert findings(outcome) == ["test failed [tests/test_mod.py::test_add]"]
 
 
@@ -400,6 +407,9 @@ def test_a_green_base_is_measured_for_the_numbers_the_summary_will_show(scene: S
         "lint_violations": 0.0,
         "max_ccn": 1.0,
         "functions": 2.0,
+        "dependency_cycles": 0.0,
+        "dependency_edges": 0.0,
+        "max_distance": 1.0,
     }
 
 
