@@ -141,9 +141,10 @@ def read_facts(log_path: Path) -> Facts:
         elif kind == TRACE:
             rows = payload.get("criteria")
             if isinstance(rows, list):
-                facts.traced[str(payload.get("task"))] = tuple(
-                    _traced(row) for row in rows if isinstance(row, dict)
-                )
+                task = str(payload.get("task"))
+                merged = {t.id: t for t in facts.traced.get(task, ())}
+                merged.update({t.id: t for t in (_traced(r) for r in rows if isinstance(r, dict))})
+                facts.traced[task] = tuple(merged.values())
         elif kind == DIFFERENTIAL:
             facts.differential = {k: v for k, v in payload.items() if k != "kind"}
         elif kind == METRICS:

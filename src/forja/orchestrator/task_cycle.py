@@ -24,6 +24,7 @@ from forja.core.adapters.executor import ErrorKind
 from forja.core.artifacts.elements import elements_of
 from forja.core.artifacts.models import ArtifactType, Executor, Producer
 from forja.core.artifacts.schemas import CriteriaBody
+from forja.core.events.models import MAX_PAYLOAD_BYTES, canonical_json
 from forja.core.events.state import RunState
 from forja.core.gates import Approved, CheckRun, FindingKind, Inconclusive, Rejected, Verdict
 from forja.core.states import AttemptState, Level, StageState, TaskState
@@ -52,6 +53,7 @@ from forja.orchestrator.summary import DOCUMENTATION, PREMISE, TRACE
 from forja.orchestrator.workspace_git import CommitMessage, IntegrationConflict
 
 UNTESTED_LIMIT = 200
+TRACE_BYTES = MAX_PAYLOAD_BYTES - 512  # the margin holds the task id and the key of the event
 RETURNED = (
     "Returned to the test author: the new code has lines no test runs. Write tests for them; "
 )
@@ -552,21 +554,17 @@ class TaskCycle:
             assumptions=output.assumptions,
             artifact_id=manifest_artifact_id(ctx.task.task_id),
         )
-        self._journal.note(
-            TRACE,
+        rows: list[JsonValue] = [
             {
-                "task": ctx.task.task_id,
-                "criteria": [
-                    {
-                        "id": c.id,
-                        "text": c.text,
-                        "origin": [*c.origin],
-                        "tests": [t.test_id for t in manifest.tests if t.criterion_id == c.id],
-                    }
-                    for c in criteria.criteria
-                ],
-            },
-        )
+                "id": c.id,
+                "text": c.text,
+                "origin": [*c.origin],
+                "tests": [t.test_id for t in manifest.tests if t.criterion_id == c.id],
+            }
+            for c in criteria.criteria
+        ]
+        for group in _within_event_limit(rows):
+            self._journal.note(TRACE, {"task": ctx.task.task_id, "criteria": group})
 
     async def _write_record(self, ctx: AttemptContext) -> None:
         """The Forja writes the change record itself, from the facts it measured and the claims
@@ -849,3 +847,18 @@ class TaskCycle:
             TaskState.BLOCKED,
             payload={"reason": "integration_gate", "detail": describe_stop(stopper)},
         )
+
+
+def _within_event_limit(rows: list[JsonValue]) -> list[list[JsonValue]]:
+    """Consecutive rows grouped so that each group fits in one event (the task id and the key
+    take the margin); a row alone is never split."""
+    groups: list[list[JsonValue]] = []
+    size = 0
+    for row in rows:
+        width = len(canonical_json(row)) + 1
+        if not groups or size + width > TRACE_BYTES:
+            groups.append([])
+            size = 0
+        groups[-1].append(row)
+        size += width
+    return groups

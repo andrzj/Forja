@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from forja.core.artifacts.llm_output import DataGenerator, DeclaredTest, LlmOutput
+from forja.core.artifacts.llm_output import (
+    Criterion,
+    CriterionLevel,
+    DataGenerator,
+    DeclaredTest,
+    LlmOutput,
+)
 from forja.core.artifacts.models import ArtifactType, Producer
 from forja.core.artifacts.schemas import AuthoredTestsBody
 from forja.core.artifacts.store import ArtifactStore
@@ -136,6 +142,43 @@ def test_the_summary_traces_each_criterion_from_the_input_to_its_tests(
         in lines
     )
     assert any(line.startswith("Não conferido:") or "Não conferido" in line for line in lines)
+
+
+def test_many_long_criteria_are_traced_in_the_summary_without_breaking_the_event_limit(
+    world: MemoryWorld,
+) -> None:
+    count = 30
+    criteria = tuple(
+        Criterion(
+            id=n, text=f"criterion {n} " + "word " * 30, level=CriterionLevel.UNIT, origin=("E1",)
+        )
+        for n in range(1, count + 1)
+    )
+    declared = tuple(
+        DeclaredTest(criterion_id=n, test_id=f"tests/test_a.py::test_{n}", path="tests/test_a.py")
+        for n in range(1, count + 1)
+    )
+    world.config = world.config.model_copy(
+        update={"fix": FixRequest.model_validate({"description": "many"})}
+    )
+    task = PlannedTask(
+        "many", ("src/a.py",), 8, 400, stages=(Producer.SPECIFIER, *TASK.stages), test_root="tests"
+    )
+
+    _, log = world.run(
+        measurer=ScriptedMeasurer(),
+        agent=ScriptedAgent(edits=[{"src/a.py": "def f():\n    return 1\n"}]),
+        agents={
+            Producer.SPECIFIER: ScriptedAgent(edits=[{}], criteria=criteria),
+            Producer.TEST_AUTHOR: ScriptedAgent(edits=[TESTS], tests=declared),
+            Producer.DOCUMENTER: ScriptedAgent(edits=[{"README.md": "# a\n"}]),
+        },
+        planner=ScriptedPlanner((task,)),
+    )
+
+    lines = _traceability(log.state, read_facts(log.path))
+    for n in range(1, count + 1):
+        assert any(f"critério {n} (origem E1): criterion {n} " in line for line in lines)
 
 
 def test_a_run_with_no_test_author_has_nothing_to_trace(world: MemoryWorld) -> None:
