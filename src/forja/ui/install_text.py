@@ -24,9 +24,9 @@ from forja.ui.install_panels import (
     percent_of,
     size_text,
     summary_lines,
-    wrapped,
 )
 from forja.ui.live import _COLOR_SYSTEM, clock_text
+from forja.ui.panels import wrapped
 from forja.ui.terminal import Capabilities
 from forja.ui.theme import ColorDepth, Role, Theme
 

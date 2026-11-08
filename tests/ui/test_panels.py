@@ -38,6 +38,7 @@ VIEWS = {
     "hostile": view(task_intent=HOSTILE, objective=HOSTILE, repo=HOSTILE),
     "over the limit": view(tokens_used=2_600_000),
     "failed gate": view(gates=(("scope", GateStatus.FAILED),) + view().gates[1:]),
+    "rejected task": view(task_id="t2", task_intent=HOSTILE + " " + "palavra " * 40),
 }
 
 
@@ -61,6 +62,7 @@ def every_panel(
         panels.band(theme, columns),
         *panels.final(list(report), shown, theme, columns, rows),
         *panels.help_lines(theme, columns),
+        *panels.details(shown, theme, columns),
     ]
 
 
@@ -73,7 +75,7 @@ def test_no_line_is_wider_than_its_room_at_any_width(name: str, key: str) -> Non
                 assert text.cell_len <= columns, (name, key, columns, text.plain)
 
 
-@pytest.mark.parametrize("name", [n for n in VIEWS if n != "hostile"])
+@pytest.mark.parametrize("name", [n for n in VIEWS if n not in ("hostile", "rejected task")])
 def test_only_symbols_from_the_closed_list_are_drawn(name: str) -> None:
     ok = allowed()
     for theme in THEMES.values():
@@ -196,3 +198,47 @@ def test_the_bar_shows_the_gates_by_name_then_by_number_then_by_symbol() -> None
     assert bar(len(names) - 1) == numbers
     assert bar(len(numbers)) == numbers
     assert bar(len(numbers) - 1) == symbols
+
+
+def test_the_details_show_the_task_its_checks_by_gate_and_its_rejections_whole() -> None:
+    shown = view(task_id="t2", task_intent="reduzir parse_args (CCN 17)")
+    lines = [line.plain for line in panels.details(shown, THEMES["escuro"], 40)]
+
+    assert lines[0] == " tarefa t2 · tentativa 1/3"
+    assert lines[1] == " reduzir parse_args (CCN 17)"
+    assert " ✓ gate  1 · scope" in lines
+    assert " ◔ gate  3 · lint" in lines
+    assert " · gate  8 · complexity" in lines
+    rejected = lines[lines.index(" rejeições desta tarefa") + 1 :]
+    assert rejected[0].startswith(" ✗ t2-a1: format yyy")
+    assert "".join(line.strip() for line in rejected[:-1]).count("y") == 200
+    assert rejected[-1] == " ✗ t2-a2: lint"
+    assert all(len(line) <= 40 for line in lines)
+
+
+def test_the_details_leave_out_the_rejections_of_other_tasks() -> None:
+    lines = [line.plain for line in panels.details(view(), THEMES["escuro"], 60)]
+
+    assert lines[-2:] == [" rejeições desta tarefa", " nenhuma"]
+
+
+def test_with_no_task_the_details_say_so() -> None:
+    lines = panels.details(blank_view(), THEMES["escuro"], 60)
+
+    assert [line.plain for line in lines] == [" nenhuma tarefa em andamento"]
+
+
+@pytest.mark.parametrize(
+    ("rows", "offset", "shown"),
+    [
+        (3, 0, ["c", "d", "e"]), (3, 1, ["b", "c", "d"]), (3, 2, ["a", "b", "c"]),
+        (3, 99, ["a", "b", "c"]), (3, -1, ["c", "d", "e"]), (9, 0, list("abcde")),
+        (0, 0, ["e"]), (1, 4, ["a"]),
+    ],
+)  # fmt: skip
+def test_a_window_shows_the_rows_that_end_offset_lines_before_the_last(
+    rows: int, offset: int, shown: list[str]
+) -> None:
+    lines = [Text(char) for char in "abcde"]
+
+    assert [line.plain for line in panels.window(lines, rows, offset)] == shown

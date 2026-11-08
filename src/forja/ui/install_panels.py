@@ -6,15 +6,14 @@ first (the size, then the version, then the bar), never the name of the tool or 
 final report feeds the full screen, the live line and plain text (``summary_lines``).
 """
 
-import textwrap
 from dataclasses import dataclass
 
 from rich.text import Text
 
-from forja.ui.glyphs import Marks, clean, fit, pad, width
+from forja.ui.glyphs import Marks, fit, pad, width
 from forja.ui.install_events import InstallSummary, InstallView, Stage, ToolRow
 from forja.ui.live import clock_text, gauge, percent_text
-from forja.ui.panels import _finish, _line, _put
+from forja.ui.panels import _finish, _line, _put, wrapped
 from forja.ui.theme import ColorDepth, Role, Theme
 
 STAGE_WORDS = {
@@ -433,11 +432,6 @@ def summary(view: View, theme: Theme, columns: int, rows: int, offset: int = 0) 
     room = max(1, rows)
     end = len(out) - min(max(0, offset), max(0, len(out) - room))
     return out[max(0, end - room) : end]
-
-
-def wrapped(text: str, room: int) -> list[str]:
-    pieces = textwrap.wrap(clean(text), room, subsequent_indent="  ") or [""]
-    return [fit(piece, room) for piece in pieces]
 
 
 def footer(theme: Theme, columns: int, *, finished: bool) -> Text:

@@ -213,6 +213,89 @@ def test_the_help_opens_and_closes() -> None:
     drive(THEMES["escuro"], (80, 24), scenario)
 
 
+def test_d_opens_the_details_from_the_top_scrolls_them_and_closes_them() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        app.show(VIEWS["rejected task"])
+        await pilot.press("d")
+        await pilot.pause()
+        keys = {pane.key for pane in shown(app)}
+        assert "details" in keys and not {"tasks", "attempt", "rej"} & keys
+        check_layout(app, (80, 24))
+        pane = app.query_one("#details", Pane)
+        assert app.focused is pane
+        height = pane.content_size.height
+        first = app.lines_for("details", pane.content_size.width, height, pane.back)
+        assert first[0].plain.startswith(" tarefa t2")
+        top = pane.back
+        assert top > 0
+        await pilot.press("down")
+        await pilot.pause()
+        assert pane.back == top - 1
+        await pilot.press("d")
+        await pilot.pause()
+        assert "details" not in {pane.key for pane in shown(app)}
+        assert "attempt" in {pane.key for pane in shown(app)}
+
+    app = drive(THEMES["escuro"], (80, 24), scenario)
+    assert app._keys.empty()
+
+
+@pytest.mark.parametrize("key", ["q", "escape"])
+def test_q_and_escape_close_the_details_without_stopping(key: str) -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press(key)
+        await pilot.pause()
+        assert "details" not in {pane.key for pane in shown(app)}
+        assert not app.stopping
+
+    app = drive(THEMES["escuro"], (80, 24), scenario)
+    assert app._keys.empty()
+
+
+def test_opening_one_pane_over_the_run_closes_the_other() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("question_mark")
+        await pilot.press("d")
+        await pilot.pause()
+        keys = {pane.key for pane in shown(app)}
+        assert "details" in keys and "help" not in keys
+        await pilot.press("question_mark")
+        await pilot.pause()
+        keys = {pane.key for pane in shown(app)}
+        assert "help" in keys and "details" not in keys
+
+    drive(THEMES["escuro"], (80, 24), scenario)
+
+
+@pytest.mark.parametrize("size", SIZES)
+def test_the_details_keep_the_layout_at_every_size(size: tuple[int, int]) -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        app.show(VIEWS["rejected task"])
+        await pilot.press("d")
+        await pilot.pause()
+        check_layout(app, size)
+
+    drive(THEMES["escuro"], size, scenario)
+
+
+def test_the_details_after_the_end_hide_the_report_until_closed() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        app.conclude(["fim"])
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+        keys = {pane.key for pane in shown(app)}
+        assert "details" in keys and "final" not in keys
+        await pilot.press("escape")
+        await pilot.pause()
+        assert "final" in {pane.key for pane in shown(app)}
+        assert app.is_running
+
+    drive(THEMES["escuro"], (80, 24), scenario)
+
+
 def test_the_panel_in_focus_scrolls_back_and_returns_to_the_end() -> None:
     async def scenario(app: ForjaApp, pilot: Any) -> None:
         await pilot.press("tab")

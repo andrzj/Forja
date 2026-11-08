@@ -64,6 +64,7 @@ VIEWS = {
     "idle": full(task_rows=with_running(None)),
     "late": full(task_rows=with_running("t7")),
     "over": full(tokens_used=1500, tokens_limit=1000, task_rows=ROWS[:2]),
+    "rejected": full(rejections=("t3-a1: gate 3 (lint): " + "x " * 80, "t2-a1: outra")),
 }  # fmt: skip
 
 
@@ -109,6 +110,9 @@ def scenarios() -> dict[str, list[Text]]:
         for columns in range(1, 90):
             out[f"{key} band {columns}"] = [panels.band(theme, columns)]
             out[f"{key} help {columns}"] = panels.help_lines(theme, columns)
+        for name in ("full", "blank", "rejected"):
+            for columns in (*range(1, 13), 30, 50, 90):
+                out[f"{key} details {name} {columns}"] = panels.details(VIEWS[name], theme, columns)
     report = ["Entregue", "segunda linha do relatorio", "terceira"]
     for name in ("full", "delivered", "blank", "failed", "idle", "late"):
         view = VIEWS[name]

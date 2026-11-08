@@ -31,6 +31,7 @@ SUBJECTS = {
     "rej": Role.REJECTED,
     "final": Role.ACCENT,
     "help": Role.ACCENT,
+    "details": Role.ACCENT,
 }
 TITLES = {
     "tasks": "Tarefas",
@@ -38,8 +39,11 @@ TITLES = {
     "rej": "Rejeições",
     "final": "Fim da execução",
     "help": "Ajuda",
+    "details": "Detalhes da tarefa",
 }
 STOP_KEYS = ("ctrl+k", "ctrl+c")
+OVERLAYS = {"help": "helping", "details": "detailing"}  # pane -> class of the screen that shows it
+TOP_FIRST = 10**9  # a scroll back that the pane clamps to its first line
 
 
 class LinesSource(Protocol):
@@ -108,13 +112,15 @@ class ForjaApp(App[None]):
     #tasks { width: 34; }
     #attempt { width: 1fr; }
     #rej { height: 6; }
-    #final, #help { display: none; }
+    #final, #help, #details { display: none; }
     #foot { height: 1; }
     Screen.stopping #band { display: block; }
     Screen.finished #body, Screen.finished #rej { display: none; }
     Screen.finished #final { display: block; }
     Screen.helping #body, Screen.helping #rej, Screen.helping #final { display: none; }
     Screen.helping #help { display: block; }
+    Screen.detailing #body, Screen.detailing #rej, Screen.detailing #final { display: none; }
+    Screen.detailing #details { display: block; }
     Screen.narrow #tasks { width: 24; }
     Screen.compact #tasks { display: none; }
     Screen.compact #head { height: 3; }
@@ -126,6 +132,7 @@ class ForjaApp(App[None]):
         Binding("ctrl+q", "noop", priority=True, show=False),
         Binding("t", "theme", show=False),
         Binding("question_mark", "help", show=False),
+        Binding("d", "details", show=False),
         Binding("q", "quit_or_stop", show=False),
         Binding("escape", "leave", show=False),
     ]
@@ -161,6 +168,7 @@ class ForjaApp(App[None]):
         yield Pane("rej", scrolls=True)
         yield Pane("final")
         yield Pane("help")
+        yield Pane("details", scrolls=True)
         yield Pane("foot")
 
     def on_mount(self) -> None:
@@ -214,7 +222,15 @@ class ForjaApp(App[None]):
             return panels.final(self.final_text, view, theme, width, height)
         if key == "help":
             return panels.help_lines(theme, width)
+        if key == "details":
+            return self._window(key, panels.details(view, theme, width), height)
         return [panels.footer(theme, width, finished=self.finished, stopping=self.stopping)]
+
+    def _window(self, key: str, lines: list[Text], height: int) -> list[Text]:
+        """The part of a long pane in view, its scroll kept between its first and last line."""
+        pane = self.query_one(f"#{key}", Pane)
+        pane.back = min(pane.back, max(0, len(lines) - max(height, 1)))
+        return panels.window(lines, height, pane.back)
 
     # -- colors --------------------------------------------------------------------------------
 
@@ -246,19 +262,41 @@ class ForjaApp(App[None]):
         self.set_theme(next_theme(self.theme_in_use))
 
     def action_help(self) -> None:
-        self.screen.toggle_class("helping")
+        self._toggle("help")
+
+    def action_details(self) -> None:
+        self._toggle("details", back=TOP_FIRST)
+
+    def _toggle(self, key: str, *, back: int = 0) -> None:
+        """Open the pane over the run, closing any other, or close it when it is open."""
+        opening = not self.screen.has_class(OVERLAYS[key])
+        self._close_overlays()
+        if opening:
+            pane = self.query_one(f"#{key}", Pane)
+            pane.back = back
+            self.screen.set_class(True, OVERLAYS[key])
+            if pane.can_focus:
+                pane.focus()
+        self.refresh_panes()
+
+    def _overlay_open(self) -> bool:
+        return any(self.screen.has_class(name) for name in OVERLAYS.values())
+
+    def _close_overlays(self) -> None:
+        for name in OVERLAYS.values():
+            self.screen.set_class(False, name)
         self.refresh_panes()
 
     def action_leave(self) -> None:
-        if self.screen.has_class("helping"):
-            self.action_help()
+        if self._overlay_open():
+            self._close_overlays()
         elif self.finished:
             self.exit()
 
     def action_quit_or_stop(self) -> None:
         """``q`` closes what is open over the run, else stops it safely as ``ctrl+k`` does."""
-        if self.screen.has_class("helping"):
-            self.action_help()
+        if self._overlay_open():
+            self._close_overlays()
         else:
             self.action_stop()
 

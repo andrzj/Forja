@@ -6,16 +6,17 @@ fit is shortened with ``fit`` or loses its least important piece (the time first
 attempt), never the tokens, and never breaks a symbol in half.
 """
 
+import textwrap
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from rich.style import Style
 from rich.text import Text
 
-from forja.ui.glyphs import GlyphSet, fit, pad, width
+from forja.ui.glyphs import GlyphSet, clean, fit, pad, width
 from forja.ui.live import GATE_LABELS, clock_text, gauge, gauge_role, percent_text
 from forja.ui.theme import Role, Theme
-from forja.ui.view import FeedLine, GateStatus, View, gate_groups
+from forja.ui.view import GATE_OF, FeedLine, GateStatus, View, gate_groups
 
 STATE_WORDS = {
     "preparing": "preparando",
@@ -41,6 +42,12 @@ TASK_ROLES = {
     "in_progress": ("current", Role.WARNING),
 }
 FEED_ROLES = {"error": Role.ERROR, "edit": Role.TEXT, "text": Role.TEXT}
+_GATE_MARKS = {
+    GateStatus.PASSED: ("passed", Role.SUCCESS),
+    GateStatus.FAILED: ("failed", Role.ERROR),
+    GateStatus.RUNNING: ("running", Role.WARNING),
+    GateStatus.PENDING: ("pending", Role.MUTED),
+}
 
 
 def short_count(value: int) -> str:
@@ -164,12 +171,7 @@ def gates_line(view: View, theme: Theme, columns: int) -> Text:
         line = _line(columns)
         _put(line, " ", Style())
         for position, (gate, status) in enumerate(groups):
-            kind, role = {
-                GateStatus.PASSED: ("passed", Role.SUCCESS),
-                GateStatus.FAILED: ("failed", Role.ERROR),
-                GateStatus.RUNNING: ("running", Role.WARNING),
-                GateStatus.PENDING: ("pending", Role.MUTED),
-            }[status]
+            kind, role = _GATE_MARKS[status]
             if position:
                 _put(line, "  " if labels is names else " ", Style())
             label = labels[gate]
@@ -239,7 +241,12 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
     """Only the keys that do something right now."""
     options: tuple[str, ...]
     if finished:
-        options = (" q sair   t tema   ? ajuda", " q sair   t tema", " q sair")
+        options = (
+            " q sair   d detalhes   t tema   ? ajuda",
+            " q sair   t tema   ? ajuda",
+            " q sair   t tema",
+            " q sair",
+        )
     elif stopping:
         options = (
             " salvando... q de novo sai agora",
@@ -248,8 +255,9 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
         )
     else:
         options = (
-            " q parar e salvar   t tema   tab painel   setas rolam   ? ajuda",
-            " q parar   t tema   tab painel   ? ajuda",
+            " q parar e salvar   d detalhes   t tema   tab painel   setas rolam   ? ajuda",
+            " q parar   d detalhes   t tema   tab painel   ? ajuda",
+            " q parar   d detalhes   t tema   ? ajuda",
             " q parar   t tema   ? ajuda",
             " q parar",
         )
@@ -298,17 +306,71 @@ def final(lines: list[str], view: View, theme: Theme, columns: int, rows: int) -
     return [*out, Text(end=""), _finish(stats, columns)][: max(rows, 1)]
 
 
+def wrapped(text: str, room: int) -> list[str]:
+    pieces = textwrap.wrap(clean(text), room, subsequent_indent="  ") or [""]
+    return [fit(piece, room) for piece in pieces]
+
+
+def window(lines: list[Text], rows: int, offset: int) -> list[Text]:
+    """The ``rows`` lines that end ``offset`` lines before the last one, kept inside the list."""
+    room = max(1, rows)
+    end = len(lines) - min(max(0, offset), max(0, len(lines) - room))
+    return lines[max(0, end - room) : end]
+
+
+def _wrapped_lines(text: str, lead: str, role: Role, theme: Theme, columns: int) -> list[Text]:
+    """The text whole, over as many lines as it takes, the lead on the first one only."""
+    room = max(1, columns - 1 - width(lead))
+    out = []
+    for number, piece in enumerate(wrapped(text, room)):
+        line = _line(columns)
+        _put(line, " " + (lead if number == 0 else " " * width(lead)), theme.style(role))
+        _put(line, piece, theme.style(Role.TEXT))
+        out.append(_finish(line, columns))
+    return out
+
+
+def details(view: View, theme: Theme, columns: int) -> list[Text]:
+    """The task on the screen whole: what it is for, every check with its gate, and every
+    rejection of it uncut. The caller shows a window of it."""
+    marks = theme.glyphs.marks
+    if not view.task_id:
+        return [_title("nenhuma tarefa em andamento", theme, columns)]
+    where = f"tarefa {view.task_id}"
+    if view.attempt:
+        where += f" {marks.bullet} tentativa {view.attempt}/{view.attempts_max}"
+    out = [_title(where, theme, columns)]
+    if view.task_intent:
+        out += _wrapped_lines(view.task_intent, "", Role.TEXT, theme, columns)
+    out += [Text(end=""), _title("checks da tentativa", theme, columns)]
+    for name, status in view.gates:
+        kind, role = _GATE_MARKS[status]
+        line = _line(columns)
+        _put(line, f" {getattr(marks, kind)} ", theme.style(role))
+        text = f"gate {GATE_OF[name]:>2} {marks.bullet} {name}"
+        _put(line, fit(text, max(1, columns - 3), ellipsis=marks.ellipsis), theme.style(Role.TEXT))
+        out.append(_finish(line, columns))
+    own = [text for text in view.rejections if text.split("-", 1)[0] == view.task_id]
+    out += [Text(end=""), _title("rejeições desta tarefa", theme, columns)]
+    if not own:
+        out.append(_title("nenhuma", theme, columns))
+    for text in own:
+        out += _wrapped_lines(text, f"{marks.failed} ", Role.ERROR, theme, columns)
+    return out
+
+
 def help_lines(theme: Theme, columns: int) -> list[Text]:
     keys = (
         (
             "q / ctrl+k / ctrl+c",
             "para, salva tudo e deixa a execução para retomar; de novo sai na hora",
         ),
+        ("d", "mostra a tarefa atual inteira; de novo fecha"),
         ("t", "troca o tema"),
         ("tab", "muda o painel em foco"),
         ("setas, pgup, pgdn", "rolam o painel em foco; end volta ao fim"),
         ("?", "fecha esta ajuda"),
-        ("q, esc", "saem, depois que a execução terminou"),
+        ("q, esc", "fecham a tela aberta; depois do fim, saem"),
     )
     out = []
     for key, what in keys:
