@@ -102,6 +102,22 @@ def test_a_wide_header_says_count_time_and_attempt() -> None:
     assert "680k/2M" in plain and "tempo 12:41" in plain and "tentativa 1/3" in plain
 
 
+def test_the_header_says_the_tokens_of_the_task_and_drops_them_before_the_time() -> None:
+    shown = view(task_tokens=120_000)
+
+    def cost(columns: int) -> str:
+        return panels.header(shown, THEMES["escuro"], columns, compact=True)[2].plain
+
+    assert cost(120) == (" tokens ████████░░░░░░░░░░░░░░░░ 34% 680k/2M · tarefa 120k · tempo 12:41")
+    widest_without = next(c for c in range(120, 0, -1) if "tarefa" not in cost(c))
+    assert "680k/2M · tempo 12:41" in cost(widest_without)
+
+
+def test_before_any_task_the_header_has_no_task_tokens() -> None:
+    plain = panels.header(view(task_id=""), THEMES["escuro"], 200, compact=False)[1].plain
+    assert "tarefa" not in plain and "tempo" in plain
+
+
 def test_the_compact_header_has_three_lines() -> None:
     assert len(panels.header(VIEWS["busy"], THEMES["escuro"], 60, compact=True)) == 3
 

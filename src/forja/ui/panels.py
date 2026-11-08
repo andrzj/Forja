@@ -112,6 +112,10 @@ def _cost(view: View, theme: Theme, columns: int, *, with_attempt: bool) -> Text
         _put(line, f" {percent_text(fraction)}", theme.style(role, bold=True))
         if "count" in parts:
             _put(line, f" {short_count(view.tokens_used)}/{short_count(view.tokens_limit)}", muted)
+        if "task" in parts and view.task_id:
+            _put(
+                line, f" {theme.glyphs.marks.bullet} tarefa {short_count(view.task_tokens)}", muted
+            )
         if "time" in parts:
             _put(line, f" {theme.glyphs.marks.bullet} tempo {clock_text(view.elapsed)}", muted)
         if "attempt" in parts and view.attempt:
@@ -119,9 +123,10 @@ def _cost(view: View, theme: Theme, columns: int, *, with_attempt: bool) -> Text
             _put(line, attempt, muted)
         return line
 
-    wanted = {"count", "time"} | ({"attempt"} if with_attempt else set())
+    wanted = {"count", "task", "time"} | ({"attempt"} if with_attempt else set())
     for cells, parts in (
-        (24, wanted), (14, wanted), (10, wanted - {"attempt"}), (10, {"count"}), (8, set())
+        (24, wanted), (14, wanted), (10, wanted - {"attempt"}), (10, {"count", "time"}),
+        (10, {"count"}), (8, set()),
     ):  # fmt: skip
         line = build(cells, parts)
         if line.cell_len <= columns:

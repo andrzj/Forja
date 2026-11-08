@@ -38,6 +38,7 @@ def full(**changes: object) -> View:
         tasks_running=1, feed=FEED, feed_total=8, gates=MIXED,
         rejections=("a: gate 4 (lint): 2 new", "b: gate 6 (tests): 1 failed", "c", "d", "e"),
         rejections_total=5, tokens_used=1_234_567, tokens_limit=3_000_000, elapsed=3725.0,
+        task_tokens=45_000,
     )  # fmt: skip
     return busy(**{**base, **changes})
 

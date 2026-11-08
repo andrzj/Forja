@@ -413,6 +413,22 @@ def test_the_feed_shows_the_task_on_the_screen_and_the_tokens_count_both() -> No
     assert snapshot.tokens_used == 30
 
 
+def test_each_task_keeps_its_own_tokens_and_the_screen_shows_those_of_its_task() -> None:
+    view = two_running()
+    for target, spent in (("t1-a1", 10), ("t2-a1", 100), ("t1-a2", 5), ("t2-a1", 1)):
+        usage = activity("usage", input=spent, output=0)
+        view.apply(usage.model_copy(update={"target_id": target}))
+
+    assert view.snapshot().task_tokens == 15
+    view.apply(transition(Level.TASK, "t1", TaskState.INTEGRATED))
+    assert view.snapshot().task_tokens == 101
+    assert view.snapshot().tokens_used == 116
+
+
+def test_a_task_with_no_tokens_spent_yet_shows_zero() -> None:
+    assert two_running().snapshot().task_tokens == 0
+
+
 def test_with_one_task_in_progress_the_number_is_the_count_done_plus_one() -> None:
     view = model()
     for task in ("t1", "t2", "t3"):

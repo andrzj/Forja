@@ -149,6 +149,7 @@ class View:
     task_rows: tuple[tuple[str, str, str], ...] = ()  # (id, intent, state), in plan order
     tasks_running: int = 0  # tasks in progress; the screen follows the first of them
     task_number: int = 0  # place in the plan of the task on the screen; 0 = the next to finish
+    task_tokens: int = 0  # tokens spent by the task on the screen
 
     @property
     def number(self) -> int:
@@ -189,6 +190,7 @@ class ViewModel:
     feed: deque[FeedLine] = field(default_factory=lambda: deque(maxlen=_FEED))
     rejections: deque[str] = field(default_factory=lambda: deque(maxlen=_REJECTIONS))
     tokens_used: int = 0
+    task_tokens: dict[str, int] = field(default_factory=dict)  # task id -> tokens it spent
     seconds_before: float = 0.0
     feed_total: int = 0
     rejections_total: int = 0
@@ -310,18 +312,22 @@ class ViewModel:
         kind = payload.get("kind")
         clock = moment[11:19]
         if kind == "agent_activity":
-            self._activity(clock, payload, foreign=self._foreign(target))
+            self._activity(clock, payload, target)
         elif kind == "waiting_for_network":
             self._add(FeedLine(clock, "note", "aguardando a rede voltar"))
         elif kind == "session_started":
             self.message = ""
 
-    def _activity(self, clock: str, payload: Mapping[str, object], foreign: bool) -> None:
-        """The tokens are the run's, whoever spent them; the feed is the task on the screen's."""
+    def _activity(self, clock: str, payload: Mapping[str, object], target: str) -> None:
+        """The tokens count for the run and for the task that spent them; the feed is the task
+        on the screen's."""
         kind = payload.get("type")
         if kind == "usage":
-            self.tokens_used += _count(payload.get("input")) + _count(payload.get("output"))
-        elif foreign:
+            spent = _count(payload.get("input")) + _count(payload.get("output"))
+            self.tokens_used += spent
+            task = target.split("-", 1)[0]
+            self.task_tokens[task] = self.task_tokens.get(task, 0) + spent
+        elif self._foreign(target):
             return
         elif kind == "file_read":
             self._add(FeedLine(clock, "read", f"leu {payload.get('path', '')}"))
@@ -375,6 +381,7 @@ class ViewModel:
             tasks_integrated=sum(1 for s in self.tasks.values() if s == TaskState.INTEGRATED),
             tasks_blocked=sum(1 for s in self.tasks.values() if s == TaskState.BLOCKED),
             task_number=self._number_on_screen(),
+            task_tokens=self.task_tokens.get(self.task_id, 0),
             tasks_running=sum(1 for s in self.tasks.values() if s == TaskState.IN_PROGRESS),
             task_rows=tuple(
                 (task, self.intents.get(task, ""), state) for task, state in self.tasks.items()
