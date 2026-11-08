@@ -56,7 +56,7 @@ Chaves e padrões, conforme `Execucao` em `cli\settings.py`:
 | Chave | Padrão | Para quê |
 | --- | --- | --- |
 | `objetivo` | `"refatorar"` | `refatorar`, `corrigir`, `investigar` ou `criar` |
-| `descricao` | `""` | Erro (`corrigir`), pergunta (`investigar`) ou ideia (`criar`) |
+| `descricao` | `""` | Erro (`corrigir`), pergunta (`investigar`) ou ideia (`criar`). Em `refatorar` é ignorada: a medida escolhe a função, e só os `fatos` conduzem o agente |
 | `arquivo` | `""` | Arquivo com a descrição, no lugar de `descricao` |
 | `criterios` | `""` | Arquivo de critérios (`corrigir`) |
 | `cli` | `""` | CLI do implementador. Vazio: `claude-code` |

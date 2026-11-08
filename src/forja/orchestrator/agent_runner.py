@@ -106,10 +106,11 @@ every file you created, modified or removed (the list is checked against what re
 {{"actions": [{{"summary": "what changed", "reason": "why it is better",
 "files": [{{"path": "relative/path.py", "change": "modified"}}]}}]}}
 
-`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
-"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
-sentence.
+`change` is one of `created`, `modified`, `removed`. Use no key that is not in the shape: an extra
+key, such as `evidence` in an action, makes the file invalid and costs an attempt. Add
+`"assumptions"` only for something you had to guess: a list of objects {{"statement": "what you
+guessed", "reason": "why", "missing_evidence": "what would settle it"}}, never plain strings. Then
+answer with one short sentence.
 """
 
 AUTHOR_INSTRUCTIONS = """\
@@ -135,10 +136,11 @@ for the test (`path::name`) and `path` is its file:
 "change": "created"}}]}}], "tests": [{{"criterion_id": 1, "test_id": "tests/test_x.py::test_name",
 "path": "tests/test_x.py"}}]}}
 
-`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
-"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
-sentence.
+`change` is one of `created`, `modified`, `removed`. Use no key that is not in the shape: an extra
+key, such as `evidence` in an action, makes the file invalid and costs an attempt. Add
+`"assumptions"` only for something you had to guess: a list of objects {{"statement": "what you
+guessed", "reason": "why", "missing_evidence": "what would settle it"}}, never plain strings. Then
+answer with one short sentence.
 """
 
 FIX_INSTRUCTIONS = """\
@@ -157,10 +159,11 @@ every file you created, modified or removed (the list is checked against what re
 {{"actions": [{{"summary": "what changed", "reason": "why it fixes the defect",
 "files": [{{"path": "relative/path.py", "change": "modified"}}]}}]}}
 
-`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
-"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
-sentence.
+`change` is one of `created`, `modified`, `removed`. Use no key that is not in the shape: an extra
+key, such as `evidence` in an action, makes the file invalid and costs an attempt. Add
+`"assumptions"` only for something you had to guess: a list of objects {{"statement": "what you
+guessed", "reason": "why", "missing_evidence": "what would settle it"}}, never plain strings. Then
+answer with one short sentence.
 """
 
 DOCUMENTER_INSTRUCTIONS = """\
@@ -185,10 +188,11 @@ use `"actions": []` if you changed nothing:
 "actions": [{{"summary": "what changed", "reason": "why", "files": [{{"path": "README.md",
 "change": "modified"}}]}}]}}
 
-`change` is one of `created`, `modified`, `removed`. Add `"assumptions"` only for something you
-had to guess: a list of objects {{"statement": "what you guessed", "reason": "why",
-"missing_evidence": "what would settle it"}}, never plain strings. Then answer with one short
-sentence.
+`change` is one of `created`, `modified`, `removed`. Use no key that is not in the shape: an extra
+key, such as `evidence` in an action, makes the file invalid and costs an attempt. Add
+`"assumptions"` only for something you had to guess: a list of objects {{"statement": "what you
+guessed", "reason": "why", "missing_evidence": "what would settle it"}}, never plain strings. Then
+answer with one short sentence.
 """
 
 SPECIFIER_INSTRUCTIONS = """\

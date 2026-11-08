@@ -18,16 +18,19 @@ Functions = Callable[[Path], Awaitable[Mapping[tuple[str, str], int]]]
 
 
 class ComplexityPlanner:
-    def __init__(self, functions: Functions, max_ccn: int = DEFAULT_MAX_CCN) -> None:
+    def __init__(
+        self, functions: Functions, max_ccn: int | Callable[[str], int] = DEFAULT_MAX_CCN
+    ) -> None:
+        """``max_ccn`` is one limit, or the limit of each file (the policy sets it per language)."""
         self._functions = functions
-        self._max_ccn = max_ccn
+        self._max_ccn = max_ccn if callable(max_ccn) else lambda _file: max_ccn
 
     async def plan(
         self, worktree: Path, baseline: Baseline, budget: Budget
     ) -> Sequence[PlannedTask]:
         found = await self._functions(worktree)
         worst = sorted(
-            ((ccn, file, name) for (file, name), ccn in found.items() if ccn > self._max_ccn),
+            ((ccn, file, name) for (file, name), ccn in found.items() if ccn > self._max_ccn(file)),
             key=lambda item: (-item[0], item[1], item[2]),
         )
         return [

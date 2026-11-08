@@ -36,6 +36,17 @@ def test_the_most_complex_functions_come_first_and_only_those_above_the_limit() 
     ]
 
 
+def test_each_file_has_the_limit_of_its_own() -> None:
+    async def functions(worktree: Path) -> dict[tuple[str, str], int]:
+        return FOUND
+
+    planner = ComplexityPlanner(functions, lambda file: 10 if file == "src/c.py" else 30)
+
+    tasks = asyncio.run(planner.plan(Path("."), Baseline(True), Budget()))
+
+    assert [t.scope for t in tasks] == [("src/b.py",), ("src/c.py",), ("src/c.py",)]
+
+
 def test_a_function_at_the_limit_is_not_above_it() -> None:
     assert all("limit" not in t.intent for t in plan())
     assert any("limit" in t.intent for t in plan(max_ccn=14))

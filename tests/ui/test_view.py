@@ -81,6 +81,13 @@ def test_a_new_attempt_has_its_number_and_clean_gates() -> None:
     assert set(statuses(view).values()) == {GateStatus.PENDING}
 
 
+def test_every_stage_counts_its_own_attempts() -> None:
+    view = model()
+    for attempt in ("t1-ca1", "t1-ta1", "t1-ta2", "t1-a1"):
+        view.apply(transition(Level.ATTEMPT, attempt, AttemptState.CREATED))
+        assert view.snapshot().attempt == int(attempt[-1])
+
+
 def test_the_pipeline_is_in_order_so_what_came_before_a_running_gate_passed() -> None:
     view = model()
 

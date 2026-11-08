@@ -7,8 +7,11 @@ complexity is debt for the planner, not a reason to refuse an unrelated improvem
 
 import csv
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import JsonValue
 
 from forja.checks.base import Undecided, decided, rejected
 from forja.checks.changes import Changes, write_files
@@ -29,7 +32,12 @@ def lizard_plan(lizard: tuple[str, ...], root: Path, files: tuple[str, ...]) -> 
 
 
 def max_ccn(data: GateInput, language: str) -> int:
-    thresholds = data.values.get("thresholds")
+    return ccn_limit(data.values, language)
+
+
+def ccn_limit(values: Mapping[str, JsonValue], language: str) -> int:
+    """The limit the policy sets for ``language``, or lizard's own."""
+    thresholds = values.get("thresholds")
     per_language = thresholds.get(language) if isinstance(thresholds, dict) else None
     value = per_language.get("max_ccn") if isinstance(per_language, dict) else None
     return int(value) if isinstance(value, int | float) and value > 0 else DEFAULT_MAX_CCN

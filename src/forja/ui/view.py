@@ -83,6 +83,7 @@ _REJECTIONS = 20
 _RUN_TOOL = re.compile(r"^run_tool:(?P<target>[^:]+):(?P<check>[a-z_]+):\d+$")
 _GATE_OF = re.compile(r"gate \d+ \((?P<check>[a-z_]+)\)")
 _ATTEMPT = re.compile(r"-a(?P<number>\d+)$")
+_ATTEMPT_OF_STAGE = re.compile(r"-(?:t|c|f|d)?a(?P<number>\d+)$")
 
 
 class GateStatus(StrEnum):
@@ -270,7 +271,7 @@ class ViewModel:
         return owner in self.tasks and owner != self.task_id
 
     def _attempt(self, target: str, to: str, payload: Mapping[str, object]) -> None:
-        found = _ATTEMPT.search(target)
+        found = _ATTEMPT_OF_STAGE.search(target)
         if to == AttemptState.REJECTED.value and self._foreign(target):
             self._reject(f"{target}: {payload.get('reason', '')}")
         elif self._foreign(target):

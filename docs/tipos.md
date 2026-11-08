@@ -44,7 +44,7 @@ Falha da ferramenta nunca aprova: o resultado é `Inconclusive`. Isso vale para 
 
 ## Limites
 
-- **A tentativa pode esconder erro.** `# type: ignore` e o comentário `# mypy:` no código dela calam o `mypy`, que não tem opção para ignorá-los (o `ruff` tem `--ignore-noqa`). Só a revisão do ramo pega isso.
+- **A tentativa pode esconder erro.** `# type: ignore` e o comentário `# mypy:` no código dela calam o `mypy`, que não tem opção para ignorá-los (o `ruff` tem `--ignore-noqa`). O gate 1 (escopo) reprova a tentativa que acrescenta esses comentários (visto no E2E 8); o que ele não vê, como uma opção de configuração que afrouxa o `mypy`, só a revisão do ramo pega.
 - **Erro novo pode vir de outro arquivo.** Mudar a assinatura de uma função quebra quem a chama; a catraca é por arquivo mudado, como a do lint.
 - **Em aberto para o E2E:** o `--python-executable` com o ambiente virtual da execução (`<run>\venv`) e com instalação editável; o JSON em execução limpa; o código de saída no Windows.
 - Na barra de gates da UI o `types` entra no gate 3 (lint), com `format` e `lint`.

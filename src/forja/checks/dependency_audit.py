@@ -42,6 +42,7 @@ ARTIFACTS = frozenset(
 NOTHING_TO_AUDIT = 128  # OSV-Scanner: no package found
 FOUND = 1  # OSV-Scanner: something was found; the report says what
 Package = tuple[str, str, str]  # (ecosystem, name, version)
+LISTED_ADVISORIES = 3  # advisories named in a finding; the rest are counted
 
 
 # SPDX ids that osv-scanner accepts and that (nearly) no package uses; it refuses ids that are
@@ -49,6 +50,16 @@ Package = tuple[str, str, str]  # (ecosystem, name, version)
 UNUSED_LICENSES = ("Glulxe", "xlock", "Wsuipa")
 UNKNOWN_LICENSES = frozenset({"unknown", "non-standard", "noassertion", "none"})
 EXPRESSION_WORDS = frozenset({"and", "or", "with"})
+
+
+def _vulnerability_message(package: Package, advisories: list[str]) -> str:
+    where = f"{package[1]} {package[2]}"
+    if len(advisories) == 1:
+        return f"new vulnerability {advisories[0]} in {where}"
+    shown = ", ".join(advisories[:LISTED_ADVISORIES])
+    more = len(advisories) - LISTED_ADVISORIES
+    tail = f" and {more} more" if more > 0 else ""
+    return f"{len(advisories)} new vulnerabilities in {where}: {shown}{tail}"
 
 
 def _identifiers(license_id: str) -> set[str]:
@@ -132,12 +143,15 @@ class DependencyAuditCheck:
 
     @staticmethod
     def _vulnerabilities(now: Audit, was: Audit) -> list[Finding]:
+        """One finding per package and file: a package with dozens of advisories is one line that
+        names the first few and counts the rest."""
+        grouped: dict[tuple[Package, str], list[str]] = {}
+        for (package, advisory), source in sorted(now.vulnerabilities.items()):
+            if (package, advisory) not in was.vulnerabilities:
+                grouped.setdefault((package, source), []).append(advisory)
         return [
-            Finding(
-                message=f"new vulnerability {advisory} in {package[1]} {package[2]}", target=source
-            )
-            for (package, advisory), source in sorted(now.vulnerabilities.items())
-            if (package, advisory) not in was.vulnerabilities
+            Finding(message=_vulnerability_message(package, advisories), target=source)
+            for (package, source), advisories in grouped.items()
         ]
 
     def _licenses(self, now: Audit, was: Audit) -> list[Finding]:

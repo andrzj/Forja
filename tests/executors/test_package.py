@@ -349,6 +349,20 @@ def test_every_template_that_takes_assumptions_shows_their_shape() -> None:
         assert '"missing_evidence"' in template
 
 
+def test_every_template_that_shows_the_actions_forbids_the_keys_it_does_not_show() -> None:
+    from forja.orchestrator import agent_runner
+
+    templates = [
+        agent_runner.INSTRUCTIONS,
+        agent_runner.AUTHOR_INSTRUCTIONS,
+        agent_runner.FIX_INSTRUCTIONS,
+        agent_runner.DOCUMENTER_INSTRUCTIONS,
+    ]
+
+    for template in templates:
+        assert "Use no key that is not in the shape" in template
+
+
 def test_the_fix_and_the_test_author_may_add_a_dependency_only_when_nothing_available_serves() -> (
     None
 ):

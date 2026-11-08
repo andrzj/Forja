@@ -255,4 +255,15 @@ def test_windows_paths_in_the_report_are_read_as_posix(tmp_path: Path) -> None:
     report = tmp_path / "r.json"
     report.write_text('{"results": [{"check_id": "r", "path": ".\\\\src\\\\a.py"}]}')
 
-    assert _count(report) == {("src/a.py", "r"): 1}
+    assert _count(report, tmp_path / "rules") == {("src/a.py", "r"): 1}
+
+
+def test_the_rule_is_named_without_the_path_semgrep_puts_before_it(tmp_path: Path) -> None:
+    from forja.checks.sast import _count  # noqa: PLC0415
+
+    report = tmp_path / "r.json"
+    report.write_text(
+        '{"results": [{"check_id": "C.Users.me.runs.r1.semgrep-rules.shell-true", "path": "a.py"}]}'
+    )
+
+    assert _count(report, tmp_path / "semgrep-rules") == {("a.py", "shell-true"): 1}

@@ -12,7 +12,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from forja.checks.complexity import ccn_limit
 from forja.checks.duplication import MIN_LINES, MIN_TOKENS, limit_of
+from forja.checks.shape import language_of
 from forja.checks.specs import default_registry
 from forja.checks.voice_markers import build_markers
 from forja.cli.security_notes import differential_notices, e2e_notices, security_notices
@@ -478,7 +480,10 @@ async def _context(
     agents: dict[Producer, AgentRunner] = {
         Producer.DOCUMENTER: runner(config.implementer, Producer.DOCUMENTER)
     }
-    planner: Planner = ComplexityPlanner(functions)
+    complexity = policy.values().get("complexity", {})
+    planner: Planner = ComplexityPlanner(
+        functions, lambda file: ccn_limit(complexity, language_of(file))
+    )
     test_root = _test_root(policy.test_root, registry, repo)
     if config.fix is not None:
         agents[Producer.TEST_AUTHOR] = runner(

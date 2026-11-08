@@ -116,6 +116,31 @@ def test_a_new_vulnerability_rejects_naming_advisory_package_and_file(
     assert finding.target == LOCK
 
 
+def test_many_new_advisories_on_one_package_are_one_finding_that_counts_the_rest(
+    log: EventLog, tmp_path: Path
+) -> None:
+    advisories = ",".join(f"GHSA-{number}" for number in range(1, 8))
+    write(tmp_path, LOCK, f"a 1 vulns={advisories}\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "b 2\n"})
+
+    assert isinstance(result, Rejected)
+    (finding,) = result.findings
+    assert finding.message == "7 new vulnerabilities in a 1: GHSA-1, GHSA-2, GHSA-3 and 4 more"
+    assert finding.target == LOCK
+
+
+def test_three_new_advisories_on_one_package_are_all_named(log: EventLog, tmp_path: Path) -> None:
+    write(tmp_path, LOCK, "a 1 vulns=GHSA-1,GHSA-2,GHSA-3\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "b 2\n"})
+
+    assert isinstance(result, Rejected)
+    assert [f.message for f in result.findings] == [
+        "3 new vulnerabilities in a 1: GHSA-1, GHSA-2, GHSA-3"
+    ]
+
+
 def test_an_old_vulnerability_that_stays_does_not_reprove(log: EventLog, tmp_path: Path) -> None:
     write(tmp_path, LOCK, "a 1 vulns=GHSA-1\nb 2\n")
 

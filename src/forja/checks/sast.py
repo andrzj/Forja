@@ -103,7 +103,7 @@ class SastCheck:
         code = execution.result.exit_code
         if code != 0:
             raise _failed(f"{name}: semgrep ended with {code}", execution.operation_id)
-        counts = _count(report)
+        counts = _count(report, config)
         if counts is None:
             raise _failed(f"{name}: the semgrep report cannot be read", execution.operation_id)
         return counts
@@ -117,14 +117,20 @@ def _failed(detail: str, operation_id: str) -> Undecided:
     )
 
 
-def _count(report: Path) -> Counts | None:
+def _rule(check_id: str, config: Path) -> str:
+    """The rule as the person wrote it: Semgrep puts the path of the rules directory, with dots,
+    before the id of every rule it reads from one."""
+    return check_id.partition(f".{config.name}.")[2] or check_id
+
+
+def _count(report: Path, config: Path) -> Counts | None:
     """Findings per (file, rule) of a Semgrep JSON report, ``None`` when it is not one."""
     try:
         results = json.loads(report.read_text(encoding="utf-8"))["results"]
         counts: Counts = Counter()
         for result in results:
             path = str(result["path"]).replace("\\", "/").removeprefix("./")
-            counts[(path, str(result["check_id"]))] += 1
+            counts[(path, _rule(str(result["check_id"]), config))] += 1
     except (OSError, ValueError, KeyError, TypeError):
         return None
     return counts
