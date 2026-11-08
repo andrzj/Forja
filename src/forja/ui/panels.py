@@ -229,11 +229,13 @@ def rejections(view: View, theme: Theme, columns: int, rows: int, offset: int = 
         return [_finish(none, columns)]
     items = list(view.rejections)
     end = len(items) - min(max(0, offset), max(0, len(items) - rows))
+    lead = f" {marks.failed} "
+    room = max(1, columns - width(lead))
     lines = []
     for text in items[max(0, end - rows) : end]:
         line = _line(columns)
-        _put(line, f" {marks.failed} ", theme.style(Role.ERROR))
-        _put(line, fit(text, max(1, columns - 4), ellipsis=ellipsis), theme.style(Role.TEXT))
+        _put(line, lead, theme.style(Role.ERROR))
+        _put(line, fit(text, room, ellipsis=ellipsis), theme.style(Role.TEXT))
         lines.append(_finish(line, columns))
     return lines
 
