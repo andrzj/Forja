@@ -298,7 +298,8 @@ class ViewModel:
             return
         check = found["check"].removesuffix("_before")
         if check in self.gates and kind == "intent" and not self._foreign(found["target"]):
-            self._advance_to(check, GateStatus.RUNNING)
+            if _ATTEMPT.search(found["target"]):
+                self._advance_to(check, GateStatus.RUNNING)
             self.log.append(
                 FeedLine(moment[11:19], "note", f"mede {check} (gate {GATE_OF[check]})")
             )

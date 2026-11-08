@@ -184,6 +184,16 @@ def test_what_is_not_a_tool_run_of_a_gate_changes_nothing() -> None:
     assert statuses(view) == before
 
 
+def test_a_measurement_of_the_whole_run_does_not_leave_a_gate_running_after_the_attempt() -> None:
+    view = model()
+    view.apply(transition(Level.ATTEMPT, "t1-a1", AttemptState.APPROVED))
+
+    view.apply(tool("intent", "run_tool:r1:complexity:3"))
+
+    assert set(statuses(view).values()) == {GateStatus.PASSED}
+    assert view.snapshot().log[-1].text == "mede complexity (gate 8)"
+
+
 def test_an_approved_attempt_passed_every_gate() -> None:
     view = model()
     view.apply(transition(Level.ATTEMPT, "t1-a1", AttemptState.APPROVED))
