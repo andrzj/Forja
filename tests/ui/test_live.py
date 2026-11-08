@@ -162,7 +162,7 @@ def test_the_third_line_has_the_last_news_and_the_hint_to_stop() -> None:
 
 
 def test_in_a_window_too_narrow_for_both_the_news_wins_over_the_hint() -> None:
-    third = render_status(VIEWS["busy"], THEMES["escuro"], 30)[2].plain
+    third = render_status(VIEWS["busy"], THEMES["escuro"], 25)[2].plain
 
     assert HINT not in third
     assert third.startswith("12:31:07 editou")

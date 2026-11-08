@@ -19,7 +19,7 @@ from forja.ui.theme import ColorDepth, Role, Theme
 from forja.ui.view import FeedLine, GateStatus, View
 
 GAUGE_CELLS = 10
-HINT = "ctrl+k interrompe"
+HINT = "q interrompe"
 GATE_NAMES = {
     "scope": "escopo",
     "freeze": "congel.",

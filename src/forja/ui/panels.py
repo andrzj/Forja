@@ -235,16 +235,16 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
         options = (" q sair   t tema   ? ajuda", " q sair   t tema", " q sair")
     elif stopping:
         options = (
-            " salvando... ctrl+k de novo sai agora",
-            " ctrl+k de novo sai agora",
-            " ctrl+k: sair",
+            " salvando... q de novo sai agora",
+            " q de novo sai agora",
+            " q: sair",
         )
     else:
         options = (
-            " ctrl+k parar e salvar   t tema   tab painel   setas rolam   ? ajuda",
-            " ctrl+k parar   t tema   tab painel   ? ajuda",
-            " ctrl+k parar   t tema   ? ajuda",
-            " ctrl+k parar",
+            " q parar e salvar   t tema   tab painel   setas rolam   ? ajuda",
+            " q parar   t tema   tab painel   ? ajuda",
+            " q parar   t tema   ? ajuda",
+            " q parar",
         )
     chosen = next((text for text in options if width(text) <= columns), options[-1])
     return _finish(
@@ -254,8 +254,8 @@ def footer(theme: Theme, columns: int, *, finished: bool, stopping: bool) -> Tex
 
 
 def band(theme: Theme, columns: int) -> Text:
-    """The strip shown after the first ctrl+k: a notice, not a question."""
-    text = "Salvando... tudo que já foi feito está guardado. ctrl+k de novo sai agora."
+    """The strip shown after the first stop: a notice, not a question."""
+    text = "Salvando... tudo que já foi feito está guardado. q de novo sai agora."
     shown = pad(text, columns, align="center")
     return _finish(
         Text(shown, theme.style(Role.BACKGROUND, Role.WARNING, bold=True), end=""), columns
@@ -294,14 +294,14 @@ def final(lines: list[str], view: View, theme: Theme, columns: int, rows: int) -
 def help_lines(theme: Theme, columns: int) -> list[Text]:
     keys = (
         (
-            "ctrl+k / ctrl+c",
+            "q / ctrl+k / ctrl+c",
             "para, salva tudo e deixa a execução para retomar; de novo sai na hora",
         ),
         ("t", "troca o tema"),
         ("tab", "muda o painel em foco"),
         ("setas, pgup, pgdn", "rolam o painel em foco; end volta ao fim"),
         ("?", "fecha esta ajuda"),
-        ("q", "sai, depois que a execução terminou"),
+        ("q, esc", "saem, depois que a execução terminou"),
     )
     out = []
     for key, what in keys:

@@ -148,11 +148,35 @@ def test_t_changes_the_theme_and_comes_back_around() -> None:
     drive(THEMES["escuro"], (80, 24), scenario)
 
 
-def test_q_does_nothing_while_the_run_goes_and_leaves_when_it_is_over() -> None:
+def test_q_stops_like_ctrl_k_and_a_second_q_asks_again() -> None:
     async def scenario(app: ForjaApp, pilot: Any) -> None:
         await pilot.press("q")
         await pilot.pause()
-        assert app.is_running
+        assert app.is_running and app.stopping
+        assert "band" in {pane.key for pane in shown(app)}
+        await pilot.press("q")
+        await pilot.pause()
+
+    app = drive(THEMES["escuro"], (80, 24), scenario)
+    assert [app._keys.get_nowait(), app._keys.get_nowait()] == ["ctrl+k", "ctrl+k"]
+    assert app._keys.empty()
+
+
+def test_q_with_the_help_open_closes_it_and_does_not_stop() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
+        await pilot.press("question_mark")
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert "help" not in {pane.key for pane in shown(app)}
+        assert not app.stopping
+
+    app = drive(THEMES["escuro"], (80, 24), scenario)
+    assert app._keys.empty()
+
+
+def test_q_leaves_when_the_run_is_over_without_sending_a_stop() -> None:
+    async def scenario(app: ForjaApp, pilot: Any) -> None:
         app.conclude(["Entregue em forja-run/x", "Resumo: y"])
         await pilot.pause()
         keys = {pane.key for pane in shown(app)}
@@ -162,6 +186,7 @@ def test_q_does_nothing_while_the_run_goes_and_leaves_when_it_is_over() -> None:
 
     app = drive(THEMES["escuro"], (80, 24), scenario)
     assert not app.is_running
+    assert app._keys.empty()
 
 
 def test_ctrl_k_after_the_end_leaves_without_sending_a_stop() -> None:

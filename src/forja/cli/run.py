@@ -1,9 +1,9 @@
 """Running the orchestrator with the screen and the keys: how a run is shown, stopped and ended.
 
 Stopping is one cancellation of the run. The orchestrator saves where it was and leaves the run
-paused, and the next ``forja`` offers to resume it. The first ``ctrl+k`` (or ``ctrl+c``) asks for
-that; a second one while it is saving gives up waiting and leaves at once, which is safe because
-every event is already on disk and the next run settles whatever was left open.
+paused, and the next ``forja`` offers to resume it. The first ``q`` (or ``ctrl+k``, ``ctrl+c``)
+asks for that; a second one while it is saving gives up waiting and leaves at once, which is safe
+because every event is already on disk and the next run settles whatever was left open.
 """
 
 import asyncio
@@ -109,7 +109,7 @@ async def _watch(
     forced: asyncio.Event,
 ) -> None:
     async for key in keys.keys():
-        if key in ("ctrl+k", "ctrl+c"):
+        if key in ("q", "ctrl+k", "ctrl+c"):
             if pressed.is_set():
                 forced.set()
                 return

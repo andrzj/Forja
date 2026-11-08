@@ -3,7 +3,8 @@
 Textual decides where every panel goes and how big it is, from the size of the window; each panel
 asks the builders for lines that fit the room it was given. So nothing here can put an element
 out of place or wider than its panel, and a test that opens the app at many sizes can say so.
-The app also is the source of the keys while it runs (``ctrl+k`` stops, ``t`` changes the theme).
+The app also is the source of the keys while it runs (``q`` or ``ctrl+k`` stops, ``t`` changes
+the theme).
 """
 
 import asyncio
@@ -125,7 +126,7 @@ class ForjaApp(App[None]):
         Binding("ctrl+q", "noop", priority=True, show=False),
         Binding("t", "theme", show=False),
         Binding("question_mark", "help", show=False),
-        Binding("q", "leave", show=False),
+        Binding("q", "quit_or_stop", show=False),
         Binding("escape", "leave", show=False),
     ]
 
@@ -253,6 +254,13 @@ class ForjaApp(App[None]):
             self.action_help()
         elif self.finished:
             self.exit()
+
+    def action_quit_or_stop(self) -> None:
+        """``q`` closes what is open over the run, else stops it safely as ``ctrl+k`` does."""
+        if self.screen.has_class("helping"):
+            self.action_help()
+        else:
+            self.action_stop()
 
 
 class FullRenderer:

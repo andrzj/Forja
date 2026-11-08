@@ -66,8 +66,8 @@ def test_the_time_stays_when_the_second_line_fits_exactly_and_goes_one_cell_shor
 def test_the_hint_appears_at_the_narrowest_width_that_has_room_for_it() -> None:
     view = busy()
 
-    assert render_status(view, THEME, 31, "none")[2].plain.endswith(HINT)
-    assert not render_status(view, THEME, 30, "none")[2].plain.endswith(HINT)
+    assert render_status(view, THEME, 26, "none")[2].plain.endswith(HINT)
+    assert not render_status(view, THEME, 25, "none")[2].plain.endswith(HINT)
 
 
 def test_the_hint_is_red_only_when_the_tokens_are_over_the_limit() -> None:

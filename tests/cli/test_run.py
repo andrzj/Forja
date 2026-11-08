@@ -123,7 +123,7 @@ def run_with_keys(
     return ended, session, log, screen
 
 
-@pytest.mark.parametrize("key", ["ctrl+k", "ctrl+c"])
+@pytest.mark.parametrize("key", ["q", "ctrl+k", "ctrl+c"])
 def test_one_press_stops_the_run_and_leaves_it_paused_and_resumable(
     tmp_path: Path, key: str
 ) -> None:

@@ -1,9 +1,9 @@
 """Reading single keys while the run goes on, without waiting for Enter.
 
-The keys the person can use during a run are few: ``ctrl+k`` stops it (and ``ctrl+c`` does the
-same), ``t`` changes the theme. Reading is done in a thread, because a terminal has no portable
-non-blocking read, and handed to the event loop as a queue. Tests give ``execute`` a scripted
-source instead, so no terminal is needed to prove how stopping behaves.
+The keys the person can use during a run are few: ``q`` or ``ctrl+k`` stops it (and ``ctrl+c``
+does the same), ``t`` changes the theme. Reading is done in a thread, because a terminal has no
+portable non-blocking read, and handed to the event loop as a queue. Tests give ``execute`` a
+scripted source instead, so no terminal is needed to prove how stopping behaves.
 """
 
 import asyncio
@@ -13,7 +13,7 @@ import threading
 from collections.abc import AsyncIterator, Callable
 from typing import Any, Protocol
 
-KEYS = {"\x0b": "ctrl+k", "\x03": "ctrl+c", "t": "t", "T": "t"}
+KEYS = {"\x0b": "ctrl+k", "\x03": "ctrl+c", "q": "q", "Q": "q", "t": "t", "T": "t"}
 
 
 class KeySource(Protocol):
