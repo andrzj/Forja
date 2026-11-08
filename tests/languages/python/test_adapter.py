@@ -696,3 +696,25 @@ def test_a_summary_header_printed_by_a_test_does_not_hide_the_real_one(tmp_path:
     )
 
     assert facts(result) == [("test.outcome", "tests/a.py::real", "failed")]
+
+
+def test_tests_of_a_src_layout_copy_import_the_copy_and_not_an_editable_install(
+    project: Path,
+) -> None:
+    (project / "src").mkdir()
+
+    for operation in (Operation.TEST, Operation.COVERAGE):
+        plan = ADAPTER.plan(operation, OperationRequest(root=project))
+        assert isinstance(plan, CommandPlan)
+        assert plan.env_set["PYTHONPATH"] == str(project / "src")
+
+    lint = ADAPTER.plan(Operation.LINT, OperationRequest(root=project))
+    assert isinstance(lint, CommandPlan)
+    assert "PYTHONPATH" not in lint.env_set
+
+
+def test_tests_of_a_flat_layout_set_no_python_path(project: Path) -> None:
+    plan = ADAPTER.plan(Operation.TEST, OperationRequest(root=project))
+
+    assert isinstance(plan, CommandPlan)
+    assert "PYTHONPATH" not in plan.env_set

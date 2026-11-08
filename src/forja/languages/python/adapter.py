@@ -242,7 +242,12 @@ class PythonAdapter:
                 )
             case _:
                 return NotSupported(operation.value, "the Python adapter does not offer it")
-        return self._plan(request.root, argv, config_files=CONFIG_FILES)
+        return self._plan(
+            request.root,
+            argv,
+            config_files=CONFIG_FILES,
+            source_path=operation in (Operation.TEST, Operation.COVERAGE),
+        )
 
     def report(self, operation: Operation) -> ReportSpec | NotSupported:
         if operation is Operation.COVERAGE:
@@ -254,13 +259,21 @@ class PythonAdapter:
         return ("--output-format=concise", "--no-cache", "--force-exclude")
 
     def _plan(
-        self, root: Path, argv: tuple[str, ...], config_files: tuple[str, ...] = ()
+        self,
+        root: Path,
+        argv: tuple[str, ...],
+        config_files: tuple[str, ...] = (),
+        source_path: bool = False,
     ) -> CommandPlan:
         # Compiled files go to one private place outside the worktree: nothing lands in the diff.
+        env = {"NO_COLOR": "1", "PYTHONPYCACHEPREFIX": self._cache}
+        # An editable install points at the original checkout; tests of a copy must import the copy.
+        if source_path and (root / "src").is_dir():
+            env["PYTHONPATH"] = str(root / "src")
         return CommandPlan(
             argv,
             root,
-            env_set={"NO_COLOR": "1", "PYTHONPYCACHEPREFIX": self._cache},
+            env_set=env,
             config_files=config_files,
         )
 
