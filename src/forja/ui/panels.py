@@ -13,9 +13,9 @@ from rich.style import Style
 from rich.text import Text
 
 from forja.ui.glyphs import GlyphSet, fit, pad, width
-from forja.ui.live import GATE_NAMES, clock_text, gauge, gauge_role, percent_text
+from forja.ui.live import GATE_LABELS, clock_text, gauge, gauge_role, percent_text
 from forja.ui.theme import Role, Theme
-from forja.ui.view import FeedLine, GateStatus, View
+from forja.ui.view import FeedLine, GateStatus, View, gate_groups
 
 STATE_WORDS = {
     "preparing": "preparando",
@@ -150,13 +150,15 @@ def tasks(view: View, theme: Theme, columns: int, rows: int) -> list[Text]:
 
 
 def gates_line(view: View, theme: Theme, columns: int) -> Text:
-    """Every check of an attempt in order, with names while they fit and symbols alone when not."""
+    """The gates of an attempt in order, with names while they fit, then numbers, then symbols."""
     marks = theme.glyphs.marks
-    names = {name: name for name, _ in view.gates}
-    for labels in (names, GATE_NAMES, {name: "" for name in names}):
+    groups = gate_groups(view.gates)
+    names = {gate: GATE_LABELS[gate] for gate, _ in groups}
+    numbers = {gate: str(gate) for gate, _ in groups}
+    for labels in (names, numbers, {gate: "" for gate, _ in groups}):
         line = _line(columns)
         _put(line, " ", Style())
-        for position, (name, status) in enumerate(view.gates):
+        for position, (gate, status) in enumerate(groups):
             kind, role = {
                 GateStatus.PASSED: ("passed", Role.SUCCESS),
                 GateStatus.FAILED: ("failed", Role.ERROR),
@@ -165,7 +167,7 @@ def gates_line(view: View, theme: Theme, columns: int) -> Text:
             }[status]
             if position:
                 _put(line, "  " if labels is names else " ", Style())
-            label = labels[name]
+            label = labels[gate]
             _put(line, getattr(marks, kind) + (" " + label if label else ""), theme.style(role))
         if line.cell_len <= columns:
             return line

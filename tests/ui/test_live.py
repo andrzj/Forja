@@ -132,11 +132,17 @@ def test_before_any_task_the_first_line_says_the_state_of_the_run() -> None:
 def test_the_second_line_has_the_gates_the_tokens_and_the_time_when_there_is_room() -> None:
     second = render_status(VIEWS["busy"], THEMES["escuro"], 200)[1].plain
 
-    assert "✓escopo ✓segredos ✓formato ◔lint ·build ·testes ·complex." in second
-    assert "·crap ·pass. ·prof. ·ciclos ·camadas ·pacotes ·sast" in second
-    assert "·auditoria ·dep.nova ·difer." in second
-    assert "tokens ████░░░░░░ 43%" in second
+    assert second.startswith(
+        "✓escopo ✓segredos ◔lint ·build ·testes ·mutacao ·metricas ·arquitetura ·seguranca"
+        " ·diferencial  tokens ████░░░░░░ 43%"
+    )
     assert second.endswith("12:31")
+
+
+def test_the_bar_draws_only_ascii_with_ascii_symbols_when_the_gates_fit() -> None:
+    second = render_status(VIEWS["busy"], with_ascii(THEMES["neon"]), 200)[1].plain
+
+    assert "mutacao" in second and second.isascii()
 
 
 def test_a_narrow_window_loses_the_time_first_then_the_gates_and_never_the_tokens() -> None:

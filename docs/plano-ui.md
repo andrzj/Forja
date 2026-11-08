@@ -20,7 +20,7 @@ Estado (08/11/2026): plano escrito, nada implementado. Origem: ordem expressa do
 ## Decisões minhas, dentro da Especificação
 
 - `q` passa a interromper com segurança durante a execução, como `ctrl+k`: a primeira salva e deixa retomar, a segunda sai na hora. Depois do fim, `q` sai, como hoje. Com a ajuda, os detalhes ou o log abertos, `q` e `escape` fecham a tela aberta. `ctrl+k` e `ctrl+c` continuam valendo (o `ctrl+c` o terminal manda de qualquer jeito).
-- Estado de um gate na barra, a partir dos seus checks: reprovado se algum reprovou; aprovado se todos passaram; pendente se nenhum começou; em andamento nos demais casos.
+- Estado de um gate na barra, a partir dos seus checks: reprovado se algum reprovou; em andamento se algum roda; aprovado se todos passaram; pendente nos demais casos. A ordem do pipeline não é a dos números (`complexity`, do gate 8, roda antes de `mutation`, do 7), então um gate com parte aprovada e parte por medir fica pendente, não em andamento.
 - O mapa check para gate fica em `view.py` (a UI não importa `checks`), com teste que o confere com `checks\specs.py::default_registry`.
 - Os tokens da tarefa vêm dos eventos `usage` já gravados (`target_id` é a tentativa, `T1-a2`; a tarefa é o prefixo), então a retomada os refaz pelo `replay`.
 - `d` e `l` só existem na tela cheia. Na linha viva e no texto simples a notícia já sai inteira no terminal; lá só entra o `q`.

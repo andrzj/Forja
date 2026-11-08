@@ -102,7 +102,7 @@ Uma reprovação de outro caso vale mais que uma execução que não pôde ser f
 - Com casos: “Teste diferencial: I/O não é medido; só tempo e memória, e só onde a plataforma mede.”
 - Casos em quarentena e casos sem medida de memória, com os nomes (até 10, cortados em 40 caracteres, e a contagem inteira). A nota vem do log da execução, e por isso sai igual numa execução retomada.
 
-A barra de progresso da interface não mostra o gate 11: com o nome a segunda linha passa de 120 colunas.
+A barra de gates da interface mostra o gate 11 como `diferencial`.
 
 ## Limites conhecidos
 

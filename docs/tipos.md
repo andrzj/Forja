@@ -47,6 +47,6 @@ Falha da ferramenta nunca aprova: o resultado é `Inconclusive`. Isso vale para 
 - **A tentativa pode esconder erro.** `# type: ignore` e o comentário `# mypy:` no código dela calam o `mypy`, que não tem opção para ignorá-los (o `ruff` tem `--ignore-noqa`). Só a revisão do ramo pega isso.
 - **Erro novo pode vir de outro arquivo.** Mudar a assinatura de uma função quebra quem a chama; a catraca é por arquivo mudado, como a do lint.
 - **Em aberto para o E2E:** o `--python-executable` com o ambiente virtual da execução (`<run>\venv`) e com instalação editável; o JSON em execução limpa; o código de saída no Windows.
-- A barra de gates da UI ainda não mostra o `types`, como acontece com o `duplication`.
+- Na barra de gates da UI o `types` entra no gate 3 (lint), com `format` e `lint`.
 
 O plano está em `docs\plano-analise-estatica.md`.

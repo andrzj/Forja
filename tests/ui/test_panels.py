@@ -161,3 +161,22 @@ def test_the_layout_follows_the_window() -> None:
     assert panels.layout_for(60, 16).compact
     assert panels.layout_for(120, 18).compact
     assert Role.TEXT in Role
+
+
+def test_the_bar_shows_the_gates_by_name_then_by_number_then_by_symbol() -> None:
+    theme = THEMES["escuro"]
+    shown = busy()
+
+    def bar(columns: int) -> str:
+        return panels.gates_line(shown, theme, columns).plain
+
+    names = bar(300)
+    numbers = " ✓ 1 ✓ 2 ◔ 3 · 4 · 5 · 7 · 8 · 9 · 10 · 11"
+    symbols = " ✓ ✓ ◔ · · · · · · ·"
+
+    assert names.startswith(" ✓ escopo  ✓ segredos  ◔ lint  · build  · testes  · mutacao")
+    assert names.endswith("· seguranca  · diferencial")
+    assert bar(len(names)) == names
+    assert bar(len(names) - 1) == numbers
+    assert bar(len(numbers)) == numbers
+    assert bar(len(numbers) - 1) == symbols

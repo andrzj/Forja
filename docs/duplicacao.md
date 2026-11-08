@@ -38,6 +38,6 @@ O `jscpd` é obrigatório no `forja doctor`. A versão 5 é um binário autossuf
 - **A tentativa pode esconder clone.** O `jscpd` respeita `.gitignore`, `.ignore` e as regiões `jscpd:ignore-start` e `jscpd:ignore-end`. Um agente que escreve um desses ou marca uma região esconde o clone da medida. Desligar o `.gitignore` varreria `.venv` e dependências, então a Forja não o faz. A revisão do ramo é o que pega isso.
 - **Configuração da tentativa não vale.** A Forja passa `--config` explícito, que vence `.jscpd.json` e a chave `jscpd` do `package.json`.
 - **Em aberto para o E2E:** o comportamento do `--baseline-from-ref` numa worktree ligada do git; se o `jscpd` real acha clone do trabalho ainda não commitado; globs com barra invertida no Windows. Se o `--baseline-from-ref` falhar na worktree, o plano prevê cair para `--baseline` em arquivo temporário.
-- A barra de gates da UI ainda não mostra o `duplication`.
+- Na barra de gates da UI o `duplication` entra no gate 8 (métricas).
 
 O plano está em `docs\plano-gate-duplicacao.md`.

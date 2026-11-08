@@ -16,7 +16,7 @@ from rich.text import Text
 from forja.ui.glyphs import GlyphSet, fit, width
 from forja.ui.terminal import Capabilities
 from forja.ui.theme import ColorDepth, Role, Theme
-from forja.ui.view import FeedLine, GateStatus, View
+from forja.ui.view import FeedLine, GateStatus, View, gate_groups
 
 GAUGE_CELLS = 10
 HINT = "q interrompe"
@@ -49,6 +49,20 @@ GATE_NAMES = {
     "differential": "difer.",
     "voice": "voz",
     "comments": "coment.",
+}
+GATE_LABELS = {  # the gates of an attempt, in ASCII so the ASCII themes can draw them
+    1: "escopo",
+    2: "segredos",
+    3: "lint",
+    4: "build",
+    5: "testes",
+    6: "e2e",
+    7: "mutacao",
+    8: "metricas",
+    9: "arquitetura",
+    10: "seguranca",
+    11: "diferencial",
+    12: "voz",
 }
 Pieces = list[tuple[str, Style]]
 _COLOR_SYSTEM = {"truecolor": "truecolor", "256": "256", "16": "standard", "none": None}
@@ -88,12 +102,12 @@ _MARK = {
 
 def _gates(view: View, theme: Theme, depth: ColorDepth) -> Pieces:
     pieces: Pieces = []
-    for name, status in view.gates:
+    for gate, status in gate_groups(view.gates):
         mark_name, role = _MARK[status]
         mark = getattr(theme.glyphs.marks, mark_name)
         if pieces:
             pieces.append((" ", Style()))
-        pieces.append((f"{mark}{GATE_NAMES[name]}", theme.style(role, depth=depth)))
+        pieces.append((f"{mark}{GATE_LABELS[gate]}", theme.style(role, depth=depth)))
     return pieces
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from forja.core.states import AttemptState, ExecutionState, Level, TaskState
-from forja.ui.view import GATES, GateStatus, ViewModel, blank_view
+from forja.ui.view import GATE_OF, GATES, GateStatus, ViewModel, blank_view, gate_groups
 from tests.orchestrator.fakes import PASSED, REJECTED, ScriptedMeasurer, ScriptedPlanner
 from tests.orchestrator.harness import TWO_TASKS, MemoryWorld
 from tests.ui.support import activity, model, progress, tool, transition
@@ -104,6 +104,42 @@ def test_every_check_of_an_attempt_is_on_the_bar_with_a_short_name() -> None:
     assert len(set(GATES)) == len(GATES)
     for check in ("types", "duplication", "properties", "red_green", "voice", "comments"):
         assert check in GATES
+
+
+def test_each_check_on_the_bar_belongs_to_the_gate_the_registry_gives_it() -> None:
+    from forja.checks.specs import default_registry
+    from forja.ui.live import GATE_LABELS
+
+    registry = default_registry()
+
+    assert set(GATE_OF) == set(GATES)
+    assert {check: registry.get(check).gate for check in GATES} == GATE_OF
+    assert set(GATE_OF.values()) == set(GATE_LABELS) == set(range(1, 13))
+
+
+P, F, R, W = GateStatus.PASSED, GateStatus.FAILED, GateStatus.RUNNING, GateStatus.PENDING
+
+
+@pytest.mark.parametrize(
+    ("seen", "gate"),
+    [
+        ((P, P, P), P), ((W, W, W), W), ((P, R, W), R), ((P, F, W), F), ((R, F, P), F),
+        ((P, W, W), W), ((P, P, W), W), ((W, P, P), W),
+    ],
+)  # fmt: skip
+def test_a_gate_on_the_bar_sums_up_its_checks(
+    seen: tuple[GateStatus, ...], gate: GateStatus
+) -> None:
+    checks = tuple(zip(("format", "lint", "types"), seen, strict=True))
+
+    assert gate_groups(checks) == ((3, gate),)
+
+
+def test_the_gates_on_the_bar_come_in_gate_order_whatever_the_order_of_the_checks() -> None:
+    checks = (("complexity", P), ("mutation", R), ("scope", F), ("voice", W))
+
+    assert gate_groups(checks) == ((1, F), (7, R), (8, P), (12, W))
+    assert gate_groups(()) == ()
 
 
 def test_the_checks_of_gates_9_to_11_are_on_the_bar_after_gate_8_and_run_in_order() -> None:

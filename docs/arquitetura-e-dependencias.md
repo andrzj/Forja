@@ -93,7 +93,7 @@ Só roda se a tentativa muda arquivo de produção de linguagem lida; senão apr
 
 ## Linha de base e resumo
 
-A linha de base guarda, por projeto, o número de ciclos, o de arestas e o maior `D` (em monorepo, com o sufixo `[<projeto>]`). Entram na tabela de métricas do registro de mudança e nas evidências citáveis. A barra de progresso da interface não mostra o gate 9: com os três nomes a segunda linha passa de 120 colunas.
+A linha de base guarda, por projeto, o número de ciclos, o de arestas e o maior `D` (em monorepo, com o sufixo `[<projeto>]`). Entram na tabela de métricas do registro de mudança e nas evidências citáveis. A barra de gates da interface mostra o gate 9 como `arquitetura`, somando os três checks.
 
 ## Limites conhecidos
 

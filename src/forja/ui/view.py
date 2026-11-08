@@ -48,6 +48,36 @@ GATES = (
     "voice",
     "comments",
 )
+GATE_OF = {  # the gate of each check, as ``checks\specs.py`` registers it
+    "scope": 1,
+    "freeze": 1,
+    "secrets": 2,
+    "dependency_install": 2,
+    "format": 3,
+    "lint": 3,
+    "types": 3,
+    "build": 4,
+    "tests": 5,
+    "red_green": 5,
+    "e2e": 6,
+    "test_data": 6,
+    "properties": 6,
+    "mutation": 7,
+    "complexity": 8,
+    "crap": 8,
+    "pass_through": 8,
+    "module_depth": 8,
+    "duplication": 8,
+    "dependency_cycles": 9,
+    "layer_rules": 9,
+    "package_metrics": 9,
+    "sast": 10,
+    "dependency_audit": 10,
+    "new_dependency": 10,
+    "differential": 11,
+    "voice": 12,
+    "comments": 12,
+}
 _FEED = 60
 _REJECTIONS = 20
 _RUN_TOOL = re.compile(r"^run_tool:(?P<target>[^:]+):(?P<check>[a-z_]+):\d+$")
@@ -60,6 +90,29 @@ class GateStatus(StrEnum):
     RUNNING = "running"
     PASSED = "passed"
     FAILED = "failed"
+
+
+def gate_groups(
+    checks: tuple[tuple[str, GateStatus], ...],
+) -> tuple[tuple[int, GateStatus], ...]:
+    """The gates of the checks, in gate order: failed if a check failed, running if one runs,
+    passed when all passed, pending otherwise (the pipeline has not reached the rest of it)."""
+    statuses: dict[int, list[GateStatus]] = {}
+    for name, status in checks:
+        statuses.setdefault(GATE_OF[name], []).append(status)
+    groups = []
+    for gate in sorted(statuses):
+        seen = statuses[gate]
+        if GateStatus.FAILED in seen:
+            status = GateStatus.FAILED
+        elif GateStatus.RUNNING in seen:
+            status = GateStatus.RUNNING
+        elif all(item is GateStatus.PASSED for item in seen):
+            status = GateStatus.PASSED
+        else:
+            status = GateStatus.PENDING
+        groups.append((gate, status))
+    return tuple(groups)
 
 
 @dataclass(frozen=True)
