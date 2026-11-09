@@ -191,6 +191,32 @@ def test_what_is_not_a_tool_run_of_a_gate_changes_nothing() -> None:
     assert statuses(view) == before
 
 
+@pytest.mark.parametrize(
+    "check", ["citations", "traceability", "change_record", "readme", "doc_drift", "adr"]
+)
+def test_the_checks_of_gates_13_and_14_are_not_on_the_bar_and_change_nothing(check: str) -> None:
+    from forja.checks.specs import default_registry
+
+    assert default_registry().get(check).gate in (13, 14)
+    assert check not in GATE_OF
+    view = model()
+    before = statuses(view)
+    log = len(view.snapshot().log)
+
+    view.apply(tool("intent", f"run_tool:t1-a1:{check}:1"))
+    view.apply(
+        transition(
+            Level.ATTEMPT,
+            "t1-a1",
+            AttemptState.REJECTED,
+            payload={"reason": f"gate 14 ({check}) failed"},
+        )
+    )
+
+    assert statuses(view) == before
+    assert len(view.snapshot().log) == log
+
+
 def test_a_measurement_of_the_whole_run_does_not_leave_a_gate_running_after_the_attempt() -> None:
     view = model()
     view.apply(transition(Level.ATTEMPT, "t1-a1", AttemptState.APPROVED))

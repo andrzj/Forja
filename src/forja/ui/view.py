@@ -48,7 +48,10 @@ GATES = (
     "voice",
     "comments",
 )
-GATE_OF = {  # the gate of each check, as ``checks\specs.py`` registers it
+# The gates of each check of an attempt, as ``checks\specs.py`` registers it. Gates 13 and 14
+# (citations, traceability, change record, readme, doc drift, adr) run after the tasks, not in the
+# pipeline of an attempt, so they are not on the bar and every lookup here filters by ``GATES``.
+GATE_OF = {
     "scope": 1,
     "freeze": 1,
     "secrets": 2,
