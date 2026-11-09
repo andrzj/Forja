@@ -4,6 +4,10 @@ Um gate é uma etapa de conferência pela qual toda tentativa de um agente passa
 
 ## O que é um gate
 
+![Barra de gates na tela da Forja](../imagens/barra-de-gates.svg)
+
+Barra dos gates 1 a 12 durante a execução (`forja`).
+
 Cada verificação devolve um de quatro resultados:
 
 | Resultado | Significado |

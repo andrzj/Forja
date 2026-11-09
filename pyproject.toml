@@ -36,6 +36,11 @@ dev = [
 mutation = [
     "mutmut>=3.8.0",
 ]
+capturas = [
+    "pywinpty",
+    "pyte",
+    "pillow",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/forja"]

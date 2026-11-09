@@ -22,6 +22,10 @@ forja <verbo> [argumentos] # com verbo: roda esse objetivo
 
 Rode a Forja de dentro do repositório. Ela nunca envia nada para fora e nunca altera a sua branch: a entrega é a branch `forja-run/<id>`, em uma worktree própria.
 
+![Ajuda da Forja no terminal](imagens/terminal-ajuda.png)
+
+Ajuda geral no terminal real, com 170 colunas (`forja --help`).
+
 ## Opções comuns aos quatro objetivos
 
 Valem para `refatorar`, `corrigir`, `criar` e `investigar`. Podem vir antes ou depois do verbo.
@@ -107,6 +111,10 @@ forja corrigir "pedido cancelado continua somando no relatório" --criterios cri
 ```
 
 Sem `--criterios`, a Forja procura `criterios.json` ao lado do arquivo dado em `-f`. Se não achar, um agente escreve os critérios.
+
+![Plano de um conserto no terminal](imagens/terminal-corrigir-plano.png)
+
+Plano de um conserto, sem executar (`forja corrigir "soma(2, 3) devolve -1 em vez de 5" --plano`).
 
 O especificador corta a descrição em elementos com id estável (`E1`, `E2`, ...): cada item de lista e cada parágrafo é um elemento; um título sozinho não conta. Cada critério aponta de quais elementos veio, e o resumo mostra a cadeia elemento, critério, teste na seção "Rastreabilidade".
 
@@ -209,6 +217,10 @@ A Forja roda neste terminal e não cria sandbox: leitura fora da cópia e rede s
 1 item(ns) a resolver.
 ```
 
+![Verificação do ambiente no terminal](imagens/terminal-doctor.png)
+
+Verificação do ambiente num repositório limpo (`forja doctor`).
+
 Os itens variam com o repositório. Para cada linguagem detectada entram as ferramentas dela: `go` e `golangci-lint`, `node`, `dotnet`, `java` com `mvn` ou `gradle`. O `semgrep` só entra com `--semgrep-config` ou com `.semgrep.yml` ou `.semgrep/` no repositório. Itens opcionais (`mypy`, `golangci-lint` e as CLIs além da escolhida) aparecem como `[ok ]` ou `[FALTA]`, mas não contam para a saída.
 
 Código de saída: `0` se nenhum item obrigatório falta; `1` caso contrário. A linha final é `Tudo pronto.` ou `N item(ns) a resolver.`.
@@ -222,6 +234,10 @@ Instala as ferramentas externas que a Forja usa e que faltam: as de uso geral e 
 ```bash
 forja instalar
 ```
+
+![Ajuda de forja instalar no terminal](imagens/terminal-instalar-ajuda.png)
+
+Ajuda do comando de instalação (`forja instalar --help`).
 
 - As ferramentas vão para `<dados da Forja>\tools` (no Windows, `%LOCALAPPDATA%\forja\tools`; em outras plataformas, `~/.local/share/forja/tools`). A Forja não mexe no `PATH` do seu sistema.
 - Uma ferramenta já no `PATH`, ou já instalada por inteiro na pasta da Forja, não é baixada de novo.
@@ -294,6 +310,10 @@ forja --config execucao.toml
 
 Com `--config`, a Forja não pergunta nada: tudo vem do arquivo. Serve para CI e para repetir uma execução. O arquivo e as regras de cada objetivo estão em `execucao-toml.md`.
 
+![Plano no modo sem perguntas](imagens/terminal-modo-ci-plano.png)
+
+Plano lido do `execucao.toml`, sem executar (`forja --config execucao.toml --plano`).
+
 Exigências comuns:
 
 - o repositório precisa estar limpo;
@@ -324,6 +344,26 @@ Durante a execução, a tecla `q` interrompe com segurança: a primeira pergunta
 | 4 | nada integrado | entregue, mas havia tarefas bloqueadas e nenhuma foi integrada |
 | 5 | algumas bloqueadas | entregue, com algumas tarefas bloqueadas |
 | 130 | interrompida | você interrompeu |
+
+![Entrega concluída](imagens/entrega-concluida.svg)
+
+Fim de uma execução entregue (`forja`, todas as tarefas integradas).
+
+![Entrega com uma tarefa bloqueada](imagens/tarefa-bloqueada.svg)
+
+Fim de uma execução entregue com uma tarefa bloqueada (`forja`, código de saída 5).
+
+![Rejeição de gate](imagens/rejeicao-de-gate.svg)
+
+Tentativa rejeitada no gate 5 (`forja`): as rejeições aparecem no painel de baixo.
+
+![Execução em andamento no terminal](imagens/terminal-execucao-meio.png)
+
+Execução real em andamento, no terminal, com o `claude-code` (`forja --config execucao.toml`, objetivo `corrigir`).
+
+![Execução entregue no terminal](imagens/terminal-execucao-fim.png)
+
+Fim da mesma execução, com a tarefa integrada (`forja --config execucao.toml`).
 
 Mensagens de fechamento:
 

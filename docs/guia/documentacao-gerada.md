@@ -342,6 +342,95 @@ O resumo da execução (`runs/<id>/resumo.md`) tem a seção "Documentação". P
 Não conferido: links externos do README (exigiriam rede). O texto que o agente escreveu fora das afirmações com citação só passa pelas verificações de tópico.
 ```
 
+Exemplo de `resumo.md` completo, de uma execução real e curta (`forja --config execucao.toml`, objetivo `corrigir`, uma tarefa), no formato em que a Forja o grava:
+
+````markdown
+# Resumo da execução 9fa30ca504f3
+
+Branch da entrega: `forja-run/9fa30ca504f3`, criada a partir de `697ebcb4478b`.
+
+## Premissas assumidas
+
+- `p781043b5` A regra a + b é verificada com um laço sobre inteiros de -5 a 5, sem Hypothesis (por quê: Só posso alterar arquivos em tests, então não consigo declarar Hypothesis no pyproject.toml; evidência que faltou: Permissão para alterar o manifesto de dependências); tarefa `t1`, tentativa `t1-ta3`. Commits com `Stage-Id: t1-t`, `Stage-Id: t1-s`, `Stage-Id: t1-d`.
+
+## Tarefas bloqueadas
+
+Nenhuma.
+
+## Diário de bordo
+
+- `t1` (soma(2, 3) devolve -1 em vez de 5):
+  - `t1-ca1` aprovada
+  - `t1-ta1` rejeitada; disse: calculadora.py fica na raiz e os testes ficam em tests, que não o importaria sozinho; motivo: gate 5 (red_green): the declared test passes on the code with the defect [tests/test_soma.py::test_soma_com_zero_devolve_o_outro_operando]
+  - `t1-ta2` rejeitada; disse: Cobrir os dois critérios; o arquivo insere a raiz do projeto no sys.path porque calculadora.py fica fora de tests O teste de propriedade usa Hypothesis; a biblioteca padrão não tem geração de entradas por propriedade; motivo: gate 1 (scope): a comment that silences a tool was added [tests/test_soma.py]
+  - `t1-ta3` aprovada; disse: calculadora.py fica na raiz, fora de tests, e os testes novos ficam em tests
+  - `t1-a1` aprovada; disse: A função subtraía os operandos, por isso soma(2, 3) dava -1. Com a soma, os resultados passam a ser os esperados.
+  - `t1-da1` aprovada; disse: O projeto não tinha README e a documentação de soma(a, b) estava ausente
+
+## Mudanças de comportamento
+
+Não se aplica nesta versão.
+
+## Refatorações
+
+- `t1`: soma(2, 3) devolve -1 em vez de 5 (6 tentativa(s), 2 rejeitada(s))
+
+## Rastreabilidade
+
+- `t1`:
+  - critério 1 (origem E1): soma(2, 3) devolve 5 → `tests/test_soma.py::test_soma_de_2_e_3_devolve_5`
+  - critério 2 (origem E1): soma(a, b) devolve a + b para outros pares de inteiros, incluindo um negativo e zero, por exemplo soma(-1, 4) devolve 3 e soma(0, 0) devolve 0 → `tests/test_soma.py::test_soma_com_um_negativo`, `tests/test_soma.py::test_soma_com_zero_e_um_inteiro_positivo`, `tests/test_soma.py::test_soma_devolve_a_mais_b_para_pares_de_inteiros`
+
+Conferido: cada critério tem teste que falhava antes do conserto. Não conferido: que o critério diga o que o elemento da entrada diz, nem que o teste verifique o critério além do que falhar e passar mostra; isso é da revisão.
+
+## Documentação
+
+- `t1`: registro `docs/mudancas/t1.md`; README: `README.md`.
+
+Não conferido: links externos do README (exigiriam rede). O texto que o agente escreveu fora das afirmações com citação só passa pelas verificações de tópico.
+
+## Métricas antes e depois
+
+| Métrica | Antes | Depois |
+| --- | --- | --- |
+| dependency_cycles | 0 | 0 |
+| dependency_edges | 0 | 0 |
+| functions | 1 | 1 |
+| lint_violations | 0 | 0 |
+| max_ccn | 1 | 1 |
+| max_distance | 1 | 1 |
+| tests | 1 | 5 |
+| unstable_tests | 0 | 0 |
+
+## Ambiente e garantias
+
+A Forja rodou no terminal do usuário e não cria sandbox: a infraestrutura e as permissões em volta são do usuário ou da empresa.
+
+- cópia do agente sem `.git`: a Forja impôs.
+- arquivos sensíveis ausentes da cópia do agente: a Forja impôs.
+- ambiente filtrado para a CLI do agente: a Forja impôs.
+- processos presos à Forja (não sobrevivem a ela): a Forja impôs.
+- uso de git em outro caminho: a Forja só detecta (git conferido antes e depois de cada chamada).
+- leitura fora da cópia por código executado: ficou por conta do ambiente em que a Forja rodou.
+- acesso à rede: ficou por conta do ambiente em que a Forja rodou.
+- segredos do ambiente do usuário: ficou por conta do ambiente em que a Forja rodou.
+
+O agente pôde rodar os testes do projeto (`forja agente testar`).
+
+- Quem implementa: `claude-code` 2.1.319.
+- Quem documenta: o mesmo que implementa, sem comandos e só em documentação.
+- **SAST não executado: sem configuração de regras do Semgrep.**
+- **Licenças não verificadas: a política não lista licenças proibidas (seção [licenses] forbidden).**
+- **Camadas NÃO verificadas: sem regras em [architecture].**
+- **Dependência nova: o uso (downloads) só é medido em npm e NuGet; em PyPI, Go e Maven não é medido, e no Go a idade também não (a data que o proxy dá é a do commit do autor).**
+- **E2E não executado: sem comando (seção [adapters.<linguagem>.commands] e2e).**
+
+## Para publicar
+
+A Forja não faz push. Se aprovar o resultado: `git push -u <remoto> forja-run/9fa30ca504f3`.
+Este resumo fica em `C:\Users\dev\AppData\Local\Temp\forja-captura-751jx7jx\forja-home\runs\9fa30ca504f3\resumo.md` e não vai para o histórico.
+````
+
 O que uma verificação mediu e não pôde concluir aparece em "Premissas assumidas", no mesmo resumo e na seção `## Premissas` do registro. O resumo também diz quem documentou: "o mesmo que implementa, sem comandos e só em documentação". Para ler a execução depois do `git fetch`, use `forja revisao`.
 
 ## O que a Forja não confere

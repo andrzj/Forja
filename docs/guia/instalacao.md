@@ -69,6 +69,10 @@ O `doctor` só lê e diz o que falta; não instala nada. Cada item sai numa linh
 - `mypy`, `golangci-lint` e as CLIs de agente além da escolhida são opcionais: aparecem, mas não contam para o resultado.
 - A saída termina em `Tudo pronto.` ou em `N item(ns) a resolver.`
 
+![Verificação do ambiente no terminal](imagens/terminal-doctor.png)
+
+Verificação do ambiente num repositório limpo (`forja doctor`).
+
 Código de saída: `0` se nenhum item obrigatório falta; `1` caso contrário. Detalhes e um exemplo completo em [comandos.md](comandos.md).
 
 ## Instalar as ferramentas: `forja instalar`
@@ -79,6 +83,10 @@ forja instalar
 ```
 
 O comando instala o que falta e mostra o andamento de cada ferramenta (nome, para que serve, versão, origem, tamanho e etapa), com um resumo no fim. Ele não tem argumentos próprios.
+
+![Ajuda de forja instalar no terminal](imagens/terminal-instalar-ajuda.png)
+
+Ajuda do comando de instalação (`forja instalar --help`).
 
 ### O que é instalado
 

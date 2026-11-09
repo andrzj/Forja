@@ -176,6 +176,10 @@ No Windows, a Forja pede ao sistema que não suspenda o computador enquanto a ex
 
 Se a saída não for um terminal, a Forja usa o texto. Se a janela for menor que 60 por 16, cai para a linha e avisa "a janela está pequena (CxL); a tela completa pede ao menos 60x16". Só em `xterm`, `mintty` e `iTerm` a Forja amplia a janela, e nunca dentro de multiplexador ou terminal embutido. A chave `modo` da tabela `[interface]` do `execucao.toml` força um nível; veja `execucao-toml.md`.
 
+![Tela completa durante a execução, em 120 por 36](imagens/execucao-em-andamento.svg)
+
+Tela completa em andamento (`forja`).
+
 ### Teclas durante a execução
 
 | Tecla | Efeito |
@@ -197,7 +201,27 @@ Se a saída não for um terminal, a Forja usa o texto. Se a janela for menor que
 | `up`, `down`, `pageup`, `pagedown`, `end` | rolagem nos painéis |
 | `ctrl+c`, `ctrl+k` | parar |
 
+![Detalhes da tarefa atual](imagens/detalhes-da-tarefa.svg)
+
+Tecla `d` durante a execução: detalhes da tarefa atual, com os checks por gate e as rejeições.
+
+![Log completo da atividade](imagens/atividade-inteira.svg)
+
+Tecla `l` durante a execução: a atividade inteira.
+
+![Ajuda da tela completa](imagens/ajuda.svg)
+
+Tecla `?` durante a execução: a ajuda.
+
+![Aviso ao parar com q](imagens/execucao-interrompida.svg)
+
+Tecla `q` durante a execução: o aviso de que tudo foi salvo e que `q` de novo sai na hora.
+
 Na tela de instalação (`forja instalar`), `ctrl+c` cancela, `t` muda o tema e `q` sai.
+
+![Tela da instalação das ferramentas](imagens/instalacao.svg)
+
+Tela de `forja instalar` com um download em andamento.
 
 ### Temas
 
@@ -212,9 +236,21 @@ A tecla `t` percorre os temas nesta ordem. Sem escolha, o tema vem do fundo do t
 | `neon` | Forja Neon | escuro | títulos espaçados, borda por assunto |
 | `dos` | Forja DOS | escuro | borda dupla, títulos de aba e sombra |
 
+![Tema claro](imagens/tema-claro.svg)
+
+Tema `claro` (`tema = "claro"` no `execucao.toml`, ou a tecla `t`).
+
+![Tema dos](imagens/tema-dos.svg)
+
+Tema `dos` (`tema = "dos"` no `execucao.toml`, ou a tecla `t`).
+
 A chave `tema` do `execucao.toml` aceita esses nomes, sem distinguir maiúsculas; `ascii = true` troca os símbolos por ASCII. Mais em `execucao-toml.md`.
 
 ### Barra de gates
+
+![Barra de gates com os nomes, numa janela larga](imagens/barra-de-gates.svg)
+
+Barra dos gates 1 a 12 na tela de `forja`: os seis primeiros passaram e o sétimo roda. Em janela estreita a barra mostra só os números.
 
 A barra mostra 12 gates. Cada um reúne um ou mais checks, e o gate falha se qualquer check dele falha, roda se algum roda e passa se todos passam.
 

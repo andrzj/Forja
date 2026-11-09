@@ -13,6 +13,10 @@ Regras do arquivo:
 
 As opções da linha de comando (por exemplo `--cli`, `--modelo`, `--escopo`, `--fatos`, `--semgrep-config`, o texto do verbo e `-f`) têm precedência sobre a chave correspondente do arquivo. Elas estão em `comandos.md`.
 
+![Plano no modo sem perguntas](imagens/terminal-modo-ci-plano.png)
+
+Plano lido do `execucao.toml` (`forja --config execucao.toml --plano`).
+
 ## Chaves do arquivo
 
 ### `objetivo`
