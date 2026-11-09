@@ -107,10 +107,39 @@ def test_tokens_must_be_positive(tmp_path: Path) -> None:
         load_execucao(tmp_path / "e.toml")
 
 
+def test_an_unknown_theme_is_refused_when_the_file_is_read(tmp_path: Path) -> None:
+    (tmp_path / "e.toml").write_text('[interface]\ntema = "rosa"\n', encoding="utf-8")
+    with pytest.raises(SettingsError, match="tema desconhecido 'rosa'"):
+        load_execucao(tmp_path / "e.toml")
+    (tmp_path / "e.toml").write_text('[interface]\ntema = "DOS"\n', encoding="utf-8")
+    assert load_execucao(tmp_path / "e.toml").interface.tema == "DOS"
+
+
+def test_a_wrong_cli_template_is_refused_when_the_file_is_read(tmp_path: Path) -> None:
+    (tmp_path / "e.toml").write_text(
+        '[clis.x]\ncomando = ["{executable}", "{pacote}"]\n', encoding="utf-8"
+    )
+    with pytest.raises(SettingsError, match="unknown placeholders"):
+        load_execucao(tmp_path / "e.toml")
+    (tmp_path / "e.toml").write_text('[clis.x]\ncomando = ["{executable}"]\n', encoding="utf-8")
+    with pytest.raises(SettingsError, match="must deliver the package"):
+        load_execucao(tmp_path / "e.toml")
+
+
 def test_the_profile_is_empty_until_saved_and_then_kept(tmp_path: Path) -> None:
     assert load_perfil(tmp_path) == Perfil()
     save_perfil(tmp_path / "novo", Perfil(cli="claude-code", executaveis={"claude-code": "/x/y"}))
     assert load_perfil(tmp_path / "novo").executaveis == {"claude-code": "/x/y"}
+
+
+def test_the_profile_is_saved_even_when_its_folder_does_not_exist_yet(tmp_path: Path) -> None:
+    save_perfil(tmp_path / "a" / "b", Perfil(cli="codex"))
+    assert load_perfil(tmp_path / "a" / "b").cli == "codex"
+
+
+def test_without_appdata_the_windows_profile_is_under_the_home_folder() -> None:
+    expected = Path.home() / "AppData" / "Roaming" / "forja"
+    assert profile_dir({}, "win32") == expected
 
 
 def test_the_profile_lives_where_each_system_keeps_settings(tmp_path: Path) -> None:

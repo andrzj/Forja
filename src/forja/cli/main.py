@@ -41,6 +41,7 @@ from forja.cli.settings import (
     save_execucao,
     save_perfil,
 )
+from forja.core.adapters.executor import ExecutorNotFound
 from forja.core.locking.repository import RepositoryBusy
 from forja.core.paths import forja_home
 from forja.core.policy.config import PolicyConfigError
@@ -247,6 +248,12 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
         return int(ExitCode.INVALID_CONFIG)
     except SettingsError as error:
         console.say(str(error))
+        return int(ExitCode.INVALID_CONFIG)
+    except ExecutorNotFound as error:
+        console.say(
+            f"O executável indicado ({error.source.value}) não existe: {error.path}. "
+            "Corrija o caminho ou retire a indicação para a Forja procurar sozinha."
+        )
         return int(ExitCode.INVALID_CONFIG)
     except RepositoryBusy:
         console.say("Já há uma execução da Forja em andamento neste repositório.")

@@ -159,7 +159,10 @@ def test_a_cli_is_unknown_only_without_a_name_and_without_a_template(
     if known:
         name, profile = "claude-code", Perfil()
     else:
-        name, profile = "meu", Perfil(clis={"meu": ModeloCli(comando=["{executable}"])})
+        name, profile = (
+            "meu",
+            Perfil(clis={"meu": ModeloCli(comando=["{executable}", "{package}"])}),
+        )
 
     check = asyncio.run(
         doctor_module._agent_check(name, profile, {}, Quiet(), Path())  # noqa: SLF001

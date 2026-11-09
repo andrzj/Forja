@@ -13,9 +13,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from forja.core.adapters.executor import CommandTemplate
+from forja.core.adapters.executor import CommandTemplate, template_adapter
+from forja.ui.theme import THEMES
 
 DEFAULT_TOKENS = 2_000_000
 Mode = Literal["auto", "completa", "linha", "texto"]
@@ -33,6 +34,13 @@ class Interface(BaseModel):
     ascii: bool = False
     redimensionar: bool = True
 
+    @field_validator("tema")
+    @classmethod
+    def _known_theme(cls, value: str) -> str:
+        if value and value.casefold() not in THEMES:
+            raise ValueError(f"tema desconhecido {value!r}; os temas são {', '.join(THEMES)}")
+        return value
+
 
 class ModeloCli(BaseModel):
     """``[clis.<nome>]``: a CLI the Forja does not know, described by a command template."""
@@ -44,6 +52,11 @@ class ModeloCli(BaseModel):
     executaveis: list[str] = Field(default_factory=list)  # empty: the name of the CLI
     versao: list[str] = Field(default_factory=lambda: ["--version"])
     ambiente: list[str] = Field(default_factory=list)  # environment variables the CLI may see
+
+    @model_validator(mode="after")
+    def _usable_template(self) -> "ModeloCli":
+        template_adapter("cli", self.template())  # raises ValueError when the template is wrong
+        return self
 
     def template(self) -> CommandTemplate:
         return CommandTemplate(

@@ -14,10 +14,13 @@ from forja.cli import main as door
 from forja.cli import prepare as preparation
 from forja.cli.args import parse
 from forja.cli.detect import detect
-from forja.cli.settings import Execucao, ModeloCli, Perfil, load_perfil, save_perfil
+from forja.cli.settings import Execucao, Interface, ModeloCli, Perfil, load_perfil, save_perfil
 from forja.core.adapters.executor import locate_in_path
 from forja.core.states import ExecutionState
 from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
+from forja.ui.full import FullRenderer
+from forja.ui.terminal import Capabilities
+from forja.ui.theme import ASCII
 from tests.cli.test_resume import make_run
 
 pytestmark = pytest.mark.integration
@@ -108,6 +111,20 @@ def test_the_plan_says_which_tools_would_be_installed(
     talk = Talk()
     assert go(["refatorar", "--plano", "--escopo", "src"], talk, environ) == 0
     assert "Faltam ferramentas: gitleaks 8.0.0" in talk.text
+
+
+def test_an_executable_that_does_not_exist_is_explained_not_a_traceback(
+    repo: Path, environ: dict[str, str], tmp_path: Path
+) -> None:
+    missing = tmp_path / "nao-existe"
+    save_perfil(
+        Path(environ["FORJA_CONFIG_HOME"]),
+        Perfil(cli="claude-code", executaveis={"claude-code": str(missing)}),
+    )
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--escopo", "src"], talk, environ) == 2
+    assert "O executável indicado (user_config) não existe" in talk.text
+    assert str(missing) in talk.text
 
 
 def test_unsaved_changes_stop_it_before_anything(repo: Path, environ: dict[str, str]) -> None:
@@ -308,6 +325,97 @@ def test_an_unfinished_run_blocks_an_unattended_start(repo: Path, environ: dict[
     talk = Talk()
     assert go(["refatorar"], talk, environ) == 2
     assert "execução incompleta" in talk.text
+
+
+def test_the_plan_is_shown_even_with_an_unfinished_run(repo: Path, environ: dict[str, str]) -> None:
+    make_run(Path(environ["FORJA_HOME"]), "r1", repo, to=ExecutionState.PAUSED)
+    talk = Talk()
+    assert go(["refatorar", "--plano", "--escopo", "src"], talk, environ) == 0
+    assert "Vou refatorar proj" in talk.text
+    assert "execução incompleta" not in talk.text
+
+
+def test_choosing_to_resume_opens_the_unfinished_run(
+    repo: Path, environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make_run(Path(environ["FORJA_HOME"]), "r1", repo, to=ExecutionState.PAUSED)
+    opened: dict[str, object] = {}
+
+    async def fake_open(config: object, **kwargs: object) -> str:
+        opened.update(config=config, **kwargs)
+        return "session"
+
+    async def fake_run(session: object, renderer: object, console: object) -> int:
+        return 0
+
+    monkeypatch.setattr(door, "open_session", fake_open)
+    monkeypatch.setattr(door, "_run", fake_run)
+    monkeypatch.setattr(door, "renderer_for", lambda *_args: None)
+    assert go(["refatorar"], Talk("1", interactive=True), environ) == 0
+    assert opened == {"config": None, "run_id": "r1", "environ": environ, "interactive": True}
+
+
+def test_a_run_from_a_config_file_opens_without_questions(
+    repo: Path, environ: dict[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    opened: dict[str, object] = {}
+
+    async def fake_open(config: object, **kwargs: object) -> SimpleNamespace:
+        opened.update(kwargs)
+        return SimpleNamespace(directory=tmp_path)
+
+    async def fake_run(session: object, renderer: object, console: object) -> int:
+        return 0
+
+    monkeypatch.setattr(door, "open_session", fake_open)
+    monkeypatch.setattr(door, "_run", fake_run)
+    monkeypatch.setattr(door, "renderer_for", lambda *_args: None)
+    monkeypatch.setattr(door, "missing_tools", lambda _environ, **_: [])
+    answers = tmp_path / "e.toml"
+    answers.write_text(
+        'objetivo = "refatorar"\nescopo = ["src"]\ncli = "claude-code"\n', encoding="utf-8"
+    )
+    assert go(["--config", str(answers), "refatorar"], Talk(interactive=True), environ) == 0
+    assert opened["interactive"] is False
+
+
+def test_the_full_screen_is_chosen_when_the_terminal_has_room(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caps = Capabilities(True, "truecolor", True, 120, 36, "windows_terminal", True, True, False)
+    monkeypatch.setattr(door.terminal, "detect", lambda: caps)
+    screen = door.renderer_for(Perfil(), None, Talk())
+    assert isinstance(screen, FullRenderer)
+
+
+def _screen_theme(
+    monkeypatch: pytest.MonkeyPatch, *, tema: str, ascii: bool, unicode: bool
+) -> object:
+    caps = Capabilities(True, "truecolor", unicode, 120, 36, "windows_terminal", True, True, False)
+    monkeypatch.setattr(door.terminal, "detect", lambda: caps)
+    seen: list[object] = []
+    monkeypatch.setattr(door, "FullRenderer", lambda theme, *_a, **_k: seen.append(theme))
+    profile = Perfil(interface=Interface(tema=tema, ascii=ascii))
+    door.renderer_for(profile, None, Talk())
+    return seen[0]
+
+
+def test_the_theme_named_in_the_profile_is_the_one_drawn(monkeypatch: pytest.MonkeyPatch) -> None:
+    theme = _screen_theme(monkeypatch, tema="dos", ascii=False, unicode=True)
+    assert theme.key == "dos"  # type: ignore[attr-defined]
+
+
+def test_plain_symbols_are_used_when_asked_or_when_the_terminal_cannot_draw_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = _screen_theme(monkeypatch, tema="", ascii=True, unicode=True)
+    cannot = _screen_theme(monkeypatch, tema="", ascii=False, unicode=False)
+    neither = _screen_theme(monkeypatch, tema="", ascii=False, unicode=True)
+    assert asked.glyphs is ASCII  # type: ignore[attr-defined]
+    assert cannot.glyphs is ASCII  # type: ignore[attr-defined]
+    assert neither.glyphs is not ASCII  # type: ignore[attr-defined]
 
 
 def test_the_doctor_lists_what_is_missing_and_how_to_fix_it(
