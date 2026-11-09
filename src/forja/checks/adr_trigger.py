@@ -2,8 +2,8 @@
 
 A rule, not a model, decides that a decision record is called for; the documenter writes it. The
 detectors are the manifests the adapters read (a name the task added) and the directory (the unit
-of a module): a directory with a production file the task added and none at the task's base. A
-change in the graph between modules or in a layer rule comes with the architecture gate.
+of a module): a directory with a production file the task added and none at the task's base. It
+does not look at the graph between modules or at layer rules.
 
 The check wants one new numbered record under ``docs/adr`` with a section on the alternatives and
 one on the consequences, whenever a detector fires. A record nobody asked for is not rejected.
