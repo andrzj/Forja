@@ -58,6 +58,15 @@ def test_lizard_rows_give_the_place_of_each_function_and_keep_the_worst_of_a_nam
     assert parse_spans(rows) == {("a.py", "f"): Function(7, 8, 12)}
 
 
+def test_of_two_functions_of_a_name_with_the_same_complexity_the_first_is_kept() -> None:
+    rows = [
+        '3,7,9,1,5,"f@1-5@a.py","a.py","f","f( )",1,5',
+        '3,7,9,1,5,"f@8-12@a.py","a.py","f","f( )",8,12',
+    ]
+
+    assert parse_spans(rows) == {("a.py", "f"): Function(7, 1, 5)}
+
+
 def judge(scene: Scene, report: CoverageReport | None) -> GateResult:
     git = scene.repo.git.at(scene.repo.path)
     changes = asyncio.run(read_changes(git))

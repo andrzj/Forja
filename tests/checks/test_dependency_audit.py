@@ -130,6 +130,18 @@ def test_many_new_advisories_on_one_package_are_one_finding_that_counts_the_rest
     assert finding.target == LOCK
 
 
+def test_one_advisory_over_the_listed_ones_is_counted_as_one_more(
+    log: EventLog, tmp_path: Path
+) -> None:
+    write(tmp_path, LOCK, "a 1 vulns=GHSA-1,GHSA-2,GHSA-3,GHSA-4\n")
+
+    result = judge(log, tmp_path, modified(), {LOCK: "b 2\n"})
+
+    assert isinstance(result, Rejected)
+    (finding,) = result.findings
+    assert finding.message == "4 new vulnerabilities in a 1: GHSA-1, GHSA-2, GHSA-3 and 1 more"
+
+
 def test_three_new_advisories_on_one_package_are_all_named(log: EventLog, tmp_path: Path) -> None:
     write(tmp_path, LOCK, "a 1 vulns=GHSA-1,GHSA-2,GHSA-3\n")
 
