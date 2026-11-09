@@ -50,6 +50,29 @@ def test_python_import_of_a_name_falls_back_to_the_package() -> None:
     assert edges("python", files) == {("src/p/cli", "src/p/core")}
 
 
+def test_python_a_folder_without_init_is_a_namespace_package() -> None:
+    files = {
+        "a/b/__init__.py": "x = 1\n",
+        "a/b/m.py": "",
+        "use/__init__.py": "import a.b\nimport a.b.m\n",
+        "deep/x/y/z.py": "",
+        "use2/__init__.py": "from deep.x.y import z\n",
+    }
+
+    assert edges("python", files) == {("use", "a/b"), ("use2", "deep/x/y")}
+
+
+def test_python_a_regular_package_name_wins_over_a_namespace_name() -> None:
+    files = {
+        "p/a/b.py": "",
+        "zz/a/__init__.py": "",
+        "zz/a/b/__init__.py": "",
+        "u/use.py": "import a.b\n",
+    }
+
+    assert edges("python", files) == {("u", "zz/a/b")}
+
+
 def test_python_ignores_what_is_not_in_the_project() -> None:
     files = {"p/__init__.py": "import os\nimport requests.adapters\nfrom .. import top\n"}
     assert edges("python", files) == set()
@@ -187,7 +210,7 @@ def test_cycles_are_groups_of_directories_that_depend_on_each_other() -> None:
 
 def test_a_directory_is_not_its_own_dependency() -> None:
     graph = build("python", {"a/m.py": "import n\n", "a/n.py": "", "b/k.py": "import a.m\n"})
-    assert graph.edges == frozenset()
+    assert graph.edges == frozenset({("b", "a")})
     assert graph.cycles() == ()
 
 

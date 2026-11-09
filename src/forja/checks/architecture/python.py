@@ -1,4 +1,8 @@
-"""Python: an import names a dotted module, found by the longest prefix that is a file."""
+"""Python: an import names a dotted module, found by the longest prefix that is a file.
+
+A directory without ``__init__`` is a namespace package: ``a/b/m.py`` is ``a.b.m`` as well as
+``b.m`` (a source folder such as ``src`` is not told apart from a namespace, so both are names).
+"""
 
 import posixpath
 from collections.abc import Mapping
@@ -16,6 +20,11 @@ def resolve(facts: Mapping[str, FileFacts]) -> set[tuple[str, str]]:
         module = packages[path][0]
         if module:
             names.setdefault(".".join(module), path)
+    for path in sorted(facts):  # the names a namespace gives come after every regular name
+        module = packages[path][0]
+        for above in _namespaces(path, packages[path][1]):
+            if module:
+                names.setdefault(".".join([*above, *module]), path)
     edges: set[tuple[str, str]] = set()
     for path, found in facts.items():
         package = packages[path][1]
@@ -47,6 +56,16 @@ def _packages(facts: Mapping[str, FileFacts]) -> dict[str, tuple[list[str], list
         stem = posixpath.splitext(posixpath.basename(path))[0]
         result[path] = (package if stem == "__init__" else [*package, stem], package)
     return result
+
+
+def _namespaces(path: str, package: list[str]) -> list[list[str]]:
+    """The directories above the package of ``path``, taken from the nearest one, one more at a
+    time: each is a namespace that may lead the module's name."""
+    folder = posixpath.dirname(path)
+    for _ in package:  # the directories of the package itself
+        folder = posixpath.dirname(folder)
+    parts = [part for part in folder.split("/") if part]
+    return [parts[start:] for start in reversed(range(len(parts)))]
 
 
 def _absolute(target: str, package: list[str]) -> list[str]:
