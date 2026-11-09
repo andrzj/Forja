@@ -216,5 +216,6 @@ def _validate_ignore(rule: Any, patterns: Any, where: str, bad: Any) -> None:
         except re.error as error:
             bad(f"{where}.ignore", f"{pattern!r} is not a valid regular expression: {error}")
             continue
-        if compiled.match(""):
-            bad(f"{where}.ignore", f"{pattern!r} matches the empty string, so it drops every line")
+        # the comparison searches each line with its line end: an empty line is "" or "\n"
+        if compiled.search("") or compiled.search("\n"):
+            bad(f"{where}.ignore", f"{pattern!r} matches an empty line, so it drops every line")

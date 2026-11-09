@@ -162,6 +162,8 @@ def _with_output(*lines: str) -> str:
         ('kind = "stdout"', 'rule = "ignore"', "ignore = [1]"),
         ('kind = "stdout"', 'rule = "ignore"', 'ignore = ["("]'),
         ('kind = "stdout"', 'rule = "ignore"', 'ignore = [".*"]'),
+        ('kind = "stdout"', 'rule = "ignore"', "ignore = ['\\s']"),
+        ('kind = "stdout"', 'rule = "ignore"', "ignore = ['\\n']"),
         ('kind = "stdout"', "extra = 1"),
     ],
 )
@@ -190,3 +192,18 @@ def test_every_problem_of_a_case_is_reported_at_once() -> None:
     text = problems('[[differential.cases]]\nname = "A"\ncommand = ["sh"]\nstdin = "/x"\n')
 
     assert "name" in text and "is a shell" in text and "stdin" in text
+
+
+@pytest.mark.parametrize("pattern", [r"\s", r"\n", ".*", "$", "^"])
+def test_a_pattern_that_finds_an_empty_line_is_refused_as_the_comparison_would_use_it(
+    pattern: str,
+) -> None:
+    text = problems(_with_output('kind = "stdout"', 'rule = "ignore"', f"ignore = ['{pattern}']"))
+
+    assert "matches an empty line, so it drops every line" in text
+
+
+def test_a_pattern_that_needs_text_in_the_line_is_accepted() -> None:
+    case = policy(_with_output('kind = "stdout"', 'rule = "ignore"', "ignore = ['^took', 'ms$']"))
+
+    assert case.differential[0].outputs[0].ignore == ("^took", "ms$")
