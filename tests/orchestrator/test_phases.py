@@ -8,6 +8,7 @@ import pytest
 from forja.core.adapters.executor import ErrorKind
 from forja.core.events import EventLog
 from forja.core.states import AttemptState, ExecutionState, Level, StageState, TaskState
+from forja.orchestrator import phases
 from forja.orchestrator.budget import read_consumption
 from forja.orchestrator.config import Budget
 from forja.orchestrator.diary import HYPOTHESIS_REQUEST
@@ -231,7 +232,10 @@ def test_a_baseline_that_is_not_green_fails_the_run_before_any_task(world: Memor
     outcome, log = world.run(measurer=ScriptedMeasurer(baseline_ok=False))
 
     assert (outcome.state, outcome.exit_code) == (ExecutionState.FAILED, ExitCode.FAILED)
-    assert outcome.message == "baseline_not_green"
+    assert outcome.message == (
+        "A base já não está verde (tests fail on the base): a Forja não parte de testes ou "
+        "checagens que falham. Corrija-os, faça o commit e rode de novo."
+    )
     assert log.state.children_of(Level.TASK, RUN) == []
     payload = log.state.transition_payload(Level.EXECUTION, RUN, ExecutionState.FAILED)
     assert payload == {"reason": "baseline_not_green", "problems": ["tests fail on the base"]}
@@ -527,3 +531,21 @@ def test_the_hypothesis_is_asked_after_two_rejections_at_the_same_gate(
     first, second, third = agent.seen
     assert (first.hypothesis, second.hypothesis) == ("", "")
     assert third.hypothesis == HYPOTHESIS_REQUEST
+
+
+@pytest.mark.parametrize(
+    ("problems", "shown"),
+    [
+        (["a", "b"], " (a; b)"),
+        ([], ""),
+        (None, ""),
+        ("a", ""),
+    ],
+)
+def test_the_message_of_a_base_that_is_not_green_lists_the_problems_only_when_there_are_some(
+    problems: object, shown: str
+) -> None:
+    assert phases._baseline_message(problems) == (  # noqa: SLF001
+        f"A base já não está verde{shown}: a Forja não parte de testes ou checagens que falham. "
+        "Corrija-os, faça o commit e rode de novo."
+    )

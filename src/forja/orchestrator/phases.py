@@ -41,6 +41,19 @@ from forja.orchestrator.workspace_git import HANDLED_OPERATIONS
 AGENT_OPERATIONS = frozenset({"prepare_workcopy", "apply_diff"})
 SUMMARY_NAME = "resumo.md"
 METRIC_LIMIT = 40
+BASELINE_NOT_GREEN = "baseline_not_green"
+
+
+def _baseline_message(problems: object) -> str:
+    """The run that ended before any task because the base is not green, said to the person."""
+    found = [str(p) for p in problems] if isinstance(problems, list) else []
+    what = f" ({'; '.join(found)})" if found else ""
+    return (
+        f"A base já não está verde{what}: a Forja não parte de testes ou checagens que falham. "
+        "Corrija-os, faça o commit e rode de novo."
+    )
+
+
 _ENDED = (ExecutionState.DELIVERED, ExecutionState.DISCARDED, ExecutionState.FAILED)
 
 
@@ -159,6 +172,8 @@ class Orchestrator:
                 f"{self._ctx.run_dir / SUMMARY_NAME}"
             )
         payload = self._log.state.transition_payload(Level.EXECUTION, self._run_id, state) or {}
+        if payload.get("reason") == BASELINE_NOT_GREEN:
+            return _baseline_message(payload.get("problems"))
         return str(payload.get("reason", state.value))
 
     # -- the phases -----------------------------------------------------------------------------
@@ -207,7 +222,7 @@ class Orchestrator:
         self._record_metrics("baseline", baseline)
         if not baseline.ok:
             problems: list[JsonValue] = [*baseline.problems[:10]]
-            self._go(ExecutionState.FAILED, {"reason": "baseline_not_green", "problems": problems})
+            self._go(ExecutionState.FAILED, {"reason": BASELINE_NOT_GREEN, "problems": problems})
             return
         self._go(ExecutionState.PLANNING)
 
