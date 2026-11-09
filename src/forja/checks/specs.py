@@ -8,7 +8,7 @@ PREMISE = InconclusivePolicy.PREMISE
 
 
 def default_registry() -> CheckRegistry:
-    """The checks of increment 1. A tool that cannot run blocks the task, except complexity,
+    """The default checks. A tool that cannot run blocks the task, except complexity,
     whose gap is declared as an assumption because its limit is not calibrated yet."""
     registry = CheckRegistry()
     for spec in (

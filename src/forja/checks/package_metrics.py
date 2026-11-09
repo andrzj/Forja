@@ -14,7 +14,7 @@ from forja.checks.base import rejected
 from forja.checks.shape import threshold
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 
-DEFAULT_MAX_DISTANCE = 0.8  # a guess until the calibration of step 9
+DEFAULT_MAX_DISTANCE = 0.8  # a guess; the owner dropped the calibration
 DEFAULT_MIN_TYPES = 3
 
 

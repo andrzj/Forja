@@ -17,7 +17,7 @@ from forja.checks.shape import language_of, read_texts, shapes, shapes_before, t
 from forja.checks.structure import SyntaxProblem
 from forja.core.gates import Approved, Finding, GateInput, GateResult
 
-DEFAULT_MAX_RATIO = 1.0  # a guess until the calibration of step 9
+DEFAULT_MAX_RATIO = 1.0  # a guess; the owner dropped the calibration
 DEFAULT_MIN_STATEMENTS = 10
 
 

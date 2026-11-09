@@ -1,6 +1,7 @@
 """Gate 7 (the mutation part): do the tests notice a change to the lines the attempt wrote?
 
-Only the lines the diff added are mutated. As in unclebob/mutator, coverage only says which lines
+The lines the diff added are mutated, and so is every other place in a function that holds one
+(as in the mutator's differential run). As in unclebob/mutator, coverage only says which lines
 a test runs (a mutant on another line is not run), each mutant is judged by the whole test
 command, and the score is killed over killed plus survived; one below the policy's limit reproves.
 The check serves every language the mutator serves; the adapter it is given supplies the test

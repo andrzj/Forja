@@ -26,7 +26,7 @@ class CitationCheck:
     worktree: Path
     claims: Sequence[Claim]
     evidence_ids: frozenset[str]  # the measurements and gates a claim may point at
-    fact_ids: frozenset[str] = frozenset()  # facts a person recorded; none exist yet
+    fact_ids: frozenset[str] = frozenset()  # facts the config of the run records
     id: str = "citations"
     gate: int = 13
     requires: frozenset[str] = frozenset()
