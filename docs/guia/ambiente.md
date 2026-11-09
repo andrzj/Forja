@@ -63,7 +63,7 @@ export SSL_CERT_FILE=/etc/ssl/certs/empresa.pem
 forja refatorar
 ```
 
-Para os processos isolados (testes, build, ferramentas), o ambiente é limitado a `PATH`, `SYSTEMROOT`, `TEMP`, `TMP`, `TMPDIR`, `PATHEXT`, `COMSPEC`, `HOME`, `USERPROFILE`, `LANG`, `TERM` e as variáveis `LC_*`; a Forja acrescenta `PYTHONDONTWRITEBYTECODE=1`. O comando de e2e roda com variáveis de proxy apontando para um endereço sem resposta, `NO_PROXY=localhost,127.0.0.1,::1`, `npm_config_offline=true`, `PIP_NO_INDEX=1`, `GOPROXY=off` e `NODE_USE_ENV_PROXY=1`; veja `gates\e2e-e-dados-de-teste.md`.
+Para os processos isolados (testes, build, ferramentas), o ambiente é limitado a `PATH`, `SYSTEMROOT`, `TEMP`, `TMP`, `TMPDIR`, `PATHEXT`, `COMSPEC`, `HOME`, `USERPROFILE`, `LANG`, `TERM` e as variáveis `LC_*`; a Forja acrescenta `PYTHONDONTWRITEBYTECODE=1`. O comando de e2e roda com variáveis de proxy apontando para uma armadilha local em `127.0.0.1` que responde 403, `NO_PROXY=localhost,127.0.0.1,::1`, `npm_config_offline=true`, `PIP_NO_INDEX=1`, `GOPROXY=off` e `NODE_USE_ENV_PROXY=1`; veja `gates\e2e-e-dados-de-teste.md`.
 
 ### Fachada do agente
 

@@ -136,7 +136,7 @@ Páginas: `gates\seguranca-e-dependencias.md` (gate 2), `gates\tipos.md` (`types
 | `e2e` | 6 | `observation` | `block` | os testes de ponta a ponta passam e nenhum tentou alcançar a rede | |
 | `test_data` | 6 | `observation` | `premise` | os arquivos de teste não ganharam dados pessoais | |
 | `properties` | 6 | `observation` | `premise` | código de produção alterado vem com teste de propriedades | |
-| `mutation` | 7 | `observation` | `premise` | os testes percebem mudanças nas linhas que a tentativa escreveu | `thresholds.min_score`, `limits.workers` |
+| `mutation` | 7 | `observation` | `premise` | os testes percebem mudanças nas funções que a tentativa tocou | `thresholds.min_score`, `limits.workers` |
 | `complexity` | 8 | `blocking` | `premise` | nenhuma função nova ou piorada acima do limite de complexidade | `thresholds.max_ccn` |
 | `crap` | 8 | `observation` | `premise` | função complexa e pouco coberta pelos testes | `thresholds.max_crap` |
 | `pass_through` | 8 | `observation` | `premise` | função nova que só repassa os próprios argumentos | |
@@ -249,7 +249,7 @@ max_dashes = 0
 
 ## Comandos: `[checks.<id>.commands]`
 
-Uma verificação que roda uma ferramenta da linguagem aceita que o repositório diga o comando. O comando é uma lista (programa e argumentos), nunca um texto de shell. A Forja troca só a linha de comando: diretório, ambiente e leitura da saída continuam sendo os do adaptador da linguagem. O comando só entra se o adaptador da linguagem suporta a operação. A troca vale para todas as linguagens do projeto.
+Uma verificação que roda uma ferramenta da linguagem aceita que o repositório diga o comando. O comando é uma lista (programa e argumentos), nunca um texto de shell. A lista substitui o comando inteiro, inclusive o formato de saída que a Forja lê e os arquivos alterados que ela acrescentaria: ela precisa trazer tudo isso. Diretório, ambiente e leitura da saída continuam sendo os do adaptador da linguagem. O comando só entra se o adaptador da linguagem suporta a operação. A troca vale para todas as linguagens do projeto.
 
 | Verificação | Nome | Efeito |
 | --- | --- | --- |
@@ -272,7 +272,7 @@ test = ["python", "-m", "pytest", "-q", "-x"]
 
 # Lint com a configuração do repositório.
 [checks.lint.commands]
-lint = ["ruff", "check", "--config", "pyproject.toml"]
+lint = ["ruff", "check", "--ignore-noqa", "--output-format=concise", "--no-cache", "--config", "pyproject.toml", "."]
 ```
 
 ## `[adapters.<linguagem>.commands]`
