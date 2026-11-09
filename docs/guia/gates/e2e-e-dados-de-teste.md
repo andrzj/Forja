@@ -99,7 +99,7 @@ e2e = ["npm", "run", "test:e2e"]
 
 O comando roda com o diretório, o ambiente e o interpretador que o adaptador usa para rodar testes, e a saída é lida como a de qualquer execução de testes. Por isso o e2e só roda numa linguagem em que o adaptador sabe rodar testes: um projeto TypeScript sem `vitest` nem `jest` é deixado de fora, mesmo com `e2e` declarado. Em monorepo, roda uma vez por projeto da linguagem.
 
-Das operações que a seção `[adapters.<linguagem>.commands]` aceita (`format`, `lint`, `lint_fix`, `types`, `build`, `test`, `coverage`, `mutation`, `e2e`), só `e2e` tem efeito. As outras são aceitas, mas a Forja não as lê. Para trocar o comando de testes, use `[checks.tests.commands]`, como acima.
+Das operações que a seção `[adapters.<linguagem>.commands]` aceita (`format`, `lint`, `lint_fix`, `types`, `build`, `test`, `coverage`, `e2e`), só `e2e` tem efeito. As outras são aceitas, mas a Forja não as lê. Para trocar o comando de testes, use `[checks.tests.commands]`, como acima.
 
 Quando o arquivo declara um comando, o resumo antes da confirmação traz a linha `<linguagem>: roda no lugar do padrão (e2e): <comando>`.
 

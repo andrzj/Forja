@@ -412,6 +412,10 @@ def test_adapter_commands_merge_operation_by_operation_across_layers() -> None:
         ('[adapters.cobol.commands]\ntest = ["x"]\n', "adapters.cobol: unknown language"),
         ('[adapters.python.commands]\ndeploy = ["x"]\n', "unknown operation"),
         (
+            '[adapters.python.commands]\nmutation = ["x"]\n',
+            "adapters.python.commands.mutation: unknown operation",
+        ),
+        (
             '[adapters.python.commands]\ntest = "pytest -q"\n',
             "non-empty list of strings (no shell string)",
         ),
@@ -430,7 +434,9 @@ def test_the_operations_the_policy_accepts_are_the_ones_the_adapters_have() -> N
     from forja.core.adapters import Operation
     from forja.core.policy.config import ADAPTER_OPERATIONS
 
-    assert {operation.value for operation in Operation} == ADAPTER_OPERATIONS
+    assert {
+        operation.value for operation in Operation if operation is not Operation.MUTATION
+    } == ADAPTER_OPERATIONS
 
 
 def test_adapter_commands_change_the_policy_version() -> None:

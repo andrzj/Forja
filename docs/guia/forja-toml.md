@@ -277,7 +277,7 @@ lint = ["ruff", "check", "--ignore-noqa", "--output-format=concise", "--no-cache
 
 ## `[adapters.<linguagem>.commands]`
 
-Comandos por linguagem e por operação. A linguagem é uma de `java`, `go`, `python`, `csharp`, `javascript`, `typescript`. A operação é uma de `format`, `lint`, `lint_fix`, `types`, `build`, `test`, `coverage`, `mutation`, `e2e`.
+Comandos por linguagem e por operação. A linguagem é uma de `java`, `go`, `python`, `csharp`, `javascript`, `typescript`. A operação é uma de `format`, `lint`, `lint_fix`, `types`, `build`, `test`, `coverage`, `e2e`.
 
 | Chave | Tipo | Padrão | Efeito |
 | --- | --- | --- | --- |

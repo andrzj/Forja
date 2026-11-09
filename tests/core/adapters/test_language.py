@@ -39,7 +39,7 @@ def log_with(tmp_path: Path, *lines: str) -> Path:
 
 
 def test_the_operations_match_the_ones_the_policy_accepts_for_overrides() -> None:
-    assert {op.value for op in Operation} == ADAPTER_OPERATIONS
+    assert {op.value for op in Operation if op is not Operation.MUTATION} == ADAPTER_OPERATIONS
 
 
 def test_building_and_testing_are_the_required_operations() -> None:

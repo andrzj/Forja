@@ -42,9 +42,10 @@ _CHECK_KEYS = {"mode", "on_inconclusive", "promotion", "thresholds", "commands",
 # (docs/guia/documentacao-gerada.md).
 NEVER_BLOCKING = frozenset({"voice", "comments"})
 # Kept in step with adapters.language.Operation (a test compares them); importing it here would
-# make the two packages import each other.
+# make the two packages import each other. ``mutation`` is left out: no adapter plans it and the
+# mutation gate runs its own executor, so a command for it would never be read.
 ADAPTER_OPERATIONS = frozenset(
-    {"format", "lint", "lint_fix", "types", "build", "test", "coverage", "mutation", "e2e"}
+    {"format", "lint", "lint_fix", "types", "build", "test", "coverage", "e2e"}
 )
 
 # The tables a forja.toml may hold and the keys each accepts (``checks`` is keyed by check id, and
