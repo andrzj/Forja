@@ -300,3 +300,55 @@ def test_a_missing_tool_points_to_forja_instalar_then_to_its_own_site(
         "semgrep": "rode `forja instalar` ou instale à mão, conforme https://semgrep.dev/docs/getting-started/cli",
         "mypy": "rode `forja instalar` ou instale à mão, conforme https://mypy.readthedocs.io/en/stable/getting_started.html",
     }
+
+
+def test_osv_scanner_is_checked_and_a_missing_one_is_optional_with_the_fix(
+    agent: list[str],
+) -> None:
+    check = checks_of(detection())["osv-scanner"]
+
+    assert not check.ok
+    assert not check.required
+    assert check.detail == "osv-scanner ausente: a auditoria de dependências fica inconclusiva"
+    assert check.fix == (
+        "rode `forja instalar` ou instale à mão, conforme https://github.com/google/osv-scanner"
+    )
+
+
+def test_a_missing_language_tool_points_to_forja_instalar_then_to_its_own_site(
+    agent: list[str], tmp_path: Path
+) -> None:
+    (tmp_path / "pom.xml").write_text("<project/>")
+    found = checks_of(detection(repo=tmp_path, go=True, typescript=True, csharp=True, java=True))
+
+    assert {
+        name: found[name].fix for name in ("go", "golangci-lint", "node", "dotnet", "java", "maven")
+    } == {
+        "go": "rode `forja instalar` ou instale à mão, conforme https://go.dev/doc/install",
+        "golangci-lint": "rode `forja instalar` ou instale à mão, conforme https://golangci-lint.run/welcome/install/",
+        "node": "rode `forja instalar` ou instale à mão, conforme https://nodejs.org/en/download",
+        "dotnet": "rode `forja instalar` ou instale à mão, conforme https://dotnet.microsoft.com/download",
+        "java": "rode `forja instalar` ou instale à mão, conforme https://adoptium.net/installation/",
+        "maven": "rode `forja instalar` ou instale à mão, conforme https://maven.apache.org/install.html",
+    }
+
+
+def test_a_missing_gradle_points_to_forja_instalar_then_to_its_own_site(
+    agent: list[str], tmp_path: Path
+) -> None:
+    found = checks_of(detection(repo=tmp_path, java=True))
+
+    assert found["gradle"].fix == (
+        "rode `forja instalar` ou instale à mão, conforme https://gradle.org/install/"
+    )
+
+
+def test_a_missing_bundled_module_says_to_reinstall_the_forja(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(doctor_module.importlib.util, "find_spec", lambda _name: None)
+
+    check = doctor_module._module("ruff", "lint")  # noqa: SLF001
+
+    assert not check.ok
+    assert check.fix == "reinstale a Forja"

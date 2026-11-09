@@ -28,6 +28,7 @@ from forja.toolchain.resolve import installed_by_forja
 
 SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli"
 INSTALL_HINT = "rode `forja instalar`"
+OSV_HELP = "https://github.com/google/osv-scanner"
 GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks"
 JSCPD_HELP = "https://github.com/kucherenko/jscpd"
 MYPY_HELP = "https://mypy.readthedocs.io/en/stable/getting_started.html"
@@ -50,13 +51,17 @@ class Check:
     required: bool = True
 
 
+def _install_fix(help_url: str) -> str:
+    return f"{INSTALL_HINT} ou instale à mão, conforme {help_url}"
+
+
 def _module(name: str, purpose: str) -> Check:
     found = importlib.util.find_spec(name) is not None
     return Check(
         name,
         found,
         f"{purpose} (vem com a Forja)" if found else f"{purpose}: não encontrado",
-        "" if found else "reinstale a Forja: `uv tool install forja` ou `pip install forja`",
+        "" if found else "reinstale a Forja",
     )
 
 
@@ -93,7 +98,20 @@ def _mypy_check(environ: Mapping[str, str]) -> Check:
         "mypy",
         found,
         _where("mypy", environ) if found else "mypy ausente: a análise de tipos fica inconclusiva",
-        "" if found else f"{INSTALL_HINT} ou instale à mão, conforme {MYPY_HELP}",
+        "" if found else _install_fix(MYPY_HELP),
+        required=False,
+    )
+
+
+def _osv_check(environ: Mapping[str, str]) -> Check:
+    found = locate_in_path("osv-scanner", environ.get("PATH")) is not None
+    return Check(
+        "osv-scanner",
+        found,
+        _where("osv-scanner", environ)
+        if found
+        else "osv-scanner ausente: a auditoria de dependências fica inconclusiva",
+        "" if found else _install_fix(OSV_HELP),
         required=False,
     )
 
@@ -107,7 +125,7 @@ def _go_checks(environ: Mapping[str, str]) -> list[Check]:
             "go",
             found,
             _where("go", environ) if found else "go ausente",
-            "" if found else GO_HELP,
+            "" if found else _install_fix(GO_HELP),
         ),
         Check(
             "golangci-lint",
@@ -115,7 +133,7 @@ def _go_checks(environ: Mapping[str, str]) -> list[Check]:
             _where("golangci-lint", environ)
             if lint
             else "golangci-lint ausente: o lint de Go fica não suportado",
-            "" if lint else f"instale seguindo {GOLANGCI_HELP}",
+            "" if lint else _install_fix(GOLANGCI_HELP),
             required=False,
         ),
     ]
@@ -128,7 +146,7 @@ def _node_checks(environ: Mapping[str, str]) -> list[Check]:
             "node",
             found,
             _where("node", environ) if found else "node ausente",
-            "" if found else NODE_HELP,
+            "" if found else _install_fix(NODE_HELP),
         )
     ]
 
@@ -140,7 +158,7 @@ def _dotnet_checks(environ: Mapping[str, str]) -> list[Check]:
             "dotnet",
             found,
             _where("dotnet", environ) if found else "dotnet ausente",
-            "" if found else DOTNET_HELP,
+            "" if found else _install_fix(DOTNET_HELP),
         )
     ]
 
@@ -154,7 +172,7 @@ def _java_checks(environ: Mapping[str, str], root: Path | None = None) -> list[C
             "java",
             java,
             _where("java", environ) if java else "java ausente",
-            "" if java else JAVA_HELP,
+            "" if java else _install_fix(JAVA_HELP),
         )
     ]
     if root is not None and not (root / "pom.xml").is_file():
@@ -165,7 +183,7 @@ def _java_checks(environ: Mapping[str, str], root: Path | None = None) -> list[C
             "maven",
             maven,
             _where("mvn", environ) if maven else "mvn ausente",
-            "" if maven else MAVEN_HELP,
+            "" if maven else _install_fix(MAVEN_HELP),
         )
     )
     return checks
@@ -180,7 +198,7 @@ def _gradle_check(environ: Mapping[str, str], root: Path) -> Check:
         "gradle",
         found,
         _where("gradle", environ) if found else "gradle ausente e o repositório não tem gradlew",
-        "" if found else GRADLE_HELP,
+        "" if found else _install_fix(GRADLE_HELP),
     )
 
 
@@ -203,16 +221,15 @@ async def run_checks(
             "gitleaks",
             detection.gitleaks,
             _where("gitleaks", environ) if detection.gitleaks else "gitleaks ausente",
-            ""
-            if detection.gitleaks
-            else f"{INSTALL_HINT} ou instale à mão, conforme {GITLEAKS_HELP}",
+            "" if detection.gitleaks else _install_fix(GITLEAKS_HELP),
         ),
         Check(
             "jscpd",
             detection.jscpd,
             _where("jscpd", environ) if detection.jscpd else "jscpd ausente",
-            "" if detection.jscpd else f"{INSTALL_HINT} ou instale à mão, conforme {JSCPD_HELP}",
+            "" if detection.jscpd else _install_fix(JSCPD_HELP),
         ),
+        _osv_check(environ),
         Check(
             "disco",
             detection.disk_free_gib >= LOW_DISK_GIB,
@@ -249,7 +266,7 @@ async def run_checks(
                 "semgrep",
                 found,
                 _where("semgrep", environ) if found else "semgrep ausente",
-                "" if found else f"{INSTALL_HINT} ou instale à mão, conforme {SEMGREP_HELP}",
+                "" if found else _install_fix(SEMGREP_HELP),
             )
         )
     checks.append(await _agent_check(name, profile, environ, console, cache))
