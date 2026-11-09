@@ -47,6 +47,21 @@ ADAPTER_OPERATIONS = frozenset(
     {"format", "lint", "lint_fix", "types", "build", "test", "coverage", "mutation", "e2e"}
 )
 
+# The tables a forja.toml may hold and the keys each accepts (``checks`` is keyed by check id, and
+# ``differential`` and ``architecture`` hold lists of tables). The user guide must name every one.
+SECTION_KEYS: dict[str, frozenset[str]] = {
+    "checks": frozenset(),
+    "sensitive": frozenset({"paths"}),
+    "branches": frozenset({"protected"}),
+    "adapters": frozenset({"commands"}),
+    "redaction": frozenset({"patterns", "allow", "allow_patterns", "pii", "entropy_threshold"}),
+    "tests": frozenset({"root"}),
+    "licenses": frozenset({"forbidden"}),
+    "voice": frozenset({"markers_extra", "markers_off"}),
+    "architecture": frozenset({"layers"}),
+    "differential": frozenset({"cases"}),
+}
+
 Number = int | float
 
 
@@ -251,18 +266,7 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
     def bad(where: str, message: str) -> None:
         problems.append(f"{layer.name}: {where}: {message}")
 
-    unknown_top = set(layer.data) - {
-        "checks",
-        "sensitive",
-        "branches",
-        "adapters",
-        "redaction",
-        "tests",
-        "licenses",
-        "voice",
-        "architecture",
-        "differential",
-    }
+    unknown_top = set(layer.data) - set(SECTION_KEYS)
     for key in sorted(unknown_top):
         bad(key, "unknown section")
     _validate_architecture(layer.data.get("architecture"), bad)
@@ -324,7 +328,7 @@ def _validate_architecture(section: Any, bad: Any) -> None:
     if not isinstance(section, dict):
         bad("architecture", "must be a table")
         return
-    for key in sorted(set(section) - {"layers"}):
+    for key in sorted(set(section) - SECTION_KEYS["architecture"]):
         bad(f"architecture.{key}", "unknown key")
     layers = section.get("layers")
     if layers is None:
@@ -368,7 +372,7 @@ def _validate_tests(section: Any, bad: Any) -> None:
     if not isinstance(section, dict):
         bad("tests", "must be a table")
         return
-    for key in sorted(set(section) - {"root"}):
+    for key in sorted(set(section) - SECTION_KEYS["tests"]):
         bad(f"tests.{key}", "unknown key")
     if "root" in section:
         root = section["root"]
@@ -408,8 +412,7 @@ def _validate_redaction(section: Any, bad: Any) -> None:
     if not isinstance(section, dict):
         bad("redaction", "must be a table")
         return
-    known = {"patterns", "allow", "allow_patterns", "pii", "entropy_threshold"}
-    for key in sorted(set(section) - known):
+    for key in sorted(set(section) - SECTION_KEYS["redaction"]):
         bad(f"redaction.{key}", "unknown key")
 
     _validate_redaction_patterns(section.get("patterns"), bad)
@@ -486,7 +489,7 @@ def _validate_adapters(section: Any, bad: Any) -> None:
         if not isinstance(body, dict):
             bad(where, "must be a table")
             continue
-        for key in sorted(set(body) - {"commands"}):
+        for key in sorted(set(body) - SECTION_KEYS["adapters"]):
             bad(f"{where}.{key}", "unknown key")
         commands = body.get("commands", {})
         if not isinstance(commands, dict):
@@ -536,7 +539,7 @@ def _validate_voice(section: Any, bad: Any) -> None:
     if not isinstance(section, dict):
         bad("voice", "must be a table")
         return
-    for extra in sorted(set(section) - {"markers_extra", "markers_off"}):
+    for extra in sorted(set(section) - SECTION_KEYS["voice"]):
         bad(f"voice.{extra}", "unknown key")
     for key, check_one in (
         ("markers_extra", _check_marker_pattern),
