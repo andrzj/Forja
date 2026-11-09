@@ -286,18 +286,15 @@ def final(lines: list[str], view: View, theme: Theme, columns: int, rows: int) -
     role = STATE_ROLES.get(view.state, Role.ACCENT)
     out: list[Text] = []
     for number, text in enumerate(lines):
-        line = _line(columns)
-        _put(
-            line,
-            " " + (marks.passed + " " if number == 0 and role is Role.SUCCESS else ""),
-            theme.style(role, bold=True),
-        )
-        _put(
-            line,
-            fit(text, max(1, columns - 3), ellipsis=ellipsis),
-            theme.style(Role.TEXT, bold=number == 0),
-        )
-        out.append(_finish(line, columns))
+        for part, piece in enumerate(wrapped(text, max(1, columns - 3))):
+            line = _line(columns)
+            _put(
+                line,
+                " " + (marks.passed + " " if number == part == 0 and role is Role.SUCCESS else ""),
+                theme.style(role, bold=True),
+            )
+            _put(line, piece, theme.style(Role.TEXT, bold=number == 0))
+            out.append(_finish(line, columns))
     stats = _line(columns)
     done = f"{view.tasks_integrated} de {view.tasks_total} tarefa(s) integrada(s)"
     count = (

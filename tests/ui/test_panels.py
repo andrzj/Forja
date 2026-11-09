@@ -131,7 +131,7 @@ def test_the_current_task_stays_in_view_when_the_list_is_long() -> None:
         (f"t{n}", f"tarefa {n}", "in_progress" if n == 30 else "pending") for n in range(1, 41)
     )
     shown = panels.tasks(view(task_rows=rows), THEMES["escuro"], 40, 6)
-    assert any("t30" in line.plain for line in shown)
+    assert any("t30" in line.plain for line in shown[:-2])
 
 
 def test_scrolling_back_shows_older_lines_and_cannot_go_past_the_start() -> None:
@@ -280,3 +280,27 @@ def test_the_log_keeps_the_time_while_three_cells_are_left_for_the_text() -> Non
 
     assert first(13) == " 12:00:00 leu"
     assert first(12) == " leu"
+
+
+def test_a_long_line_of_the_closing_report_is_wrapped_whole_and_not_cut() -> None:
+    theme = THEMES["escuro"]
+    long_line = (
+        "Dependência nova: o uso (downloads) só é medido em npm e NuGet; em PyPI não é medido"
+    )
+
+    out = panels.final(["Entregue", long_line], view(state="delivered"), theme, 40, 20)
+
+    shown = [text.plain for text in out]
+    assert len(out) > 4
+    assert all(theme.glyphs.marks.ellipsis not in line for line in shown[:-2])
+    words = " ".join(" ".join(line.split()) for line in shown[1:-2]).split()
+    assert words == long_line.split()
+
+
+def test_only_the_first_line_of_the_closing_report_carries_the_mark_and_the_bold() -> None:
+    theme = THEMES["escuro"]
+    out = panels.final(["Entregue " * 8, "segunda " * 8], view(state="delivered"), theme, 30, 20)
+
+    marked = [text.plain for text in out if theme.glyphs.marks.passed in text.plain]
+    assert len(marked) == 1
+    assert out[0].plain.lstrip().startswith(theme.glyphs.marks.passed)
