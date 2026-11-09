@@ -84,7 +84,7 @@ Funciona como em `tests`. Os dois são independentes: quem quer o mesmo comando 
 
 ### O comando é seu
 
-A Forja não traz comando de e2e e não inventa um. Você declara, por linguagem, a chave `e2e` em `[adapters.<linguagem>.commands]`. A linguagem é a do adaptador: `python`, `go`, `typescript`, `csharp` ou `java`. JavaScript é atendido pelo adaptador `typescript`: a chave `[adapters.javascript.commands]` é aceita pelo arquivo, mas nenhum adaptador tem esse nome e o comando nunca roda.
+A Forja não traz comando de e2e e não inventa um. Você declara, por linguagem, a chave `e2e` em `[adapters.<linguagem>.commands]`. A linguagem é a do adaptador: `python`, `go`, `typescript`, `csharp` ou `java`. JavaScript é atendido pelo adaptador `typescript`: a seção `[adapters.javascript]` é recusada, porque nenhum adaptador tem esse nome. Use `[adapters.typescript.commands]`.
 
 ```toml
 # Python: roda só a pasta de e2e. O primeiro item "python" vira o

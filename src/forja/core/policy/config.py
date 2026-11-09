@@ -486,6 +486,9 @@ def _validate_adapters(section: Any, bad: Any) -> None:
         return
     for language, body in section.items():
         where = f"adapters.{language}"
+        if language == "javascript":  # no adapter has this name: its commands would never run
+            bad(where, "no adapter has this name; use typescript, which serves JavaScript")
+            continue
         if language not in LANGUAGES:
             bad(where, f"unknown language; use: {', '.join(sorted(LANGUAGES))}")
             continue
