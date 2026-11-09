@@ -75,7 +75,6 @@ class Execucao(BaseModel):
     agente_roda_testes: bool = True
     tarefas: int = Field(default=5, ge=1)  # how many of the worst functions one run takes on
     paralelismo: int = Field(default=1, ge=1)  # tasks of disjoint scope that run at once
-    base: str = ""
     semgrep_config: str = ""  # the user's Semgrep rules (a file or directory); empty: none named
     linguagem: str = ""  # criar: the language of the new project
     nome: str = ""  # criar: its name (lower-case words joined by hyphens)

@@ -16,7 +16,7 @@ from forja.executors import KNOWN_CLIS
 
 VERBS = {
     "refatorar": "melhora o código sem mudar o comportamento",
-    "corrigir": "corrige um erro descrito por você (incremento 3)",
+    "corrigir": "corrige um erro descrito por você",
     "criar": "cria um projeto, num diretório vazio, a partir de uma ideia",
     "investigar": "entende o código a partir de uma pergunta e escreve a documentação",
 }
@@ -54,7 +54,7 @@ def parser() -> argparse.ArgumentParser:
     main.add_argument(
         "--cli-testes",
         metavar="NOME",
-        help="qual CLI escreve os testes do conserto (corrigir); padrão: a de --cli",
+        help="qual CLI escreve os testes (corrigir e criar); padrão: a de --cli",
     )
     main.add_argument(
         "--modelo",
@@ -64,7 +64,7 @@ def parser() -> argparse.ArgumentParser:
     main.add_argument(
         "--modelo-testes",
         metavar="NOME",
-        help="qual modelo escreve os testes do conserto (corrigir); padrão: o configurado na CLI",
+        help="qual modelo escreve os testes (corrigir e criar); padrão: o configurado na CLI",
     )
     main.add_argument("--plano", action="store_true", help="mostrar o plano, sem executar")
     main.add_argument(

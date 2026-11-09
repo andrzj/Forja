@@ -72,6 +72,21 @@ def test_execucao_survives_a_round_trip_with_awkward_text(tmp_path: Path) -> Non
     assert load_execucao(tmp_path / "execucao.toml") == original
 
 
+def test_no_verb_description_carries_a_development_stage() -> None:
+    assert not any("incremento" in text for text in VERBS.values())
+
+
+def test_the_test_author_options_say_they_serve_fixing_and_creating() -> None:
+    help_text = " ".join(parser().format_help().split())
+    assert "escreve os testes (corrigir e criar)" in help_text
+
+
+def test_a_key_that_nothing_reads_is_not_accepted(tmp_path: Path) -> None:
+    (tmp_path / "e.toml").write_text('base = "main"\n', encoding="utf-8")
+    with pytest.raises(SettingsError, match="base"):
+        load_execucao(tmp_path / "e.toml")
+
+
 def test_a_misspelled_key_is_named_not_ignored(tmp_path: Path) -> None:
     (tmp_path / "e.toml").write_text("tokenz = 5\n", encoding="utf-8")
     with pytest.raises(SettingsError, match="tokenz"):
