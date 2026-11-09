@@ -70,7 +70,7 @@ def task_decisions(state: RunState, task: str) -> list[Decision]:
             found.append(Decision(stage, EXHAUSTED, _text(payload.get("reason"))))
     if state.state_of(Level.TASK, task) is TaskState.BLOCKED:
         payload = state.transition_payload(Level.TASK, task, TaskState.BLOCKED) or {}
-        found.append(Decision(task, BLOCKED, _text(payload.get("reason"))))
+        found.append(Decision(task, BLOCKED, blocked_reason(payload)))
     return found
 
 
@@ -100,6 +100,13 @@ def _entry(state: RunState, stage: str, attempt: str) -> Entry:
         gates = ", ".join(str(g) for g in passed) if isinstance(passed, list) else ""
         return Entry(stage, attempt, said, Outcome.APPROVED, gates)
     return Entry(stage, attempt, said, Outcome.OPEN)
+
+
+def blocked_reason(payload: dict[str, object]) -> str:
+    """Why a task is blocked: the reason it recorded and, when there is one, its detail (the
+    conflict's branch, the gate that stopped the integration)."""
+    reason, detail = _text(payload.get("reason")), _text(payload.get("detail"))
+    return f"{reason}: {detail}" if reason and detail else reason or detail
 
 
 def _text(value: object) -> str:

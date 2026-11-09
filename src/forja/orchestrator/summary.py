@@ -25,6 +25,7 @@ from forja.orchestrator.diary import (
     EXHAUSTED,
     Entry,
     Outcome,
+    blocked_reason,
     task_decisions,
     task_entries,
 )
@@ -410,7 +411,7 @@ def _blocked(state: RunState) -> list[str]:
         if state.state_of(Level.TASK, task) is not TaskState.BLOCKED:
             continue
         payload = state.transition_payload(Level.TASK, task, TaskState.BLOCKED) or {}
-        reason = payload.get("reason", "motivo não registrado")
+        reason = blocked_reason(payload) or "motivo não registrado"
         lines.append(f"- `{task}` ({_intent(state, task)}): {reason}")
         lines.extend(_rejections(state, task))
     return lines or ["Nenhuma."]

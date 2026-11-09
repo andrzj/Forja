@@ -175,6 +175,30 @@ def test_a_decision_without_a_reason_has_an_empty_one(log: EventLog) -> None:
     assert task_decisions(log.state, "t1") == [Decision("t1", BLOCKED, "")]
 
 
+def test_a_blocked_task_decision_carries_the_detail_after_the_reason(log: EventLog) -> None:
+    log.append_transition(Level.TASK, "t1", TaskState.PENDING, TaskState.IN_PROGRESS)
+    log.append_transition(
+        Level.TASK,
+        "t1",
+        TaskState.IN_PROGRESS,
+        TaskState.BLOCKED,
+        payload={"reason": "integration_conflict", "detail": "branch forja/t1 conflicts"},
+    )
+
+    assert task_decisions(log.state, "t1") == [
+        Decision("t1", BLOCKED, "integration_conflict: branch forja/t1 conflicts")
+    ]
+
+
+def test_a_blocked_decision_with_only_a_detail_shows_the_detail(log: EventLog) -> None:
+    log.append_transition(Level.TASK, "t1", TaskState.PENDING, TaskState.IN_PROGRESS)
+    log.append_transition(
+        Level.TASK, "t1", TaskState.IN_PROGRESS, TaskState.BLOCKED, payload={"detail": "d"}
+    )
+
+    assert task_decisions(log.state, "t1") == [Decision("t1", BLOCKED, "d")]
+
+
 def test_a_log_read_again_gives_the_same_entries(log: EventLog, tmp_path: Path) -> None:
     attempt(log, "t1-a1", said="one", end=S.REJECTED, payload={"reason": "r"})
     attempt(log, "t1-a2", said="two")

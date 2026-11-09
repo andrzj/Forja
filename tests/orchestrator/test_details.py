@@ -507,6 +507,25 @@ def test_a_blocked_task_with_no_reason_or_intent_is_still_listed(world: MemoryWo
     assert "- `odd` (): motivo não registrado" in text
 
 
+def test_a_blocked_task_shows_the_detail_of_the_conflict_after_the_reason(
+    world: MemoryWorld,
+) -> None:
+    _, log = world.run()
+    log.append_transition(Level.TASK, "odd", None, TaskState.PENDING, parent_id=RUN)
+    log.append_transition(Level.TASK, "odd", TaskState.PENDING, TaskState.IN_PROGRESS)
+    log.append_transition(
+        Level.TASK,
+        "odd",
+        TaskState.IN_PROGRESS,
+        TaskState.BLOCKED,
+        payload={"reason": "integration_conflict", "detail": "forja/odd conflicts with main"},
+    )
+
+    text = render_summary(log.state, Facts(), world.config, "branch", Path("x"))
+
+    assert "- `odd` (): integration_conflict: forja/odd conflicts with main" in text
+
+
 def test_the_facts_of_the_log_keep_each_premise_once_and_only_numbers(world: MemoryWorld) -> None:
     _, log = world.run()
     for check in ("c1", "c1", "c2"):
