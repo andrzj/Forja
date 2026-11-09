@@ -380,3 +380,12 @@ def test_a_refactoring_still_adds_no_dependency() -> None:
     from forja.orchestrator import agent_runner
 
     assert "do not add dependencies" in agent_runner.INSTRUCTIONS
+
+
+def test_the_documenter_instructions_name_every_section_of_the_readme_model() -> None:
+    from forja.checks.readme import MODEL
+    from forja.orchestrator import agent_runner
+
+    for name, _ in MODEL:
+        assert f"`{name}`" in agent_runner.README_SECTIONS
+    assert "{model}" in agent_runner.DOCUMENTER_INSTRUCTIONS

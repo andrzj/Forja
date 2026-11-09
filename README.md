@@ -15,6 +15,7 @@
 - [Descrição do projeto](#descrição-do-projeto)
 - [Funcionalidades](#funcionalidades)
 - [Pré-requisitos](#pré-requisitos)
+- [Instalação](#instalação)
 - [Como rodar a aplicação](#como-rodar-a-aplicação)
 - [Como rodar os testes](#como-rodar-os-testes)
 - [Casos de uso](#casos-de-uso)
@@ -57,7 +58,7 @@
 - Rede, na instalação das ferramentas externas.
 - Windows x64 ou Linux x64. Em outras plataformas `forja instalar` não instala nada e as ferramentas ficam por sua conta.
 
-## Como rodar a aplicação
+## Instalação
 
 O pacote ainda não está publicado em registro. A partir de uma cópia do repositório:
 
@@ -69,13 +70,17 @@ forja instalar
 
 `forja doctor` só verifica e diz o que falta. `forja instalar` baixa as ferramentas que faltam e, rodado de novo, não baixa o que já está instalado.
 
+Detalhes de instalação, atualização e remoção em [Instalação](docs/guia/instalacao.md).
+
+## Como rodar a aplicação
+
 Para executar, entre no repositório alvo e rode:
 
 ```bash
 forja
 ```
 
-A Forja pergunta o que fazer, mostra a confirmação e começa. Detalhes de instalação, atualização e remoção em [Instalação](docs/guia/instalacao.md).
+A Forja pergunta o que fazer, mostra a confirmação e começa.
 
 ## Como rodar os testes
 

@@ -1,5 +1,7 @@
 """The README judged without a model: sections, commands, links, and what may change."""
 
+import re
+
 import pytest
 
 from forja.checks.readme import (
@@ -242,3 +244,36 @@ def test_a_section_with_a_problem_does_not_let_a_new_section_in() -> None:
     new = old + "\n## Extra\n\nmore\n"
     assert touched_chunks(old, new, [Problem("build", "m", "Build")]) == ["Extra (new)"]
     assert touched_chunks(old, new, [Problem("links", "m")]) == ["Extra (new)"]
+
+
+def _model_readme(extra: tuple[str, ...] = ()) -> str:
+    from forja.checks.readme import MODEL
+
+    lines = ["# Sample", "", "Sample does one thing."]
+    for name, _ in MODEL:
+        lines += ["", f"## {name}", "", "text", *extra]
+    return "\n".join(lines)
+
+
+def test_every_section_of_the_model_that_answers_a_requirement_satisfies_it() -> None:
+    from forja.checks.readme import MODEL, REQUIRED
+
+    patterns = dict(REQUIRED)
+
+    for name, answers in MODEL:
+        if answers is not None:
+            assert re.search(patterns[answers], name, re.IGNORECASE), name
+
+
+def test_the_model_answers_every_requirement_of_the_gate() -> None:
+    from forja.checks.readme import MODEL, REQUIRED
+
+    answered = {answers for _, answers in MODEL}
+
+    assert {name for name, _ in REQUIRED} <= answered
+
+
+def test_a_readme_written_to_the_model_has_no_missing_section() -> None:
+    problems = evaluate(_model_readme(), lambda path: True)
+
+    assert [p for p in problems if p.section != "links"] == []

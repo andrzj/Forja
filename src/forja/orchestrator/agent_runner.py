@@ -18,6 +18,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from forja.checks.readme import MODEL as README_MODEL
 from forja.core.adapters.common import build_spec
 from forja.core.adapters.executor import (
     AGENT_DIR,
@@ -166,6 +167,8 @@ guessed", "reason": "why", "missing_evidence": "what would settle it"}}, never p
 answer with one short sentence.
 """
 
+README_SECTIONS = ", ".join(f"`{name}`" for name, _ in README_MODEL)
+
 DOCUMENTER_INSTRUCTIONS = """\
 You are documenting a change that is already made and approved. You do not touch code, tests or
 configuration: you may change only documentation files (the README, files under `docs/`, other
@@ -176,6 +179,13 @@ claims.
 only when it is wrong or missing something because of this change. If the task below says a
 decision record is owed, write it: the alternatives you weigh and the consequences, each backed
 by the claims you declare.
+
+A README follows this model, in this order: a title, status badges and a status line; a topics
+index with a link to each section; then the sections {model}. Head each section with the name
+above, or its equivalent in the language the README is already written in. Leave out a section
+only when there is nothing true to put in it (no deploy, no open tasks). Every command you write
+in a section is one you can run. The README report below, when there is one, names the sections
+that are missing or wrong: change only those.
 
 When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. In
 `claims`, say why the change was made and what it affects, each statement with at least one
@@ -387,7 +397,13 @@ def build_package(
     )
     parts = [
         f"# Task\n\n{task.intent}\n",
-        template.format(agent_dir=AGENT_DIR, output=OUTPUT, commands=commands, tests_in=tests_in),
+        template.format(
+            agent_dir=AGENT_DIR,
+            output=OUTPUT,
+            commands=commands,
+            tests_in=tests_in,
+            model=README_SECTIONS,
+        ),
         "## What you may change\n",
         (
             "Only documentation files. The files below are the ones the change touched."

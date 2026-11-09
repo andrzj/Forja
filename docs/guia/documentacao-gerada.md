@@ -103,6 +103,8 @@ O que a verificação `readme` confere:
 
 Links externos não são conferidos, porque exigiriam rede. O resumo da execução declara isso.
 
+Quando o documentador escreve ou completa um README, ele segue um modelo de seções, nesta ordem: título, selos e linha de situação; `Tópicos` (índice com um link por seção); `Descrição do projeto`; `Funcionalidades`; `Layout ou Deploy da Aplicação`; `Pré-requisitos`; `Instalação`; `Como rodar a aplicação`; `Como rodar os testes`; `Casos de uso`; `Configuração`; `Linguagens, dependências e libs utilizadas`; `Resolvendo problemas`; `Tarefas em aberto`; `Desenvolvedores e contribuintes`; `Licença`. O título de cada seção pode vir no idioma em que o README já está escrito. O documentador omite uma seção só quando não há nada verdadeiro a pôr nela, e todo comando que escreve é um que ele consegue rodar. As seções que a verificação `readme` exige (as seis acima) estão todas no modelo. Seção sem problema continua intocada: o modelo vale para o que falta ou está errado.
+
 Exemplo de um README com as seis seções que a verificação reconhece:
 
 ```markdown

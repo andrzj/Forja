@@ -27,6 +27,26 @@ REQUIRED = (
     ("configure", r"configur"),
     ("dependencies", r"depend|requisit|requirement"),
 )
+# The sections of the README model the owner chose (gist KAYOKG/176fc612c1f8cc476c1c4ff558453dec),
+# in its order, with what each one answers of ``REQUIRED`` (``None``: the gate does not ask for it).
+# The gist has no section for the build, which the gate requires, so "Instalação" is added to it.
+MODEL: tuple[tuple[str, str | None], ...] = (
+    ("Tópicos", None),
+    ("Descrição do projeto", "what"),
+    ("Funcionalidades", None),
+    ("Layout ou Deploy da Aplicação", None),
+    ("Pré-requisitos", "dependencies"),
+    ("Instalação", "build"),
+    ("Como rodar a aplicação", "run"),
+    ("Como rodar os testes", "test"),
+    ("Casos de uso", None),
+    ("Configuração", "configure"),
+    ("Linguagens, dependências e libs utilizadas", None),
+    ("Resolvendo problemas", None),
+    ("Tarefas em aberto", None),
+    ("Desenvolvedores e contribuintes", None),
+    ("Licença", None),
+)
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _FENCE = re.compile(r"^\s*(```+|~~~+)")
 _SPAN = re.compile(r"`([^`\n]+)`")
