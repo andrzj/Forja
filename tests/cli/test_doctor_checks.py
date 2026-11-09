@@ -281,3 +281,22 @@ def test_an_agent_that_refuses_the_test_task_is_reported(
 
     assert not check.ok
     assert check.detail == "recusou"
+
+
+def test_a_missing_tool_points_to_forja_instalar_then_to_its_own_site(
+    agent: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def pytest_ok(_repo: Path) -> Check:
+        return Check("pytest", True, "ok")
+
+    monkeypatch.setattr(doctor_module, "_pytest_in", pytest_ok)
+    found = checks_of(
+        detection(repo=tmp_path, python=True, gitleaks=False, jscpd=False), semgrep_config="r.yml"
+    )
+
+    assert {name: found[name].fix for name in ("gitleaks", "jscpd", "semgrep", "mypy")} == {
+        "gitleaks": "rode `forja instalar` ou instale à mão, conforme https://github.com/gitleaks/gitleaks",
+        "jscpd": "rode `forja instalar` ou instale à mão, conforme https://github.com/kucherenko/jscpd",
+        "semgrep": "rode `forja instalar` ou instale à mão, conforme https://semgrep.dev/docs/getting-started/cli",
+        "mypy": "rode `forja instalar` ou instale à mão, conforme https://mypy.readthedocs.io/en/stable/getting_started.html",
+    }

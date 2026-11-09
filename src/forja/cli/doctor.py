@@ -26,11 +26,11 @@ from forja.executors.probe import executable_version, version_problem
 from forja.toolchain.install import tools_dir
 from forja.toolchain.resolve import installed_by_forja
 
-SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli (pip install semgrep)"
+SEMGREP_HELP = "https://semgrep.dev/docs/getting-started/cli"
 INSTALL_HINT = "rode `forja instalar`"
-GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks (as instruções de instalação estão no README)"
-JSCPD_HELP = "https://github.com/kucherenko/jscpd (as instruções de instalação estão no README)"
-MYPY_HELP = "https://mypy.readthedocs.io/en/stable/getting_started.html (pip install mypy)"
+GITLEAKS_HELP = "https://github.com/gitleaks/gitleaks"
+JSCPD_HELP = "https://github.com/kucherenko/jscpd"
+MYPY_HELP = "https://mypy.readthedocs.io/en/stable/getting_started.html"
 GIT_HELP = "https://git-scm.com/downloads"
 GO_HELP = "https://go.dev/doc/install"
 GOLANGCI_HELP = "https://golangci-lint.run/welcome/install/"
@@ -93,7 +93,7 @@ def _mypy_check(environ: Mapping[str, str]) -> Check:
         "mypy",
         found,
         _where("mypy", environ) if found else "mypy ausente: a análise de tipos fica inconclusiva",
-        "" if found else f"{INSTALL_HINT} ou instale seguindo {MYPY_HELP}",
+        "" if found else f"{INSTALL_HINT} ou instale à mão, conforme {MYPY_HELP}",
         required=False,
     )
 
@@ -203,13 +203,15 @@ async def run_checks(
             "gitleaks",
             detection.gitleaks,
             _where("gitleaks", environ) if detection.gitleaks else "gitleaks ausente",
-            "" if detection.gitleaks else f"{INSTALL_HINT} ou instale seguindo {GITLEAKS_HELP}",
+            ""
+            if detection.gitleaks
+            else f"{INSTALL_HINT} ou instale à mão, conforme {GITLEAKS_HELP}",
         ),
         Check(
             "jscpd",
             detection.jscpd,
             _where("jscpd", environ) if detection.jscpd else "jscpd ausente",
-            "" if detection.jscpd else f"{INSTALL_HINT} ou instale seguindo {JSCPD_HELP}",
+            "" if detection.jscpd else f"{INSTALL_HINT} ou instale à mão, conforme {JSCPD_HELP}",
         ),
         Check(
             "disco",
@@ -247,7 +249,7 @@ async def run_checks(
                 "semgrep",
                 found,
                 _where("semgrep", environ) if found else "semgrep ausente",
-                "" if found else f"{INSTALL_HINT} ou instale seguindo {SEMGREP_HELP}",
+                "" if found else f"{INSTALL_HINT} ou instale à mão, conforme {SEMGREP_HELP}",
             )
         )
     checks.append(await _agent_check(name, profile, environ, console, cache))
