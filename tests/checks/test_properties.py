@@ -101,6 +101,24 @@ def test_a_test_file_the_check_cannot_read_leaves_it_inconclusive(tmp_path: Path
     assert "tests/test_a.py" in result.detail
 
 
+def test_an_unreadable_file_of_another_language_does_not_hide_a_lack(tmp_path: Path) -> None:
+    tests = {"tests/test_a.py": "plain example test\n", "tests/a.test.ts": None}
+
+    result = judge(tmp_path, ("src/a.py",), tests)
+
+    assert isinstance(result, Rejected)
+    assert [f.target for f in result.findings] == ["src/a.py"]
+
+
+def test_an_unreadable_file_of_a_language_with_a_lack_is_inconclusive(tmp_path: Path) -> None:
+    tests = {"tests/test_a.py": "import hypothesis\n", "tests/a.test.ts": None}
+
+    result = judge(tmp_path, ("src/a.py", "src/a.ts"), tests)
+
+    assert isinstance(result, Inconclusive)
+    assert "tests/a.test.ts" in result.detail
+
+
 def test_an_unreadable_test_file_does_not_matter_when_the_library_was_found(
     tmp_path: Path,
 ) -> None:
@@ -133,7 +151,7 @@ def test_the_suffix_decides_the_library_whatever_its_case() -> None:
 
 
 def test_a_changed_file_of_no_known_language_is_skipped_not_read(tmp_path: Path) -> None:
-    result = judge(tmp_path, ("src/a.py",), {"notes.txt": None})
+    result = judge(tmp_path, ("src/a.py",), {"notes.txt": "hypothesis\n"})
 
     assert isinstance(result, Rejected)
 

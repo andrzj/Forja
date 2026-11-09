@@ -69,7 +69,7 @@ class PropertiesCheck:
         if not wanted:
             return Approved()
         used: set[Library] = set()
-        unreadable: list[str] = []
+        unreadable: dict[Library, list[str]] = {}  # per language: a lack is unknown only there
         for path in self.changes.current(self.is_test):
             library = library_of(path)
             if library is None or library in used:
@@ -81,7 +81,7 @@ class PropertiesCheck:
                 with where.open("rb") as handle:
                     text = handle.read(READ_LIMIT).decode("utf-8", errors="replace")
             except OSError:  # what is in it is unknown, so it is never taken for a lack
-                unreadable.append(path)
+                unreadable.setdefault(library, []).append(path)
                 continue
             if library.needle in text:
                 used.add(library)
@@ -95,11 +95,17 @@ class PropertiesCheck:
             for library, path in wanted.items()
             if library not in used
         ]
-        if findings and unreadable:
+        unknown = [
+            path
+            for library in wanted
+            if library not in used
+            for path in unreadable.get(library, ())
+        ]
+        if unknown:
             raise Undecided(
                 Inconclusive(
                     reason=InconclusiveReason.TOOL_FAILED,
-                    detail="properties: cannot read " + ", ".join(unreadable[:3]),
+                    detail="properties: cannot read " + ", ".join(unknown[:3]),
                 )
             )
         return rejected(findings) if findings else Approved()
