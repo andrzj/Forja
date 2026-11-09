@@ -83,6 +83,56 @@ def test_a_declared_file_is_read_and_a_missing_one_is_none(log: EventLog, tmp_pa
     assert shown.outputs == {(FILE, "out/r.txt"): b"x\r\ny", (FILE, "out/none.txt"): None}
 
 
+def test_a_file_left_by_an_earlier_run_is_not_read_as_this_ones(
+    log: EventLog, tmp_path: Path
+) -> None:
+    (tmp_path / "work" / "out").mkdir(parents=True)
+    (tmp_path / "work" / "out" / "old.txt").write_bytes(b"from before")
+
+    shown = run(log, tmp_path, case("pass", DifferentialOutput(FILE, path="out/old.txt")))
+
+    assert shown.outputs == {(FILE, "out/old.txt"): None}
+    assert not (tmp_path / "work" / "out" / "old.txt").exists()
+
+
+def test_a_file_that_cannot_be_removed_is_not_decided(
+    log: EventLog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "old.txt").write_bytes(b"x")
+
+    def refuse(self: Path, *, missing_ok: bool = False) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    with pytest.raises(Undecided) as info:
+        run(log, tmp_path, case("pass", DifferentialOutput(FILE, path="old.txt")))
+
+    assert isinstance(info.value.result, Inconclusive)
+    assert "cannot remove old.txt: Permission denied" in (info.value.result.detail or "")
+
+
+def test_a_declared_directory_is_left_alone(log: EventLog, tmp_path: Path) -> None:
+    (tmp_path / "work" / "out").mkdir(parents=True)
+
+    shown = run(log, tmp_path, case("pass", DifferentialOutput(FILE, path="out")))
+
+    assert shown.outputs == {(FILE, "out"): None}
+    assert (tmp_path / "work" / "out").is_dir()
+
+
+def test_a_declared_file_outside_the_repository_is_none_and_untouched(
+    log: EventLog, tmp_path: Path
+) -> None:
+    (tmp_path / "work").mkdir()
+    (tmp_path / "outside.txt").write_bytes(b"not yours")
+
+    shown = run(log, tmp_path, case("pass", DifferentialOutput(FILE, path="../outside.txt")))
+
+    assert shown.outputs == {(FILE, "../outside.txt"): None}
+    assert (tmp_path / "outside.txt").read_bytes() == b"not yours"
+
+
 def test_the_command_runs_in_the_case_directory(log: EventLog, tmp_path: Path) -> None:
     (tmp_path / "work" / "sub").mkdir(parents=True)
 

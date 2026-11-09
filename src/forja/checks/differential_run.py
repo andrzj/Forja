@@ -1,9 +1,10 @@
 """Gate 11: one run of one differential case, and what it left to compare.
 
 The command is the case's own, a list of arguments the program gets as they are. It runs inside the
-network trap, like the E2E, and the files it was declared to write are read after it ends into
-memory, so what is compared never stays in a place the implementer can edit. A non-zero exit code is
-a value to compare, not a failure of the tool; a command that did not run to the end is.
+network trap, like the E2E, after the files it declares were removed, and those files are read after
+it ends into memory, so what is compared never stays in a place the implementer can edit. A non-zero
+exit code is a value to compare, not a failure of the tool; a command that did not run to the end
+is.
 """
 
 from collections.abc import Mapping
@@ -68,6 +69,7 @@ async def run_case(
                 detail=f"{CHECK}: case {case.name}: {case.cwd} is not a directory here",
             )
         )
+    _clear_old_files(case, worktree)
     async with NetworkTrap() as trap:
         plan = CommandPlan(
             case.command,
@@ -88,6 +90,27 @@ async def run_case(
         result.peak_memory,
         execution.operation_id,
     )
+
+
+def _clear_old_files(case: DifferentialCase, worktree: Path) -> None:
+    """Remove the declared files an earlier run left, so one the command did not write is absent
+    rather than read from the run before."""
+    for output in case.outputs:
+        if output.kind != FILE:
+            continue
+        found = inside(worktree, output.path)
+        if found is None or not found.is_file():
+            continue
+        try:
+            found.unlink()
+        except OSError as error:
+            raise Undecided(
+                Inconclusive(
+                    reason=InconclusiveReason.TOOL_FAILED,
+                    detail=f"{CHECK}: case {case.name}: cannot remove {output.path}: "
+                    f"{error.strerror}",
+                )
+            ) from None
 
 
 def _read(
