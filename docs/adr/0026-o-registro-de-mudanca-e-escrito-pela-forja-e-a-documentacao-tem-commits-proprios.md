@@ -19,4 +19,4 @@ A Especificação manda que a parte factual do registro de mudança seja gerada 
 
 ## Consequências
 
-O registro é determinístico e reproduzível, e um agente defeituoso não consegue falsificá-lo. O custo é que o texto do agente só entra pelo que for citado: frase sem citação não aparece, e o que as linhas citadas dizem continua sendo conferência do revisor. Os dois commits de documentação deixam o README fácil de reverter sozinho. O uso está em `docs/documentacao-gerada.md`; o plano, em `docs/plano-documentador.md`.
+O registro é determinístico e reproduzível, e um agente defeituoso não consegue falsificá-lo. O custo é que o texto do agente só entra pelo que for citado: frase sem citação não aparece, e o que as linhas citadas dizem continua sendo conferência do revisor. Os dois commits de documentação deixam o README fácil de reverter sozinho. O uso está em `docs/guia/documentacao-gerada.md`; o plano, em `docs/plano-documentador.md`.

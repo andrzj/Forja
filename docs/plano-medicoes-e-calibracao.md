@@ -21,7 +21,7 @@ Nada a construir. **B1.** Registrar no Plano que o gate rodou em `mutation\execu
 
 Depende de dado que a Forja não produz sozinha: execuções reais revisadas. **Do dono.** O que a Forja pode fazer sem esse dado, e só isso:
 
-**C1.** Listar os limiares ainda sem dados (mutação 0,80 e 0,70; complexidade; pass-through e profundidade; `max_distance` e `min_types`; `max_time_ratio` e `max_memory_ratio`; `max_dashes`) com o valor atual, o gate e a fonte do número, em um documento (`docs\limiares.md`). Sem alterar nenhum valor.
+**C1.** Listar os limiares ainda sem dados (mutação 0,80 e 0,70; complexidade; pass-through e profundidade; `max_distance` e `min_types`; `max_time_ratio` e `max_memory_ratio`; `max_dashes`) com o valor atual, o gate e a fonte do número, em um documento (`docs\guia\forja-toml.md`). Sem alterar nenhum valor.
 
 **C2.** Quando o dono tiver relatórios de `forja revisao` de execuções reais, calibrar com eles e promover gates de observação para bloqueante por decisão registrada na política. Isso é o item 7 da fila (promoção de gates) e fica parado até haver o dado; o Plano registra o bloqueio.
 

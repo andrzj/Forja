@@ -1,6 +1,6 @@
 # Gates
 
-Um gate é uma etapa de conferência pela qual toda tentativa de um agente passa antes de valer. Cada gate reúne uma ou mais verificações (checks). A Forja numera os gates de 1 a 14 e roda as verificações em ordem de gate. Esta página explica o que um gate faz com o resultado, lista os 14 e detalha os que não têm página própria: 1, 12, 13 e 14, mais um resumo dos gates 2, 4 e 5. Para a política de cada chave, veja `..\forja-toml.md`. Para a barra de gates da tela, veja `..\ambiente.md`. Para as opções da linha de comando, veja `..\comandos.md`.
+Um gate é uma etapa de conferência pela qual toda tentativa de um agente passa antes de valer. Cada gate reúne uma ou mais verificações (checks). A Forja numera os gates de 1 a 14 e roda as verificações em ordem de gate. Esta página explica o que um gate faz com o resultado, lista os 14 e detalha os que não têm página própria: 1, 12, 13 e 14, mais um resumo dos gates 2, 4 e 5. Para a política de cada chave, veja [forja-toml.md](../forja-toml.md). Para a barra de gates da tela, veja `..\ambiente.md`. Para as opções da linha de comando, veja `..\comandos.md`.
 
 ## O que é um gate
 
@@ -46,16 +46,16 @@ A coluna "Modo" é o padrão da Forja. Uma verificação que bloqueia por padrã
 | Gate | Nome | Verificações | Modo padrão | Página |
 | --- | --- | --- | --- | --- |
 | 1 | escopo | `scope`, `freeze` | `blocking`, `blocking` | esta página |
-| 2 | segredos | `secrets`, `dependency_install` | `blocking`, `blocking` | resumo nesta página; `seguranca-e-dependencias.md` |
-| 3 | lint | `format`, `lint`, `types` | `blocking`, `blocking`, `observation` | `tipos.md` (`types`); `format` e `lint` em `..\forja-toml.md` |
+| 2 | segredos | `secrets`, `dependency_install` | `blocking`, `blocking` | resumo nesta página; [seguranca-e-dependencias.md](seguranca-e-dependencias.md) |
+| 3 | lint | `format`, `lint`, `types` | `blocking`, `blocking`, `observation` | [tipos.md](tipos.md) (`types`); `format` e `lint` em [forja-toml.md](../forja-toml.md) |
 | 4 | build | `build` | `blocking` | resumo nesta página |
 | 5 | testes | `tests`, `red_green` | `blocking`, `blocking` | resumo nesta página |
-| 6 | e2e | `e2e`, `test_data`, `properties` | `observation` nas três | `e2e-e-dados-de-teste.md` (`e2e`, `test_data`); `teste-de-propriedades.md` (`properties`) |
-| 7 | mutação | `mutation` | `observation` | `mutacao.md` |
-| 8 | métricas | `complexity`, `crap`, `pass_through`, `module_depth`, `duplication` | `complexity` em `blocking`; as demais em `observation` | `duplicacao.md` (`duplication`); as demais em `..\forja-toml.md` |
-| 9 | arquitetura | `dependency_cycles`, `layer_rules`, `package_metrics` | `observation` nas três | `arquitetura-e-dependencias.md` |
-| 10 | segurança | `sast`, `dependency_audit`, `new_dependency` | `observation` nas três | `seguranca-e-dependencias.md` |
-| 11 | diferencial | `differential` | `observation` | `teste-diferencial.md` |
+| 6 | e2e | `e2e`, `test_data`, `properties` | `observation` nas três | [e2e-e-dados-de-teste.md](e2e-e-dados-de-teste.md) (`e2e`, `test_data`); [teste-de-propriedades.md](teste-de-propriedades.md) (`properties`) |
+| 7 | mutação | `mutation` | `observation` | [mutacao.md](mutacao.md) |
+| 8 | métricas | `complexity`, `crap`, `pass_through`, `module_depth`, `duplication` | `complexity` em `blocking`; as demais em `observation` | [duplicacao.md](duplicacao.md) (`duplication`); as demais em [forja-toml.md](../forja-toml.md) |
+| 9 | arquitetura | `dependency_cycles`, `layer_rules`, `package_metrics` | `observation` nas três | [arquitetura-e-dependencias.md](arquitetura-e-dependencias.md) |
+| 10 | segurança | `sast`, `dependency_audit`, `new_dependency` | `observation` nas três | [seguranca-e-dependencias.md](seguranca-e-dependencias.md) |
+| 11 | diferencial | `differential` | `observation` | [teste-diferencial.md](teste-diferencial.md) |
 | 12 | voz | `voice`, `comments` | `observation` nas duas | esta página |
 | 13 | citações e rastreabilidade | `citations`, `traceability` | `observation` nas duas | esta página |
 | 14 | documentação | `change_record`, `readme`, `doc_drift`, `adr` | `observation` nas quatro | esta página |
@@ -121,7 +121,7 @@ O primeiro bloco aperta o orçamento da tarefa para 5 arquivos e 200 linhas. O s
 
 ## Gate 2: segredos, resumo
 
-O detalhe está em `seguranca-e-dependencias.md`.
+O detalhe está em [seguranca-e-dependencias.md](seguranca-e-dependencias.md).
 
 | Verificação | O que faz |
 | --- | --- |
@@ -165,7 +165,7 @@ test = ["python", "-m", "pytest", "-q", "-x"]
 on_inconclusive = "premise"
 ```
 
-O comando é uma lista (programa e argumentos), nunca um texto de shell. Mais sobre comandos em `..\forja-toml.md`.
+O comando é uma lista (programa e argumentos), nunca um texto de shell. Mais sobre comandos em [forja-toml.md](../forja-toml.md).
 
 ## Gate 12: voz
 
@@ -330,4 +330,4 @@ O primeiro bloco promove `change_record` a bloqueante, o que exige `promotion` c
 
 ## Mudar o modo de um gate
 
-O modo é por verificação, não por gate: para mudar um gate inteiro, mude cada verificação dele. Promover uma verificação de `observation` para `blocking` exige `promotion` com `date` e `reason`. Afrouxar uma que bloqueia por padrão não exige. `voice` e `comments` nunca viram bloqueantes. O passo a passo, com exemplos, está em `seguranca-e-dependencias.md#promover-para-bloqueio`, e a regra completa, em `..\forja-toml.md`.
+O modo é por verificação, não por gate: para mudar um gate inteiro, mude cada verificação dele. Promover uma verificação de `observation` para `blocking` exige `promotion` com `date` e `reason`. Afrouxar uma que bloqueia por padrão não exige. `voice` e `comments` nunca viram bloqueantes. O passo a passo, com exemplos, está em `seguranca-e-dependencias.md#promover-para-bloqueio`, e a regra completa, em [forja-toml.md](../forja-toml.md).

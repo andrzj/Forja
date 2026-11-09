@@ -80,7 +80,7 @@ O jqwik pede, em texto, que agentes de IA não o usem (nota da 1.10.1 e linha na
 3. **Feito (06/11):** semente fixa e arquivos gravados pelas ferramentas. Go por `RAPID_SEED`/`RAPID_NOFAILFILE` no ambiente (flag quebraria pacote sem `rapid`); Python por `--hypothesis-seed` só quando o manifesto declara `hypothesis`; `.hypothesis` fora do índice em `stage_all`. TypeScript, Java e C#: sem forma documentada, a instrução do passo 2 manda fixar no teste.
 4. **Feito (06/11):** check `properties` (observação), `CheckSpec`, registro no medidor, listas de checks dos testes (regra de `NOTAS.md`).
 4A. **Feito (06/11):** Java com QuickTheories na instrução (`properties_brief.py`) e no check (`.java`, `org.quicktheories`), pela decisão do dono.
-5. **Feito (06/11):** documentação (`docs\teste-de-propriedades.md`) e ADR 0040.
+5. **Feito (06/11):** documentação (`docs\guia\gates\teste-de-propriedades.md`) e ADR 0040.
 6. **Feito (06/11):** gate de mutação nos arquivos novos e nos trechos mudados; sobreviventes do passo mortos, cinco antigos fora do passo (ver o Registro).
 7. Ponta a ponta com as ferramentas reais, no fecho (do dono).
 

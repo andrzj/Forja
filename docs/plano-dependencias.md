@@ -16,7 +16,7 @@ Ordem do dono (31/10/2026): um agente que escreve código tem de poder usar paco
 3. **Existência antes da instalação (Python).** Antes de instalar, a Forja confere cada dependência nova no registro (`look_up` do `new_dependency`). Inexistente ou inalcançável: a tentativa é rejeitada com o achado do gate 10, sem instalar nada.
 4. **Ambiente virtual por execução (Python).** `languages\python\environment.py`: cria `<workdir>\venv` com o `python` do repositório, deixa visíveis os pacotes desse interpretador (arquivo `.pth` que chama `site.addsitedir` no `site-packages` dele, atrás dos do ambiente novo; assim as instalações editáveis também aparecem) e instala nele as dependências declaradas no manifesto. A instalação é do que o manifesto da cópia declara a mais do que já foi instalado. O adaptador passa a usar o `python` do ambiente. O ambiente da Forja e o do repositório não são tocados.
 5. **Ligação.** `cli\session.py` e `orchestrator\measurer.py`: o ambiente é criado na medição da base, atualizado a cada tentativa cujo manifesto mudou, e descartado ao fim da execução. Instalação que falha vira rejeição da tentativa com o erro do instalador.
-6. **Testes, documentação, ADR e rodada real.** Testes por passo; `docs\seguranca-e-dependencias.md` e ADR 0036; execução real `criar` com `python-slugify`; gate de mutação nos arquivos novos.
+6. **Testes, documentação, ADR e rodada real.** Testes por passo; `docs\guia\gates\seguranca-e-dependencias.md` e ADR 0036; execução real `criar` com `python-slugify`; gate de mutação nos arquivos novos.
 
 ## Limites declarados
 

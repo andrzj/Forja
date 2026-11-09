@@ -11,7 +11,7 @@ A Especificação manda que o gate 9 reprove ciclo de dependência novo, violaç
 - **As camadas são declaradas pelo usuário em `[architecture]` e a Forja nunca as deduz.** A ordem é de cima para baixo; aresta para camada acima é violação; diretório fora de toda camada é livre. Sem camadas, `layer_rules` não executa e o resumo diz “Camadas NÃO verificadas” (mesmo tratamento do SAST sem regras, ADR 0024).
 - **Catraca.** Reprova ciclo ou componente que não cabe em nenhum do estado antigo, aresta nova para camada acima, e diretório tocado cujo `D` passou do limite e cresceu. O passado do repositório não reprova.
 - **Observação.** Os três checks nascem em observação; “não consegui medir” bloqueia em ciclos e camadas e vira premissa nas métricas, cujos limiares (`max_distance` 0,8, `min_types` 3) são palpite até a calibração.
-- **Validação (regra da Especificação).** Python contra o `grimp` (mesmas 134 arestas na própria Forja), Go contra `go list`, Java contra `jdeps`, TypeScript contra `dependency-cruiser`; C# por contagem manual com build verde. As divergências viraram limites declarados em `docs/arquitetura-e-dependencias.md`.
+- **Validação (regra da Especificação).** Python contra o `grimp` (mesmas 134 arestas na própria Forja), Go contra `go list`, Java contra `jdeps`, TypeScript contra `dependency-cruiser`; C# por contagem manual com build verde. As divergências viraram limites declarados em `docs/guia/gates/arquitetura-e-dependencias.md`.
 
 ## Alternativas
 
@@ -22,4 +22,4 @@ A Especificação manda que o gate 9 reprove ciclo de dependência novo, violaç
 
 ## Consequências
 
-O gate só vale em camadas quando o usuário as escreve; sem elas, ciclos e métricas continuam sendo medidos. O grafo da Forja tem menos arestas que a referência quando há alias de TypeScript ou `import` morto em Java, e não vê ciclo entre arquivos do mesmo diretório. Diretório renomeado que estava num ciclo antigo reaparece como ciclo novo. O uso está em `docs/arquitetura-e-dependencias.md`; o plano, em `docs/plano-gate-9.md`.
+O gate só vale em camadas quando o usuário as escreve; sem elas, ciclos e métricas continuam sendo medidos. O grafo da Forja tem menos arestas que a referência quando há alias de TypeScript ou `import` morto em Java, e não vê ciclo entre arquivos do mesmo diretório. Diretório renomeado que estava num ciclo antigo reaparece como ciclo novo. O uso está em `docs/guia/gates/arquitetura-e-dependencias.md`; o plano, em `docs/plano-gate-9.md`.

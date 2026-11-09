@@ -43,7 +43,7 @@ Um passo por commit. Cada commit atualiza o Registro de andamento do Plano de ex
 
 **Passo 5. Cópia no ramo.** `docs/mudancas/<tarefa>-diario.md`, escrito pela Forja junto com o registro, no commit `docs:` do documentador. Texto montado pela Forja a partir de campos do log, com o dito pelo agente truncado, para não depender do gate de voz. **[Superado: a fala não é truncada; ver as correções 7a e 7b.]** Muda: `ScopeCheck._documenter` (aceita o arquivo do diário da própria tarefa) e a Especificação (linha 531, "tentativas rejeitadas nunca viram commit", e linha 580, resumo fora do histórico): o diário registra as rejeitadas como texto, sem commit de código delas. Checar que voz, deriva e `change_record` continuam verdes com o arquivo.
 
-**Passo 6. Fecho.** `docs\diario-de-bordo.md` (o que o diário contém, onde fica, limites), ADR 0031, gate de mutação (`scripts\mutate.py`) nos arquivos novos e alterados, suíte rápida, `ruff` e `mypy src`.
+**Passo 6. Fecho.** `docs\guia\diario-de-bordo.md` (o que o diário contém, onde fica, limites), ADR 0031, gate de mutação (`scripts\mutate.py`) nos arquivos novos e alterados, suíte rápida, `ruff` e `mypy src`.
 
 ## Fora de escopo
 

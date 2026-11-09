@@ -25,4 +25,4 @@ A Especificação manda o gate 11 reprovar saída nova diferente da antiga para 
 
 ## Consequências
 
-Um caso com saída que varia deixa de proteger a refatoração até alguém declarar a regra que o torna estável, e o resumo diz quais casos ficaram assim. Em Linux e macOS o gate só vê saídas e tempo. A base de tempo e de memória de cada caso tem só duas medidas. O diferencial custa `runs` execuções de cada caso em cada tentativa, inclusive nas etapas do documentador e do autor de testes extra. O uso está em `docs/teste-diferencial.md`; o plano, em `docs/plano-gate-11.md`.
+Um caso com saída que varia deixa de proteger a refatoração até alguém declarar a regra que o torna estável, e o resumo diz quais casos ficaram assim. Em Linux e macOS o gate só vê saídas e tempo. A base de tempo e de memória de cada caso tem só duas medidas. O diferencial custa `runs` execuções de cada caso em cada tentativa, inclusive nas etapas do documentador e do autor de testes extra. O uso está em `docs/guia/gates/teste-diferencial.md`; o plano, em `docs/plano-gate-11.md`.

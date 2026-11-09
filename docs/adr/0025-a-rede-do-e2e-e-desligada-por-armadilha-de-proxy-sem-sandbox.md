@@ -15,4 +15,4 @@ A Especificação manda rodar o E2E com a rede desligada, de modo que dependênc
 
 ## Consequências
 
-Funciona no Windows sem privilégio e sem ferramenta extra, e o gate reprova com o destino exato. O custo é a cobertura parcial: quem precisa da garantia forte tem de rodar a Forja já num ambiente sem rede, e a Forja só consegue deixar o limite visível em toda execução. Quando houver o papel que gera fakes, a validação por contrato entra no lugar da premissa fixa. O plano está em `docs/plano-gate-6.md`; o uso, em `docs/e2e-e-dados-de-teste.md`.
+Funciona no Windows sem privilégio e sem ferramenta extra, e o gate reprova com o destino exato. O custo é a cobertura parcial: quem precisa da garantia forte tem de rodar a Forja já num ambiente sem rede, e a Forja só consegue deixar o limite visível em toda execução. Quando houver o papel que gera fakes, a validação por contrato entra no lugar da premissa fixa. O plano está em `docs/plano-gate-6.md`; o uso, em `docs/guia/gates/e2e-e-dados-de-teste.md`.

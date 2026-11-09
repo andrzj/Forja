@@ -20,4 +20,4 @@ A Especificação manda que cada elemento da entrada vire critério e que nenhum
 
 ## Consequências
 
-A rastreabilidade é verificável por máquina, mas só tão fina quanto a segmentação: prosa corrida vira poucos elementos grandes, e que o critério diga o que o elemento diz continua sendo da revisão. O dono carrega o arquivo de fatos de uma execução à outra. O andaime precisa de rede para `npm install` e para baixar dependências de Java e C#, e um `setup` que falha deixa o projeto criado e comitado. O uso está em `docs/especificar-e-investigar.md`; o plano, em `docs/plano-especificador-arqueologo.md`.
+A rastreabilidade é verificável por máquina, mas só tão fina quanto a segmentação: prosa corrida vira poucos elementos grandes, e que o critério diga o que o elemento diz continua sendo da revisão. O dono carrega o arquivo de fatos de uma execução à outra. O andaime precisa de rede para `npm install` e para baixar dependências de Java e C#, e um `setup` que falha deixa o projeto criado e comitado. O uso está em `docs/guia/comandos.md`; o plano, em `docs/plano-especificador-arqueologo.md`.

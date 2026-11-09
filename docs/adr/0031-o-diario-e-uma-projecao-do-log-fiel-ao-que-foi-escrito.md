@@ -23,4 +23,4 @@ O agente de cada tentativa recebia só a última rejeição da etapa. Duas tenta
 
 ## Consequências
 
-O arquivo do diário cresce com as tentativas, sem teto, e o agente gasta o contexto de lê-lo a partir da segunda tentativa; ler é ordem, mas a Forja não confere que leu. A seção de hipótese pede uma frase que ninguém confere. O ramo ganha um arquivo por tarefa, com a fala do agente, redigida. Papel e CLI não aparecem por entrada. O uso está em `docs/diario-de-bordo.md`; o plano, em `docs/plano-diario-de-bordo.md`.
+O arquivo do diário cresce com as tentativas, sem teto, e o agente gasta o contexto de lê-lo a partir da segunda tentativa; ler é ordem, mas a Forja não confere que leu. A seção de hipótese pede uma frase que ninguém confere. O ramo ganha um arquivo por tarefa, com a fala do agente, redigida. Papel e CLI não aparecem por entrada. O uso está em `docs/guia/diario-de-bordo.md`; o plano, em `docs/plano-diario-de-bordo.md`.

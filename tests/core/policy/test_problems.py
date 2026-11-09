@@ -362,7 +362,7 @@ def test_the_voice_checks_cannot_be_made_blocking(check: str) -> None:
 
     assert info.value.problems == [
         f"layer 0: checks.{check}.mode: the voice never blocks: the Forja instructs the agent and "
-        "reports what it measured (see docs/voz.md)"
+        "reports what it measured (see docs/guia/documentacao-gerada.md)"
     ]
 
 

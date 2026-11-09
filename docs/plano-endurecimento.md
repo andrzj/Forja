@@ -34,7 +34,7 @@ Um passo por commit; Plano atualizado no mesmo commit.
 
 **7. Documentação de uso.** `docs\` do usuário: modo CI, CLIs por papel e a sugestão, adaptador genérico, mutação incremental, paralelismo, suspensão. ADR para o que for decisão (paralelismo e adaptador genérico, pelo menos).
 
-**8. Promoção de gates e calibração (C2). Parado.** Depende de relatórios de `forja revisao` de execuções reais, do dono (`docs\limiares.md`). Quando houver: calibrar, e promover por `promotion` na política com data e motivo. A Forja não promove nem calibra sem esse dado.
+**8. Promoção de gates e calibração (C2). Parado.** Depende de relatórios de `forja revisao` de execuções reais, do dono (`docs\guia\forja-toml.md`). Quando houver: calibrar, e promover por `promotion` na política com data e motivo. A Forja não promove nem calibra sem esse dado.
 
 ## Fora de escopo
 

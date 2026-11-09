@@ -38,7 +38,8 @@ from forja.core.redaction.settings import (
 POLICY_SCHEMA_VERSION = 1
 _CHECK_KEYS = {"mode", "on_inconclusive", "promotion", "thresholds", "commands", "limits"}
 # Gate 12 measures and reports; the Forja steers the voice by instructing the agent (voice_brief),
-# never by rejecting what it wrote. Owner's decision of 31/10/2026 (docs/voz.md).
+# never by rejecting what it wrote. Owner's decision of 31/10/2026
+# (docs/guia/documentacao-gerada.md).
 NEVER_BLOCKING = frozenset({"voice", "comments"})
 # Kept in step with adapters.language.Operation (a test compares them); importing it here would
 # make the two packages import each other.
@@ -293,7 +294,7 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
             bad(
                 f"{where}.mode",
                 "the voice never blocks: the Forja instructs the agent and reports what it "
-                "measured (see docs/voz.md)",
+                "measured (see docs/guia/documentacao-gerada.md)",
             )
         _validate_enum(raw, "on_inconclusive", InconclusivePolicy, where, bad)
         _validate_promotion(raw.get("promotion"), where, bad)
