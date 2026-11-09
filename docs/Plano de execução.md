@@ -1,5 +1,7 @@
 # Forja — plano de execução
 
+> **Histórico desde 08/11/2026.** Por ordem do dono, `NOTAS.md` (raiz do repositório) é a fonte única do que falta e do que está comprometido. Este documento não governa mais: as regras, a Fila e o Registro abaixo ficam só como registro do que foi feito até essa data.
+
 ## Como este documento governa o trabalho
 
 Este é o documento que mantém a construção da Forja nos trilhos. As regras abaixo valem para qualquer pessoa ou LLM que trabalhe no projeto e mandam sobre notas de sessão e preferências de momento.
