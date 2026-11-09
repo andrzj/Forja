@@ -11,7 +11,7 @@ Um teste de propriedades afirma uma regra que vale para qualquer entrada e deixa
 | Linguagem | Biblioteca | Como o agente a usa |
 | --- | --- | --- |
 | Python | Hypothesis | `@given(...)` num teste do pytest |
-| TypeScript | fast-check com `@fast-check/vitest` | `test.prop([fc.integer()])("regra", ...)` |
+| TypeScript e JavaScript | fast-check com `@fast-check/vitest` | `test.prop([fc.integer()])("regra", ...)` |
 | Java | QuickTheories | `qt().forAll(...).check(...)` num teste JUnit |
 | Go | `pgregory.net/rapid` | `rapid.Check(t, func(t *rapid.T) { ... })` |
 | C# | FsCheck com `FsCheck.Xunit` | `[Property]` num método |
@@ -142,5 +142,4 @@ O diretório `.hypothesis`, onde o Hypothesis guarda seus exemplos, não conta c
 - **Custo.** Cada propriedade roda dezenas a centenas de casos, e a mutação refaz os testes a cada mutante.
 - **QuickTheories não tem manutenção desde 2019.** É a biblioteca que a Forja indica para Java.
 - **Java não tem semente fixada pela Forja.** Para fixá-la, o teste usa `withFixedSeed`.
-- **JavaScript.** O check aceita `fast-check` em arquivos de JavaScript, mas a instrução ao agente só cita a biblioteca de TypeScript.
 - **Fora do escopo:** teste com estado, fuzzing guiado por cobertura e o `testing/quick` do Go.

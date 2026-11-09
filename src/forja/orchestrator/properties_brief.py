@@ -31,7 +31,8 @@ pytest test). The Forja fixes the seed when it runs the tests; do not set one.
 """
 
 _TYPESCRIPT = """\
-- TypeScript: fast-check with `@fast-check/vitest` (`test.prop([fc.integer()])("rule", ...)`). \
+- TypeScript or JavaScript: fast-check with `@fast-check/vitest` \
+(`test.prop([fc.integer()])("rule", ...)`). \
 The library picks a random seed unless told otherwise: pass a fixed `seed` in the parameters \
 (`{ seed: 42 }`), so the test gives the same result every run.
 """

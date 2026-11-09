@@ -11,7 +11,7 @@ SUPPORTED = ("python", "typescript", "java", "go", "csharp")
 def test_each_supported_language_gets_its_own_library() -> None:
     for language, name, library in (
         ("python", "Python", "Hypothesis"),
-        ("typescript", "TypeScript", "fast-check"),
+        ("typescript", "TypeScript or JavaScript", "fast-check"),
         ("java", "Java", "QuickTheories"),
         ("go", "Go", "pgregory.net/rapid"),
         ("csharp", "C#", "FsCheck"),
