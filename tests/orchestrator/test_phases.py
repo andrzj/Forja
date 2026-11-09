@@ -67,7 +67,8 @@ def test_a_run_goes_from_the_confirmation_to_a_delivered_branch(world: MemoryWor
     assert attempts(log, "t1") == {"t1-a1": AttemptState.REJECTED, "t1-a2": AttemptState.COMMITTED}
     assert attempts(log, "t2") == {"t2-a1": AttemptState.COMMITTED}
     assert log.state.open_operations == {}
-    assert str(world.run_dir / SUMMARY_NAME) in outcome.message
+    assert outcome.message.startswith("entregue em ")
+    assert outcome.message.endswith(f"; resumo em {world.run_dir / SUMMARY_NAME}")
 
 
 def test_what_the_run_leaves_in_git_is_one_branch_with_one_merge_per_task(

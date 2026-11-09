@@ -186,7 +186,7 @@ def arm_b(
     clear_unfinished(repo)  # a run that paused must not block the next one
     (out / "forja-output.txt").write_text(text, encoding="utf-8")
     branch = re.search(r"forja-run/[0-9a-f]+", text)
-    summary = re.search(r"summary in (\S.*?resumo\.md)", text) or re.search(
+    summary = re.search(r"resumo em (\S.*?resumo\.md)", text) or re.search(
         r"Resumo: (\S.*?resumo\.md)", text
     )
     spent = 0

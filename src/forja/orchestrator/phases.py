@@ -155,7 +155,7 @@ class Orchestrator:
     def _message(self, state: ExecutionState) -> str:
         if state is ExecutionState.DELIVERED:
             return (
-                f"delivered on {self._ctx.workspace.run_branch}; summary in "
+                f"entregue em {self._ctx.workspace.run_branch}; resumo em "
                 f"{self._ctx.run_dir / SUMMARY_NAME}"
             )
         payload = self._log.state.transition_payload(Level.EXECUTION, self._run_id, state) or {}
