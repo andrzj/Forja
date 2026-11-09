@@ -64,6 +64,8 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
 }
 
 Number = int | float
+# jscpd takes these as whole numbers, and ``duplication.limit_of`` drops a float without a word.
+_WHOLE_LIMITS = frozenset({"min_tokens", "min_lines"})
 
 
 class PolicyConfigError(Exception):
@@ -670,6 +672,8 @@ def _validate_limits(raw: Any, spec: CheckSpec, where: str, bad: Any) -> None:
             bad(path, "this check has no such limit")
         elif not _is_number(value) or value < 0:
             bad(path, "must be a finite number, zero or more")
+        elif name in _WHOLE_LIMITS and not isinstance(value, int):
+            bad(path, "must be a whole number")
 
 
 # -- merge and validation of the result --------------------------------------------------------

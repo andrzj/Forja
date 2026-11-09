@@ -251,6 +251,30 @@ def test_numbers_must_be_finite_and_not_booleans() -> None:
     assert "finite number" in problems("[checks.complexity.limits]\nmax_files = false\n")
 
 
+@pytest.mark.parametrize("name", ["min_tokens", "min_lines"])
+def test_duplication_limits_must_be_whole_numbers(name: str) -> None:
+    registry = CheckRegistry()
+    registry.register(
+        CheckSpec(
+            "duplication",
+            7,
+            Mode.OBSERVATION,
+            InconclusivePolicy.PREMISE,
+            limits=frozenset({"min_tokens", "min_lines"}),
+        )
+    )
+
+    def load(text: str) -> EffectivePolicy:
+        return build_policy(registry, [parse_layer("layer 0", text)])
+
+    with pytest.raises(PolicyConfigError) as info:
+        load(f"[checks.duplication.limits]\n{name} = 50.5\n")
+    assert f"checks.duplication.limits.{name}: must be a whole number" in info.value.problems[0]
+    assert load(f"[checks.duplication.limits]\n{name} = 50\n").checks["duplication"].limits == {
+        name: 50
+    }
+
+
 def test_toml_that_cannot_be_parsed_is_reported_with_its_layer() -> None:
     with pytest.raises(PolicyConfigError, match=r"layer 7: not valid TOML"):
         parse_layer("layer 7", "[checks")

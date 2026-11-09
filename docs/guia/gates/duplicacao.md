@@ -27,7 +27,7 @@ O check aceita só `mode`, `on_inconclusive`, `promotion` (veja `..\forja-toml.m
 | `mode` | `observation` | `observation` ou `blocking` | com `blocking`, achado reprova a tentativa |
 | `on_inconclusive` | `premise` | `block` ou `premise` | o que fazer quando o `jscpd` não deu resposta |
 
-O arquivo aceita qualquer número finito, zero ou mais, em `min_tokens` e `min_lines`. O check só usa o valor se for inteiro. Um valor com parte decimal, como `40.5`, é aceito na leitura e ignorado na medição: vale o padrão. Os valores são passados ao `jscpd` por um arquivo de configuração gerado pela Forja, e por isso a configuração do próprio repositório para o `jscpd` (`.jscpd.json`, chave `jscpd` do `package.json`) não vale.
+O arquivo aceita só número inteiro, zero ou mais, em `min_tokens` e `min_lines`. Um valor com parte decimal, como `40.5`, é recusado na leitura com o erro `must be a whole number`. Os valores são passados ao `jscpd` por um arquivo de configuração gerado pela Forja, e por isso a configuração do próprio repositório para o `jscpd` (`.jscpd.json`, chave `jscpd` do `package.json`) não vale.
 
 ## Linguagens
 
