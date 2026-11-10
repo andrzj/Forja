@@ -12,16 +12,20 @@ from forja.core.confirmation import (
     load_confirmation,
 )
 from forja.core.isolation import IsolationLevel, IsolationRecord
+from forja.core.redaction import Redactor
 from forja.core.states import ExecutionState, Level
 from forja.orchestrator.config import (
     Budget,
+    CreateRequest,
     ExecutorRef,
     FixRequest,
     Objective,
     RunConfig,
     confirmed_payload,
     load_config,
+    redacted_config,
 )
+from forja.orchestrator.facts import Fact
 from forja.orchestrator.outcome import ExitCode, exit_code_for
 from tests.core.events.support import RUN, create_run, open_log
 
@@ -182,3 +186,63 @@ def test_the_test_author_is_optional_and_an_old_config_still_reads() -> None:
     assert RunConfig.model_validate(old) == CONFIG
     author = ExecutorRef(name="claude-code", path="/usr/bin/claude", version="2.1.0")
     assert CONFIG.model_copy(update={"test_author": author}).test_author == author
+
+
+TOKEN = "ghp_" + "A1b2C3d4" * 5  # a GitHub token shape
+
+
+def _with_secrets() -> RunConfig:
+    return CONFIG.model_copy(
+        update={
+            "facts": (Fact(id="f1", author="ana", date="2026-11-10", text=f"use {TOKEN} here"),),
+            "objective": Objective.FIX,
+            "fix": FixRequest(description=f"the call with {TOKEN} breaks"),
+        }
+    )
+
+
+def test_a_secret_in_what_the_person_wrote_is_masked_before_it_is_recorded() -> None:
+    config = redacted_config(_with_secrets(), Redactor())
+
+    assert TOKEN not in config.model_dump_json()
+    assert config.facts[0].id == "f1"
+    assert config.facts[0].text.startswith("use ") and config.facts[0].text.endswith(" here")
+
+
+def test_the_log_holds_no_secret_and_a_resume_reads_the_masked_text(tmp_path: Path) -> None:
+    config = redacted_config(_with_secrets(), Redactor())
+    path = tmp_path / "events.jsonl"
+    with open_log(path) as log:
+        create_run(log)
+        log.append_transition(
+            Level.EXECUTION,
+            RUN,
+            ExecutionState.PREPARING,
+            ExecutionState.CONFIRMED,
+            payload=confirmed_payload(config, CONFIRMATION),
+        )
+
+        assert load_config(log.state) == config
+    assert TOKEN not in path.read_text(encoding="utf-8")
+
+
+def test_a_config_without_free_text_is_unchanged() -> None:
+    assert redacted_config(CONFIG, Redactor()) == CONFIG
+
+
+def test_the_question_and_the_project_idea_are_masked_too() -> None:
+    asked = CONFIG.model_copy(
+        update={"objective": Objective.INVESTIGATE, "question": f"why does {TOKEN} fail?"}
+    )
+    created = CONFIG.model_copy(
+        update={
+            "objective": Objective.CREATE,
+            "create": CreateRequest(
+                description=f"a tool using {TOKEN}", language="python", name="x"
+            ),
+        }
+    )
+
+    assert TOKEN not in redacted_config(asked, Redactor()).question
+    assert created.create is not None
+    assert TOKEN not in (redacted_config(created, Redactor()).create or created.create).description

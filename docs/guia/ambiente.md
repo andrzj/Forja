@@ -98,7 +98,7 @@ REDUCE_MOTION=1 forja refatorar         # sem animação
 
 | Caminho | Conteúdo |
 | --- | --- |
-| `runs/<id>/events.jsonl` | registro de eventos da execução |
+| `runs/<id>/events.jsonl` | registro de eventos da execução; o texto que você escreveu (fatos, pergunta, descrições) passa pela redação antes de ser gravado |
 | `runs/<id>/logs/git` | logs do git |
 | `runs/<id>/execucao.toml` | cópia das opções da execução |
 | `runs/<id>/resumo.md` | resumo final da execução |

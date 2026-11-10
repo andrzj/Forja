@@ -23,6 +23,7 @@ from forja.core.artifacts.models import NonEmpty
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import Confirmation, ConfirmationError, confirmation_payload
 from forja.core.events.state import RunState
+from forja.core.redaction import ItemKind, PackageItem, Redactor
 from forja.core.states import ExecutionState, Level
 from forja.orchestrator.facts import Fact
 
@@ -121,6 +122,38 @@ class RunConfig(BaseModel):
         if (self.objective is Objective.CREATE) != (self.create is not None):
             raise ValueError("a project request is required for, and only for, create")
         return self
+
+
+WITHHELD = "[texto retido pela redação]"
+
+
+def _masked(redactor: Redactor, name: str, text: str) -> str:
+    result = redactor.redact([PackageItem(ItemKind.TEXT, name, text)])
+    return result.items[0].content if result.items else WITHHELD
+
+
+def redacted_config(config: RunConfig, redactor: Redactor) -> RunConfig:
+    """The config with the text a person wrote (facts, question, descriptions) masked.
+
+    The event log keeps the config so a resumed run can read it back; a secret typed into a fact
+    would otherwise sit in the log in the clear."""
+    update: dict[str, object] = {}
+    if config.facts:
+        update["facts"] = tuple(
+            fact.model_copy(update={"text": _masked(redactor, "fact", fact.text)})
+            for fact in config.facts
+        )
+    if config.question:
+        update["question"] = _masked(redactor, "question", config.question)
+    if config.fix:
+        update["fix"] = config.fix.model_copy(
+            update={"description": _masked(redactor, "fix", config.fix.description)}
+        )
+    if config.create:
+        update["create"] = config.create.model_copy(
+            update={"description": _masked(redactor, "create", config.create.description)}
+        )
+    return config.model_copy(update=update)
 
 
 def confirmed_payload(config: RunConfig, confirmation: Confirmation) -> dict[str, JsonValue]:

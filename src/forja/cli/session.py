@@ -56,6 +56,7 @@ from forja.orchestrator.config import (
     Objective,
     RunConfig,
     load_config,
+    redacted_config,
 )
 from forja.orchestrator.dry_brief import brief as dry_brief
 from forja.orchestrator.facts import Fact
@@ -349,6 +350,7 @@ async def open_session(
     )
     try:
         if not resumed:
+            config = redacted_config(config, Redactor(repo_policy(repo).redaction))
             confirm_run(log, config, isolation)
         context = await _context(config, log, directory, base, env, plain, run_id, interactive)
     except BaseException:
