@@ -19,6 +19,18 @@ class Console(Protocol):
     def ask(self, question: str, *, default: str = "") -> str: ...
 
 
+def lenient_output() -> None:
+    """A character the output encoding cannot hold is replaced, never an exception.
+
+    Redirected to a file or a pipe, Windows gives the output the ANSI code page (cp1252), and an
+    agent's text with an arrow or an emoji would stop the run in the middle of the write.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="replace")
+
+
 class TerminalConsole:
     def __init__(self) -> None:
         self.interactive = bool(sys.stdin and sys.stdin.isatty() and sys.stdout.isatty())

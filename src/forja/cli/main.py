@@ -12,7 +12,14 @@ from pathlib import Path
 
 from forja.cli.args import Arguments, parse
 from forja.cli.awake import keep_awake
-from forja.cli.console import Console, TerminalConsole, Unattended, choose, confirm
+from forja.cli.console import (
+    Console,
+    TerminalConsole,
+    Unattended,
+    choose,
+    confirm,
+    lenient_output,
+)
 from forja.cli.detect import Detection, detect
 from forja.cli.doctor import doctor
 from forja.cli.facade import run_facade
@@ -261,6 +268,7 @@ async def amain(args: Arguments, console: Console, environ: Mapping[str, str]) -
 
 
 def main(argv: list[str] | None = None) -> int:
+    lenient_output()
     args = parse(argv)
     environ = with_installed_tools(os.environ)
     os.environ.update(environ)  # this process only: the user's own PATH is not touched
