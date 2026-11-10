@@ -66,7 +66,6 @@ def said(result: GateResult) -> list[tuple[str, str]]:
             "a sentence that announces that something matters instead of saying it",
         ),
         ("I hope this helps.", "an offer of more help, to a reader who is a repository"),
-        ("Done \U0001f680", "an emoji in text that is read as documentation"),
     ],
 )
 def test_a_marker_in_a_document_is_found_with_its_line_and_never_its_text(

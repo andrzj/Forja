@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=STATUS&message=EM%20DESENVOLVIMENTO&color=red&style=for-the-badge"/>
 </p>
 
-> Status do projeto: em desenvolvimento. O que ainda falta está nas [Tarefas em aberto](#tarefas-em-aberto).
+> Status do projeto: em desenvolvimento ⚠️. O que ainda falta está nas [Tarefas em aberto](#tarefas-em-aberto).
 
 ### Tópicos
 
@@ -16,15 +16,15 @@
 - [Funcionalidades](#funcionalidades)
 - [Pré-requisitos](#pré-requisitos)
 - [Instalação](#instalação)
-- [Como rodar a aplicação](#como-rodar-a-aplicação)
+- [Como rodar a aplicação](#como-rodar-a-aplicação-)
 - [Como rodar os testes](#como-rodar-os-testes)
 - [Casos de uso](#casos-de-uso)
 - [Configurando a execução](#configurando-a-execução)
-- [Linguagens, dependências e libs utilizadas](#linguagens-dependências-e-libs-utilizadas)
-- [Resolvendo problemas](#resolvendo-problemas)
+- [Linguagens, dependências e libs utilizadas](#linguagens-dependências-e-libs-utilizadas-)
+- [Resolvendo problemas](#resolvendo-problemas-)
 - [Tarefas em aberto](#tarefas-em-aberto)
 - [Documentação](#documentação)
-- [Desenvolvedores e contribuintes](#desenvolvedores-e-contribuintes)
+- [Desenvolvedores e contribuintes](#desenvolvedores-e-contribuintes-)
 - [Licença](#licença)
 
 ## Descrição do projeto
@@ -39,16 +39,16 @@
 
 ## Funcionalidades
 
-- Quatro objetivos: `refatorar`, `corrigir`, `investigar` e `criar`. Veja [Comandos](docs/guia/comandos.md).
-- Uma branch por execução, uma worktree por tentativa e um commit por etapa. O agente trabalha numa cópia sem `.git`.
-- Catorze gates: escopo, segredos, lint (formato, lint e tipos), build, testes (com vermelho/verde), e2e (com dados de teste e propriedades), mutação, métricas (complexidade, CRAP, duplicação), arquitetura, segurança, teste diferencial, voz, citações e rastreabilidade, e documentação. Veja [Gates](docs/guia/gates/README.md).
-- Papéis de implementador, autor de testes, documentador, especificador e arqueólogo, cada um com a sua CLI, se você quiser. Veja [CLIs de agente](docs/guia/clis.md).
-- Documentação gerada junto com cada tarefa: README, registro de mudança e registro de decisão. Veja [Documentação gerada](docs/guia/documentacao-gerada.md).
-- Diário de bordo: o agente vê o histórico das tentativas e a entrega o leva junto. Veja [Diário de bordo](docs/guia/diario-de-bordo.md).
-- Tarefas em paralelo, com escopos disjuntos. Veja [Paralelismo](docs/guia/paralelismo.md).
-- Retomada de execuções interrompidas, sem perder o que foi salvo.
-- Interface de terminal com progresso, atividade do agente, detalhes (`d`) e log (`l`); modo texto para CI. Veja [Ambiente](docs/guia/ambiente.md).
-- Instalação das ferramentas externas pelo próprio comando `forja instalar`. Veja [Instalação](docs/guia/instalacao.md).
+- ✅ ✅ Quatro objetivos: `refatorar`, `corrigir`, `investigar` e `criar`. Veja [Comandos](docs/guia/comandos.md).
+- ✅ ✅ Uma branch por execução, uma worktree por tentativa e um commit por etapa. O agente trabalha numa cópia sem `.git`.
+- ✅ ✅ Catorze gates: escopo, segredos, lint (formato, lint e tipos), build, testes (com vermelho/verde), e2e (com dados de teste e propriedades), mutação, métricas (complexidade, CRAP, duplicação), arquitetura, segurança, teste diferencial, voz, citações e rastreabilidade, e documentação. Veja [Gates](docs/guia/gates/README.md).
+- ✅ ✅ Papéis de implementador, autor de testes, documentador, especificador e arqueólogo, cada um com a sua CLI, se você quiser. Veja [CLIs de agente](docs/guia/clis.md).
+- ✅ ✅ Documentação gerada junto com cada tarefa: README, registro de mudança e registro de decisão. Veja [Documentação gerada](docs/guia/documentacao-gerada.md).
+- ✅ ✅ Diário de bordo: o agente vê o histórico das tentativas e a entrega o leva junto. Veja [Diário de bordo](docs/guia/diario-de-bordo.md).
+- ✅ ✅ Tarefas em paralelo, com escopos disjuntos. Veja [Paralelismo](docs/guia/paralelismo.md).
+- ✅ ✅ Retomada de execuções interrompidas, sem perder o que foi salvo.
+- ✅ ✅ Interface de terminal com progresso, atividade do agente, detalhes (`d`) e log (`l`); modo texto para CI. Veja [Ambiente](docs/guia/ambiente.md).
+- ✅ ✅ Instalação das ferramentas externas pelo próprio comando `forja instalar`. Veja [Instalação](docs/guia/instalacao.md).
 
 ## Pré-requisitos
 
@@ -72,7 +72,7 @@ forja instalar
 
 Detalhes de instalação, atualização e remoção em [Instalação](docs/guia/instalacao.md).
 
-## Como rodar a aplicação
+## Como rodar a aplicação ▶️
 
 Para executar, entre no repositório alvo e rode:
 
@@ -129,7 +129,7 @@ Outros usos, cada um com exemplo em [Comandos](docs/guia/comandos.md):
 - `[clis.<nome>]`: descrição de uma CLI que a Forja não conhece. Veja [CLIs de agente](docs/guia/clis.md).
 - `FORJA_HOME` e as demais variáveis, pastas e arquivos que a Forja lê ou cria: [Ambiente](docs/guia/ambiente.md).
 
-## Linguagens, dependências e libs utilizadas
+## Linguagens, dependências e libs utilizadas 📚
 
 Linguagens que a Forja conduz: Python, TypeScript, JavaScript, Go, Java (Maven e Gradle) e C#.
 
@@ -143,7 +143,7 @@ Dependências de execução do pacote:
 
 Ferramentas externas instaladas por `forja instalar`: gitleaks, osv-scanner, jscpd e Semgrep, mais as de cada linguagem detectada. Desenvolvimento: `pytest`, `mypy`, `coverage`, `pytest-xdist` e `pytest-timeout`.
 
-## Resolvendo problemas
+## Resolvendo problemas ❗
 
 - `forja doctor` mostra o que falta no ambiente.
 - Execução incompleta bloqueia `--config` no mesmo repositório: rode `forja` sem `--config` e escolha retomar ou descartar. Veja [Comandos](docs/guia/comandos.md).
@@ -152,10 +152,10 @@ Ferramentas externas instaladas por `forja instalar`: gitleaks, osv-scanner, jsc
 
 ## Tarefas em aberto
 
-- Publicar o pacote em registro (hoje a instalação é a partir do repositório).
-- Suporte a macOS.
-- A Gemini CLI está suspensa e não pode ser escolhida.
-- Licença a definir.
+- 📝 📝 Publicar o pacote em registro (hoje a instalação é a partir do repositório).
+- 📝 📝 Suporte a macOS.
+- 📝 📝 A Gemini CLI está suspensa e não pode ser escolhida.
+- 📝 📝 Licença a definir.
 
 ## Documentação
 
@@ -174,7 +174,7 @@ O [guia](docs/guia/README.md) reúne uma página por assunto, com exemplo coment
 
 Convenções de desenvolvimento: código, comentários e docstrings em inglês; README em português do Brasil; `mypy` em modo strict; `ruff` com linha de 100 colunas.
 
-## Desenvolvedores e contribuintes
+## Desenvolvedores e contribuintes 🐙
 
 O histórico de autoria está no git: `git shortlog -sn`.
 

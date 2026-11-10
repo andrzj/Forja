@@ -184,7 +184,6 @@ Os marcadores da Forja:
 | `inflated` | vocabulário que infla e não diz nada (`divisor de águas`, `no cenário atual`, `paradigm shift`) |
 | `announcement` | frase que anuncia que algo importa em vez de dizê-lo (`é importante ressaltar que`) |
 | `offer` | oferta de mais ajuda (`espero que isso ajude`, `fico à disposição`) |
-| `emoji` | emoji em texto que se lê como documentação |
 
 Além dos marcadores, `voice` conta os travessões longos (o caractere Unicode U+2014) que o texto acrescentado de um arquivo, ou a mensagem de commit, traz. Acima do limite, o achado é reportado. Só o travessão longo conta. O agente é instruído a não usar nenhum.
 
@@ -209,8 +208,8 @@ Público é o que cada linguagem declara: em Python, nome sem sublinhado inicial
 
 ```toml
 [voice]
-# Este repositório usa emoji na documentação.
-markers_off = ["emoji"]
+# Este repositório aceita oferta de ajuda.
+markers_off = ["offer"]
 # Proíbe a palavra "sinergia" na prosa nova. A aspa simples evita a barra invertida dupla.
 markers_extra = ['\bsinergia\b']
 
@@ -219,7 +218,7 @@ markers_extra = ['\bsinergia\b']
 max_dashes = 0
 ```
 
-O primeiro bloco desliga o marcador `emoji` e acrescenta um padrão próprio, que aparece nos achados como `repository-1`. O segundo troca o limite de 3 travessões por zero.
+O primeiro bloco desliga o marcador `offer` e acrescenta um padrão próprio, que aparece nos achados como `repository-1`. O segundo troca o limite de 3 travessões por zero.
 
 ## Gate 13: citações e rastreabilidade
 

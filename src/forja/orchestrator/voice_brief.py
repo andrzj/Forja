@@ -12,7 +12,7 @@ Fixed text of the Forja: it does not pass through the redactor. Change it only w
 
 from collections.abc import Iterable
 
-VERSION = 1
+VERSION = 2  # 2: emoji is part of the voice, no longer something to avoid
 
 _INTRO = """\
 You write comments, commit messages and documentation that people will read in this repository. \
@@ -27,6 +27,10 @@ version without it, or cut the sentence.
 repository clearly has outranks the list below, at the repository's own frequency.
 - Leave code, identifiers, strings, quotations, titles and domain terms as they are. Change the \
 prose only.
+- Emoji are part of the voice of documentation, in the places the README model puts them: one at \
+the end of a section title (a title the model gives one), a check mark on each finished feature, a \
+memo on each open task. A repository that wrote its README with more or with fewer emoji keeps its \
+own habit. Do not put emoji in code comments or commit messages, and none inside a sentence.
 - Write only the text. Nothing before it, nothing after it.
 
 Avoid, in whatever language you write:"""
@@ -83,7 +87,6 @@ _RULES: tuple[tuple[str | None, str], ...] = (
         "Bold for emphasis, bold-header bullet lists, Title Case headings, a heading followed by "
         "a line that restates it, curly quotation marks.",
     ),
-    ("emoji", "Emoji."),
     (
         None,
         "Sycophancy, filler (in order to, due to the fact that), a hopeful closing line, and "

@@ -40,9 +40,9 @@ def test_a_marker_the_repository_turned_off_is_not_asked_for(marker: str) -> Non
 
 
 def test_turning_off_a_marker_leaves_the_other_rules() -> None:
-    kept = [rule for marker, rule in _RULES if marker != "emoji"]
+    kept = [rule for marker, rule in _RULES if marker != "offer"]
 
-    text = brief(markers_off=("emoji",))
+    text = brief(markers_off=("offer",))
 
     assert all(f"- {rule}" in text for rule in kept)
 
@@ -67,11 +67,20 @@ def test_the_brief_ends_with_the_check_against_the_list_and_a_newline() -> None:
 
 
 def test_the_brief_is_the_same_each_time() -> None:
-    assert brief(("emoji",), (r"x",)) == brief(("emoji",), (r"x",))
+    assert brief(("offer",), (r"x",)) == brief(("offer",), (r"x",))
 
 
 def test_the_list_a_repository_edits_and_the_brief_agree_on_the_default_markers() -> None:
-    kept = {marker.id for marker in build_markers(off=("emoji",))}
+    kept = {marker.id for marker in build_markers(off=("offer",))}
 
-    assert "emoji" not in kept
-    assert VERSION == 1
+    assert "offer" not in kept
+    assert VERSION == 2
+
+
+def test_emoji_is_part_of_the_voice_not_a_marker_nor_a_thing_to_avoid() -> None:
+    text = brief()
+
+    assert "emoji" not in {marker.id for marker in MARKERS}
+    assert not any(rule == "Emoji." for _, rule in _RULES)
+    assert "Emoji are part of the voice" in text
+    assert not any(marker.pattern.search("Done 🚀") for marker in MARKERS)

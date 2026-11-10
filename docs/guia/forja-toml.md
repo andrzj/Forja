@@ -374,13 +374,12 @@ As expressões são as do Python (`re`), aplicadas sem diferenciar maiúsculas d
 | `inflated` | vocabulário que infla e não diz nada |
 | `announcement` | frase que anuncia que algo importa em vez de dizê-lo |
 | `offer` | oferta de mais ajuda |
-| `emoji` | emoji em texto que se lê como documentação |
 
 Um identificador que a Forja não tem é ignorado, e a lista continua tão rígida quanto era. A instrução ao agente também reflete o que o repositório ligou e desligou. O limite de travessões é `[checks.voice.limits] max_dashes`.
 
 ```toml
 [voice]
-markers_off = ["emoji"]                    # este repositório usa emoji na documentação
+markers_off = ["offer"]                    # este repositório aceita oferta de ajuda
 markers_extra = ["\\bsinergia\\b"]         # proíbe a palavra "sinergia"
 ```
 

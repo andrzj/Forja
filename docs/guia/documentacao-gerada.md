@@ -193,9 +193,11 @@ A voz é o jeito de escrever: sem cumprimento, sem elogio, sem falar de si, sem 
 
 ### A instrução
 
-Um texto fixo, em inglês, entra como seção `## Voice` no pacote de toda chamada de agente que escreve texto: implementador, autor de testes, especificador, arqueólogo e documentador. Ele pede para não inventar fato, dizer o simples, seguir o idioma e os hábitos do repositório, deixar código, identificadores e citações como estão, e evitar uma lista de padrões: cumprimento e elogio, falar de si, oferta de ajuda, anúncio de importância, vocabulário inflado, travessões, negrito e títulos em maiúsculas, emoji, voz passiva e texto que narra a mudança em vez de descrevê-la.
+Um texto fixo, em inglês, entra como seção `## Voice` no pacote de toda chamada de agente que escreve texto: implementador, autor de testes, especificador, arqueólogo e documentador. Ele pede para não inventar fato, dizer o simples, seguir o idioma e os hábitos do repositório, deixar código, identificadores e citações como estão, e evitar uma lista de padrões: cumprimento e elogio, falar de si, oferta de ajuda, anúncio de importância, vocabulário inflado, travessões, negrito e títulos em maiúsculas, voz passiva e texto que narra a mudança em vez de descrevê-la.
 
-Hábito claro do repositório vale mais do que a lista. Se o repositório escreve com emoji ou com travessões, siga-o: desligue o marcador (veja abaixo).
+Emoji faz parte da voz: a instrução manda usá-lo na documentação nos lugares que o modelo do README usa, um no fim do título de uma seção que o modelo marca, um ✅ em cada funcionalidade pronta e um 📝 em cada tarefa em aberto. Nunca em comentário de código, em mensagem de commit nem no meio de uma frase.
+
+Hábito claro do repositório vale mais do que a lista e do que o emoji: se o repositório escreve com mais ou menos emoji, ou com travessões, a instrução manda seguir o hábito dele. Para desligar um marcador, veja abaixo.
 
 Na CLI `claude-code` o mesmo texto vai também ao prompt de sistema, acrescentado ao padrão da CLI, por um arquivo fora do diff que o agente não pode alterar. Nas outras CLIs o texto chega só pelo pacote.
 
@@ -212,7 +214,6 @@ A verificação `voice` (gate 12) lê o que a tentativa acrescenta: linhas novas
 | `inflated` | vocabulário que infla e não diz nada |
 | `announcement` | frase que anuncia que algo importa em vez de dizê-lo |
 | `offer` | oferta de mais ajuda |
-| `emoji` | emoji em texto que se lê como documentação |
 | `repository-N` | o N-ésimo padrão de `markers_extra` |
 
 Além dos marcadores, a verificação conta os travessões longos (U+2014) que um arquivo, ou a mensagem de commit, acrescenta. Acima de `max_dashes` (padrão 3), o achado é reportado. O agente é instruído a não usar nenhum.
@@ -225,9 +226,9 @@ Além dos marcadores, a verificação conta os travessões longos (U+2014) que u
 # forja.toml
 
 [voice]
-# Este repositório usa emoji na documentação: o marcador sai da medida
+# Este repositório aceita oferta de ajuda: o marcador sai da medida
 # e a regra sai da instrução ao agente.
-markers_off = ["emoji"]
+markers_off = ["offer"]
 
 # Proíbe, além dos marcadores da Forja, a palavra "sinergia".
 # Cada expressão é do Python (re), sem diferenciar maiúsculas de minúsculas,
@@ -242,7 +243,7 @@ max_dashes = 0
 As listas de `[voice]` somam entre o perfil do usuário e o `forja.toml` do repositório. Um identificador que a Forja não conhece em `markers_off` é ignorado, e a lista continua tão rígida quanto era. O que o repositório desliga ou acrescenta aparece nas notas da preparação da execução:
 
 ```text
-voz: marcadores desligados pelo repositório: emoji
+voz: marcadores desligados pelo repositório: offer
 voz: padrões proibidos pelo repositório: \bsinergia\b
 ```
 

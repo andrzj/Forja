@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-VERSION = 1
+VERSION = 2  # 2: emoji left the list; it is part of the voice (see ``voice_brief``)
 MAX_DASHES = 3  # em dashes in the text one file adds before it reads as excess
 
 
@@ -67,10 +67,5 @@ MARKERS = (
         r"\bi hope this helps\b|\blet me know if you (?:need|have|want)\b"
         r"|\bespero que (?:isso|isto) ajude\b|\bfico à disposição\b",
         "an offer of more help, to a reader who is a repository",
-    ),
-    _marker(
-        "emoji",
-        "[\U0001f300-\U0001faff✅❌✨⭐]",
-        "an emoji in text that is read as documentation",
     ),
 )
