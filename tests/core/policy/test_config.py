@@ -251,16 +251,26 @@ def test_numbers_must_be_finite_and_not_booleans() -> None:
     assert "finite number" in problems("[checks.complexity.limits]\nmax_files = false\n")
 
 
-@pytest.mark.parametrize("name", ["min_tokens", "min_lines"])
-def test_duplication_limits_must_be_whole_numbers(name: str) -> None:
+@pytest.mark.parametrize(
+    ("check", "number", "name"),
+    [
+        ("duplication", 7, "min_tokens"),
+        ("duplication", 7, "min_lines"),
+        ("mutation", 5, "workers"),
+        ("scope", 1, "max_files"),
+        ("scope", 1, "max_lines"),
+        ("voice", 12, "max_dashes"),
+    ],
+)
+def test_whole_limits_must_be_whole_numbers(check: str, number: int, name: str) -> None:
     registry = CheckRegistry()
     registry.register(
         CheckSpec(
-            "duplication",
-            7,
+            check,
+            number,
             Mode.OBSERVATION,
             InconclusivePolicy.PREMISE,
-            limits=frozenset({"min_tokens", "min_lines"}),
+            limits=frozenset({name}),
         )
     )
 
@@ -268,11 +278,9 @@ def test_duplication_limits_must_be_whole_numbers(name: str) -> None:
         return build_policy(registry, [parse_layer("layer 0", text)])
 
     with pytest.raises(PolicyConfigError) as info:
-        load(f"[checks.duplication.limits]\n{name} = 50.5\n")
-    assert f"checks.duplication.limits.{name}: must be a whole number" in info.value.problems[0]
-    assert load(f"[checks.duplication.limits]\n{name} = 50\n").checks["duplication"].limits == {
-        name: 50
-    }
+        load(f"[checks.{check}.limits]\n{name} = 50.5\n")
+    assert f"checks.{check}.limits.{name}: must be a whole number" in info.value.problems[0]
+    assert load(f"[checks.{check}.limits]\n{name} = 50\n").checks[check].limits == {name: 50}
 
 
 def test_toml_that_cannot_be_parsed_is_reported_with_its_layer() -> None:

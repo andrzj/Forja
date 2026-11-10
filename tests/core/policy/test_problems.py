@@ -231,11 +231,11 @@ def test_the_edges_of_the_accepted_ranges_are_accepted() -> None:
     result = policy(
         f'[redaction]\nallow = ["{"x" * 500}"]\nentropy_threshold = 0\n'
         "[checks.complexity.limits]\nmax_files = 0\n",
-        "[redaction]\nentropy_threshold = 8\n[checks.complexity.limits]\nmax_files = 0.5\n",
+        "[redaction]\nentropy_threshold = 8\n[checks.complexity.limits]\nmax_files = 1\n",
     )
 
     assert result.redaction.entropy_threshold == 8
-    assert result.checks["complexity"].limits == {"max_files": 0.5}
+    assert result.checks["complexity"].limits == {"max_files": 1}
 
 
 def test_all_the_problems_are_in_one_error_one_per_line() -> None:

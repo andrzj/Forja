@@ -64,8 +64,10 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
 }
 
 Number = int | float
-# jscpd takes these as whole numbers, and ``duplication.limit_of`` drops a float without a word.
-_WHOLE_LIMITS = frozenset({"min_tokens", "min_lines"})
+# The checks read these as whole numbers and drop a float without a word.
+_WHOLE_LIMITS = frozenset(
+    {"min_tokens", "min_lines", "workers", "max_files", "max_lines", "max_dashes"}
+)
 
 
 class PolicyConfigError(Exception):
