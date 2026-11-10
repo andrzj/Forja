@@ -276,10 +276,13 @@ def _validate_layer(registry: CheckRegistry, layer: Layer, problems: list[str]) 
         bad(key, "unknown section")
     _validate_architecture(layer.data.get("architecture"), bad)
     validate_differential(layer.data.get("differential"), bad)
-    _validate_string_list(layer.data.get("licenses"), "licenses", "forbidden", bad, _check_license)
+    for name, check_one in (
+        ("licenses", _check_license),
+        ("sensitive", _check_pattern),
+        ("branches", _check_branch),
+    ):
+        _validate_string_list(layer.data.get(name), name, _only_key(name), bad, check_one)
     _validate_voice(layer.data.get("voice"), bad)
-    _validate_string_list(layer.data.get("sensitive"), "sensitive", "paths", bad, _check_pattern)
-    _validate_string_list(layer.data.get("branches"), "branches", "protected", bad, _check_branch)
     _validate_adapters(layer.data.get("adapters"), bad)
     _validate_redaction(layer.data.get("redaction"), bad)
     _validate_tests(layer.data.get("tests"), bad)
@@ -570,13 +573,19 @@ def _check_branch(value: str) -> None:
         raise ValueError(f"invalid branch name {value!r}")
 
 
+def _only_key(name: str) -> str:
+    """The one key of a section that holds a single list."""
+    (key,) = SECTION_KEYS[name]
+    return key
+
+
 def _validate_string_list(section: Any, name: str, key: str, bad: Any, check_one: Any) -> None:
     if section is None:
         return
     if not isinstance(section, dict):
         bad(name, "must be a table")
         return
-    for extra in sorted(set(section) - {key}):
+    for extra in sorted(set(section) - SECTION_KEYS[name]):
         bad(f"{name}.{extra}", "unknown key")
     values = section.get(key)
     if values is None:

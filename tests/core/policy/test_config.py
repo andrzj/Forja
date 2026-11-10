@@ -20,6 +20,7 @@ from forja.core.policy import (
     load_policy,
     parse_layer,
 )
+from forja.core.policy.config import SECTION_KEYS
 from tests.core.gates.support import FakeCheck, make_input
 
 
@@ -400,6 +401,15 @@ def test_these_lists_only_add_they_never_replace_or_remove_the_defaults() -> Non
 )
 def test_invalid_sensitive_and_branch_settings_are_reported(toml: str, expected: str) -> None:
     assert expected in problems(toml)
+
+
+@pytest.mark.parametrize("section", ["sensitive", "branches", "licenses"])
+def test_a_list_section_accepts_only_the_key_of_section_keys(section: str) -> None:
+    (key,) = SECTION_KEYS[section]
+
+    policy(f'[{section}]\n{key} = ["x"]\n')
+    assert f"{section}.other: unknown key" in problems(f'[{section}]\nother = ["x"]\n')
+    assert f"{section}: must be a table" in problems(f"{section} = 3\n")
 
 
 def test_the_new_settings_change_the_policy_version() -> None:

@@ -12,7 +12,7 @@ import pytest
 
 from forja.checks.specs import default_registry
 from forja.cli.args import parser
-from forja.cli.settings import Execucao, Interface, ModeloCli
+from forja.cli.settings import Execucao, Interface, ModeloCli, Perfil
 from forja.core.policy.config import _CHECK_KEYS, ADAPTER_OPERATIONS, SECTION_KEYS
 from forja.core.policy.differential import _CASE_KEYS, _OUTPUT_KEYS
 
@@ -81,10 +81,15 @@ def test_every_command_is_in_the_guide(command: str) -> None:
 
 @pytest.mark.parametrize(
     "key",
-    sorted(set(Execucao.model_fields) | set(Interface.model_fields) | set(ModeloCli.model_fields)),
+    sorted(
+        set(Execucao.model_fields)
+        | set(Interface.model_fields)
+        | set(ModeloCli.model_fields)
+        | set(Perfil.model_fields)
+    ),
 )
 def test_every_execucao_key_is_in_the_guide(key: str) -> None:
-    assert _named(key), f"execucao.toml: {key} is not in docs/guia"
+    assert _named(key), f"execucao.toml or config.toml: {key} is not in docs/guia"
 
 
 @pytest.mark.parametrize(
