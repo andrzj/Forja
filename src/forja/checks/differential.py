@@ -32,7 +32,7 @@ from forja.core.policy.differential import DifferentialCase
 
 NO_CASES = "differential_cases"
 NO_STABLE_CASES = "differential_stable_cases"
-DEFAULT_MAX_TIME_RATIO = 1.25  # a guess until the calibration of queue item 6
+DEFAULT_MAX_TIME_RATIO = 1.25  # a default without calibration: the owner dispensed with it
 DEFAULT_MAX_MEMORY_RATIO = 1.25
 DEFAULT_RUNS = 3
 
