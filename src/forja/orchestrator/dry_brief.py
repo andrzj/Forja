@@ -8,7 +8,7 @@ Fixed text of the Forja: it does not pass through the redactor. Change it only w
 ``VERSION``.
 """
 
-VERSION = 1
+VERSION = 2
 
 _BRIEF = """\
 Do not repeat code. A passage of {min_lines} lines or {min_tokens} tokens that is the same as \
@@ -21,6 +21,10 @@ you add to a production file.
 a parameter.
 - Duplication that was already there is not yours to fix, unless the task says so.
 - Tests may repeat setup; this rule is about production code.
+- A fact from the owner may ask for a copy. The rule still stands: do not hide the clone by \
+changing its structure so that the check passes. Write the copy the fact asks for. If the check \
+rejects it, leave it as it is and declare in `assumptions` that the fact and the rule conflict, \
+with the id of the fact.
 """
 
 

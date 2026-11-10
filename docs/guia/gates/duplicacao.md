@@ -54,7 +54,8 @@ O agente que escreve código recebe, no pacote da tarefa, uma seção `## Duplic
 - que, se a mesma lógica for necessária em dois lugares, deve pô-la numa função ou módulo e chamá-la dos dois;
 - que copiar e trocar um nome ou número continua sendo clone: o que difere vira parâmetro;
 - que duplicação que já existia não é dele para consertar, salvo se a tarefa pedir;
-- que testes podem repetir preparação, e que a regra é sobre código de produção.
+- que testes podem repetir preparação, e que a regra é sobre código de produção;
+- que um fato do dono pode pedir uma cópia, e que a regra continua valendo: ele não deve esconder o clone mudando a estrutura para o check passar, deve escrever a cópia pedida e, se o check a rejeitar, deixá-la como está e declarar em `assumptions` que o fato e a regra entram em conflito, com o id do fato. A tarefa pode então terminar bloqueada em vez de entregue por contorno.
 
 Recebem a seção o implementador e a correção. Autor de testes, documentador, especificador e arqueólogo não a recebem. Quando o check reprova, o agente vê o achado (arquivo, linha e o outro lado) na tentativa seguinte, como nos outros gates.
 
