@@ -302,13 +302,15 @@ class GitWorkspace:
             git = self._git.at(worktree)
             if await git.lines("status", "--porcelain"):
                 await stage_all(git)
-                await git.lines(
-                    "commit",
-                    "-m",
-                    "style: normalize formatting",
-                    "--trailer",
-                    f"Stage-Id: {stage_id}",
-                )
+                # with core.autocrlf a rewrite of line endings shows in status but stages nothing
+                if await git.lines("diff", "--cached", "--name-only"):
+                    await git.lines(
+                        "commit",
+                        "-m",
+                        "style: normalize formatting",
+                        "--trailer",
+                        f"Stage-Id: {stage_id}",
+                    )
 
         return Step.plain({"run_branch": self.run_branch, "stage_id": stage_id}, run)
 

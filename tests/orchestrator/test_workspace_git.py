@@ -316,6 +316,25 @@ def test_a_formatter_with_nothing_to_do_makes_no_commit(
     assert settle(workspace, "normalize_style", payload) == Decision.REDO
 
 
+def test_a_formatter_that_only_changes_line_endings_makes_no_commit_and_does_not_fail(
+    workspace: GitWorkspace, repo: Repo
+) -> None:
+    repo.sh("config", "core.autocrlf", "true")
+    (repo.path / "lines.txt").write_bytes(b"a\r\nb\r\n")
+    repo.sh("add", "lines.txt")
+    repo.sh("commit", "-m", "lines")
+    base = start_run(workspace, repo)
+    lines = workspace.layout.run_worktree / "lines.txt"
+    assert lines.read_bytes() == b"a\r\nb\r\n"  # the checkout is in CRLF
+
+    async def format_to_lf(worktree: Path) -> None:
+        lines.write_bytes(b"a\nb\n")  # what gofmt does: git sees no change after normalizing
+
+    do(workspace.normalize_style(format_to_lf))
+
+    assert tip(repo, RUN_BRANCH) == base
+
+
 def test_a_crash_between_the_formatter_and_the_commit_does_not_lose_the_formatting(
     workspace: GitWorkspace, repo: Repo
 ) -> None:
