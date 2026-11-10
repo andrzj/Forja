@@ -9,6 +9,9 @@ is the project's own dependency (``coverlet.collector``); a project without it g
 the coverage gate is inconclusive rather than a pass.
 """
 
+import hashlib
+import os
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -89,6 +92,15 @@ def _entry(root: Path) -> str | None:
         if found:
             return None
     return None
+
+
+def artifacts_dir(root: Path) -> Path:
+    """Where the build of the worktree at ``root`` writes ``obj`` and ``bin``: the user's own
+    cache, one directory per worktree so two attempts never share a build."""
+    base = os.environ.get("LOCALAPPDATA") if sys.platform == "win32" else None
+    cache = Path(base) if base else Path.home() / ".cache"
+    key = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:16]
+    return cache / "forja" / "dotnet" / key
 
 
 class CSharpAdapter:
@@ -198,7 +210,13 @@ class CSharpAdapter:
 
     @staticmethod
     def _plan(root: Path, argv: tuple[str, ...], config_files: tuple[str, ...] = ()) -> CommandPlan:
-        env: Mapping[str, str] = _ENVIRONMENT_SET
+        # Build output goes to one place per worktree outside it: ``obj`` and ``bin`` ignored by
+        # git would otherwise show as hidden files in the worktree (the scope gate rejects them).
+        env: Mapping[str, str] = {
+            **_ENVIRONMENT_SET,
+            "UseArtifactsOutput": "true",
+            "ArtifactsPath": str(artifacts_dir(root)),
+        }
         return CommandPlan(
             argv, root, env_allow=DOTNET_ENVIRONMENT, env_set=env, config_files=config_files
         )

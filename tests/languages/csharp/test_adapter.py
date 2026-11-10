@@ -24,7 +24,7 @@ from forja.core.adapters import (
 from forja.core.reports import ReportFormat, ReportSpec
 from forja.core.reports.readers import read_coverage
 from forja.languages.csharp import CSharpAdapter
-from forja.languages.csharp.adapter import COVERAGE_DIRECTORY, COVERAGE_REPORT
+from forja.languages.csharp.adapter import COVERAGE_DIRECTORY, COVERAGE_REPORT, artifacts_dir
 from tests.core.adapters.conformance import language_problems
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "csharp"
@@ -178,6 +178,41 @@ def test_dotnet_may_read_its_own_settings_from_the_environment(project: Path) ->
     assert {"LOCALAPPDATA", "NUGET_PACKAGES", "DOTNET_ROOT"} <= answer.env_allow
     assert answer.env_set["DOTNET_CLI_TELEMETRY_OPTOUT"] == "1"
     assert ".editorconfig" in answer.config_files
+
+
+def test_the_build_writes_obj_and_bin_outside_the_worktree_one_place_per_worktree(
+    project: Path, tmp_path: Path
+) -> None:
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "Calc.sln").write_text("", encoding="utf-8")
+    here, there = plan(Operation.TEST, project), plan(Operation.TEST, other)
+
+    assert isinstance(here, CommandPlan) and isinstance(there, CommandPlan)
+    assert here.env_set["UseArtifactsOutput"] == "true"
+    assert here.env_set["ArtifactsPath"] == str(artifacts_dir(project))
+    assert not artifacts_dir(project).is_relative_to(project)
+    assert here.env_set["ArtifactsPath"] != there.env_set["ArtifactsPath"]
+    assert artifacts_dir(project) == artifacts_dir(project)
+
+
+def test_the_build_cache_is_the_local_app_data_on_windows_and_the_home_cache_elsewhere(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    local = tmp_path / "local"
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+
+    monkeypatch.setattr("sys.platform", "win32")
+    assert artifacts_dir(project).parent == local / "forja" / "dotnet"
+
+    monkeypatch.setattr("sys.platform", "linux")
+    assert artifacts_dir(project).parent == home / ".cache" / "forja" / "dotnet"
+
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.delenv("LOCALAPPDATA")
+    assert artifacts_dir(project).parent == home / ".cache" / "forja" / "dotnet"
 
 
 def test_every_tool_names_its_version_probe() -> None:
