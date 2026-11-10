@@ -90,7 +90,8 @@ def render(screen: pyte.Screen, out: Path, rows: int | None = None) -> None:
     font = _font()
     cw = round(font.getlength("M"))
     ch = FONT_SIZE + 6
-    img = Image.new("RGB", (cw * screen.columns + 2 * PAD, ch * len(lines) + 2 * PAD), "#" + DEFAULT_BG)
+    size = (cw * screen.columns + 2 * PAD, ch * len(lines) + 2 * PAD)
+    img = Image.new("RGB", size, "#" + DEFAULT_BG)
     draw = ImageDraw.Draw(img)
     for y, line in enumerate(lines):
         for x, cell in enumerate(line):
@@ -124,7 +125,9 @@ def run(
     """Runs ``argv`` in a ConPTY of COLS x rows; saves PNGs at the snapshot and at the end."""
     screen = pyte.Screen(COLS, rows)
     stream = pyte.Stream(screen)
-    proc = PtyProcess.spawn(argv, cwd=str(cwd), dimensions=(rows, COLS), env={**os.environ, **(env or {})})
+    proc = PtyProcess.spawn(
+        argv, cwd=str(cwd), dimensions=(rows, COLS), env={**os.environ, **(env or {})}
+    )
     lock = threading.Lock()
 
     def pump() -> None:
@@ -183,9 +186,13 @@ def temp_repo(root: Path, files: dict[str, str]) -> Path:
 
 
 BUG = {
-    "pyproject.toml": '[project]\nname = "exemplo"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n',
+    "pyproject.toml": (
+        '[project]\nname = "exemplo"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+    ),
     "calculadora.py": "def soma(a, b):\n    return a - b\n",
-    "test_calculadora.py": "from calculadora import soma\n\n\ndef test_soma():\n    assert soma(0, 0) == 0\n",
+    "test_calculadora.py": (
+        "from calculadora import soma\n\n\ndef test_soma():\n    assert soma(0, 0) == 0\n"
+    ),
 }
 
 
@@ -199,7 +206,13 @@ def doctor(tmp: Path) -> None:
 
 
 def instalar_ajuda(tmp: Path) -> None:
-    run([str(FORJA), "instalar", "--help"], tmp, rows=20, timeout=30, final=OUT / "terminal-instalar-ajuda.png")
+    run(
+        [str(FORJA), "instalar", "--help"],
+        tmp,
+        rows=20,
+        timeout=30,
+        final=OUT / "terminal-instalar-ajuda.png",
+    )
 
 
 def corrigir_plano(tmp: Path) -> None:
@@ -230,10 +243,11 @@ def execucao(tmp: Path) -> None:
     )
     repo = temp_repo(tmp, {**BUG, "execucao.toml": toml})
     home = tmp / "forja-home"
+    started = time.monotonic()
     screen = run(
         [str(FORJA), "--config", "execucao.toml"],
         repo, rows=44, timeout=1500,
-        snapshot=(lambda t, t0=time.monotonic(): time.monotonic() - t0 > 25 and bool(t.strip()),
+        snapshot=(lambda t: time.monotonic() - started > 25 and bool(t.strip()),
                   OUT / "terminal-execucao-meio.png"),
         final=OUT / "terminal-execucao-fim.png",
         done=lambda t: "Fim da execução" in t,
@@ -241,7 +255,8 @@ def execucao(tmp: Path) -> None:
     )
     print("\n".join(line.rstrip() for line in screen.display if line.strip()))
     for resumo in home.rglob("resumo.md"):
-        (OUT / "resumo-execucao.md").write_text(resumo.read_text(encoding="utf-8").replace(USER, "dev"), encoding="utf-8")
+        texto = resumo.read_text(encoding="utf-8").replace(USER, "dev")
+        (OUT / "resumo-execucao.md").write_text(texto, encoding="utf-8")
         print(f"gravado resumo de {resumo}")
         break
 
