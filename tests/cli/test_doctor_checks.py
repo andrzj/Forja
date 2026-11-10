@@ -1,6 +1,7 @@
 """The checks of the doctor one by one: each condition both ways, each boundary on the value."""
 
 import asyncio
+import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -346,7 +347,7 @@ def test_a_missing_gradle_points_to_forja_instalar_then_to_its_own_site(
 def test_a_missing_bundled_module_says_to_reinstall_the_forja(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(doctor_module.importlib.util, "find_spec", lambda _name: None)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda _name: None)
 
     check = doctor_module._module("ruff", "lint")  # noqa: SLF001
 

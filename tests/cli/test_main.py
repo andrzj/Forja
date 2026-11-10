@@ -18,9 +18,10 @@ from forja.cli.settings import Execucao, Interface, ModeloCli, Perfil, load_perf
 from forja.core.adapters.executor import locate_in_path
 from forja.core.states import ExecutionState
 from forja.executors import KNOWN_CLIS, ClaudeCodeAdapter
+from forja.ui import terminal as ui_terminal
 from forja.ui.full import FullRenderer
+from forja.ui.glyphs import ASCII
 from forja.ui.terminal import Capabilities
-from forja.ui.theme import ASCII
 from tests.cli.test_resume import make_run
 
 pytestmark = pytest.mark.integration
@@ -385,7 +386,7 @@ def test_the_full_screen_is_chosen_when_the_terminal_has_room(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     caps = Capabilities(True, "truecolor", True, 120, 36, "windows_terminal", True, True, False)
-    monkeypatch.setattr(door.terminal, "detect", lambda: caps)
+    monkeypatch.setattr(ui_terminal, "detect", lambda: caps)
     screen = door.renderer_for(Perfil(), None, Talk())
     assert isinstance(screen, FullRenderer)
 
@@ -394,7 +395,7 @@ def _screen_theme(
     monkeypatch: pytest.MonkeyPatch, *, tema: str, ascii: bool, unicode: bool
 ) -> object:
     caps = Capabilities(True, "truecolor", unicode, 120, 36, "windows_terminal", True, True, False)
-    monkeypatch.setattr(door.terminal, "detect", lambda: caps)
+    monkeypatch.setattr(ui_terminal, "detect", lambda: caps)
     seen: list[object] = []
     monkeypatch.setattr(door, "FullRenderer", lambda theme, *_a, **_k: seen.append(theme))
     profile = Perfil(interface=Interface(tema=tema, ascii=ascii))

@@ -7,6 +7,7 @@ the cycle kept when it moved the attempt to validating; the outcome is the trans
 
 import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -102,7 +103,7 @@ def _entry(state: RunState, stage: str, attempt: str) -> Entry:
     return Entry(stage, attempt, said, Outcome.OPEN)
 
 
-def blocked_reason(payload: dict[str, object]) -> str:
+def blocked_reason(payload: Mapping[str, object]) -> str:
     """Why a task is blocked: the reason it recorded and, when there is one, its detail (the
     conflict's branch, the gate that stopped the integration)."""
     reason, detail = _text(payload.get("reason")), _text(payload.get("detail"))

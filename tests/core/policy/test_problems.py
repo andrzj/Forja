@@ -166,7 +166,8 @@ CASES = {
         ],
     ),
     "adapters.javascript, which no adapter answers to, and the next language is still read": (
-        '[adapters.javascript.commands]\ne2e = ["npm", "run", "e2e"]\n[adapters.python]\ncommands = 3',
+        '[adapters.javascript.commands]\ne2e = ["npm", "run", "e2e"]\n'
+        "[adapters.python]\ncommands = 3",
         [
             "layer 0: adapters.javascript: "
             "no adapter has this name; use typescript, which serves JavaScript",

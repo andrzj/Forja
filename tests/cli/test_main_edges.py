@@ -4,6 +4,7 @@ remembers, how a run closes, and what each error of the command becomes."""
 import asyncio
 import contextlib
 import io
+import os
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +19,7 @@ from forja.cli.session import PolicyChanged
 from forja.cli.settings import Perfil, SettingsError, load_perfil, save_perfil
 from forja.core.locking.repository import RepositoryBusy
 from forja.orchestrator.outcome import ExitCode
+from forja.ui import terminal as ui_terminal
 from forja.ui.full import FullRenderer
 from forja.ui.terminal import Capabilities
 from forja.ui.theme import THEMES
@@ -47,13 +49,13 @@ def test_a_small_window_gets_the_live_line_and_the_reason(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     small = Capabilities(True, "truecolor", True, 40, 10, "xterm", True, True, False)
-    monkeypatch.setattr(door.terminal, "detect", lambda: small)
+    monkeypatch.setattr(ui_terminal, "detect", lambda: small)
     monkeypatch.setattr(door, "LiveRenderer", lambda theme, caps: ("live", caps))
     talk = Talk()
 
-    screen = door.renderer_for(Perfil(), None, talk)  # type: ignore[arg-type]
+    screen = door.renderer_for(Perfil(), None, talk)
 
-    assert screen == ("live", small)
+    assert screen == ("live", small)  # type: ignore[comparison-overlap]
     assert talk.said == ["a janela está pequena (40x10); a tela completa pede ao menos 60x16"]
 
 
@@ -213,7 +215,7 @@ def test_a_full_screen_that_breaks_is_told_and_does_not_lose_the_result() -> Non
 
     talk = Talk()
 
-    asyncio.run(door._screen(broken(), talk))  # type: ignore[arg-type]  # noqa: SLF001
+    asyncio.run(door._screen(broken(), talk))  # noqa: SLF001
 
     assert talk.said == ["A tela completa falhou (boom); o resultado da execução continua valendo."]
 
@@ -301,7 +303,7 @@ def test_the_commands_that_do_not_run_are_handed_to_their_own_code(
     monkeypatch.setattr(door, "instalar", instalar)
     monkeypatch.setattr(door, "run_facade", facade)
 
-    assert asyncio.run(door.amain(parse(argv), Talk(), {})) == code  # type: ignore[arg-type]
+    assert asyncio.run(door.amain(parse(argv), Talk(), {})) == code
     assert calls == [name]
 
 
@@ -329,7 +331,7 @@ def test_an_error_of_the_command_is_said_and_exits_as_an_invalid_configuration(
     monkeypatch.setattr(door, "start", start)
     talk = Talk()
 
-    assert asyncio.run(door.amain(parse([]), talk, {})) == int(ExitCode.INVALID_CONFIG)  # type: ignore[arg-type]
+    assert asyncio.run(door.amain(parse([]), talk, {})) == int(ExitCode.INVALID_CONFIG)
     assert talk.said == [said]
 
 
@@ -339,7 +341,7 @@ def test_main_returns_what_the_command_returns(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(door, "amain", amain)
     monkeypatch.setattr(door, "with_installed_tools", lambda environ: dict(environ))
-    monkeypatch.setattr(door.os, "environ", {})
+    monkeypatch.setattr(os, "environ", {})
 
     assert door.main(["doctor"]) == 5
 
@@ -350,7 +352,7 @@ def test_main_exits_interrupted_on_a_keyboard_interrupt(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(door, "amain", amain)
     monkeypatch.setattr(door, "with_installed_tools", lambda environ: dict(environ))
-    monkeypatch.setattr(door.os, "environ", {})
+    monkeypatch.setattr(os, "environ", {})
 
     assert door.main(["doctor"]) == int(ExitCode.INTERRUPTED)
 

@@ -16,7 +16,7 @@
 - [Funcionalidades](#funcionalidades)
 - [Pré-requisitos](#pré-requisitos)
 - [Instalação](#instalação)
-- [Como rodar a aplicação](#como-rodar-a-aplicação-)
+- [Como rodar a aplicação](#como-rodar-a-aplicação-️)
 - [Como rodar os testes](#como-rodar-os-testes)
 - [Casos de uso](#casos-de-uso)
 - [Configurando a execução](#configurando-a-execução)
