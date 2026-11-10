@@ -475,7 +475,7 @@ outputs = [
 
 ## O que a Forja imprime quando a política difere dos padrões
 
-Antes de pedir confirmação, a Forja resume a execução. Quando o `forja.toml` muda algo em relação aos padrões, o resumo inclui o bloco `forja.toml do repositório muda o padrão:`, com uma linha por diferença. Quem confirma vê tudo o que o repositório afrouxou, trocou ou desligou.
+Antes de pedir confirmação, a Forja resume a execução. Quando o `forja.toml` muda algo em relação aos padrões, o resumo inclui o bloco `forja.toml do repositório muda o padrão:`, com uma linha por diferença. Quem confirma vê tudo o que o repositório afrouxou, trocou, desligou ou acrescentou: arquivos sensíveis (`[sensitive]`), branches protegidas (`[branches]`), licenças proibidas (`[licenses]`), a raiz dos testes (`[tests]`), os padrões de redação (`[redaction.patterns]`), as camadas (`[architecture]`) e os casos do teste diferencial (`[differential]`).
 
 | Linha | Quando aparece |
 | --- | --- |

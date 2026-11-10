@@ -383,9 +383,31 @@ def policy_changes(policy: EffectivePolicy) -> tuple[str, ...]:
     for language, commands in sorted(policy.adapter_commands.items()):
         for name, argv in sorted(commands.items()):
             notes.append(f"{language}: roda no lugar do padrão ({name}): {' '.join(argv)}")
+    notes += _repository_additions(policy)
     notes += _redaction_changes(policy)
     notes += _voice_changes(policy)
     return tuple(notes)
+
+
+def _repository_additions(policy: EffectivePolicy) -> list[str]:
+    """What the repository adds beyond the Forja's defaults: files and branches it guards,
+    licenses it forbids, where tests go, its layers and its differential cases."""
+    notes = []
+    if policy.sensitive_paths:
+        notes.append(f"arquivos sensíveis acrescentados: {', '.join(policy.sensitive_paths)}")
+    if policy.protected_branches:
+        notes.append(f"branches protegidas acrescentadas: {', '.join(policy.protected_branches)}")
+    if policy.forbidden_licenses:
+        notes.append(f"licenças proibidas: {', '.join(policy.forbidden_licenses)}")
+    if policy.test_root is not None:
+        notes.append(f"testes escritos em: {policy.test_root}")
+    if policy.architecture:
+        layers = " > ".join(layer.name for layer in policy.architecture)
+        notes.append(f"camadas de arquitetura (da mais alta para a mais baixa): {layers}")
+    if policy.differential:
+        names = ", ".join(case.name for case in policy.differential)
+        notes.append(f"casos do teste diferencial: {names}")
+    return notes
 
 
 def _voice_changes(policy: EffectivePolicy) -> list[str]:
@@ -402,6 +424,9 @@ def _redaction_changes(policy: EffectivePolicy) -> list[str]:
     notes = []
     if redaction.allow or redaction.allow_patterns:
         notes.append("redação: valores liberados pelo repositório (nunca mascarados)")
+    if redaction.patterns:
+        names = ", ".join(name for name, _ in redaction.patterns)
+        notes.append(f"redação: padrões acrescentados pelo repositório: {names}")
     off = sorted(kind.value for kind in standard.pii - redaction.pii)
     if off:
         notes.append(f"redação: detectores de dados pessoais desligados: {', '.join(off)}")
