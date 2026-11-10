@@ -147,7 +147,7 @@ def _unpack(file: Path, artifact: Artifact, destination: Path) -> None:
 async def _install_wheel(tool: Tool, url: str, wheel: Path, destination: Path, python: str) -> None:
     """A virtual environment of its own, with the wheel in it. The environment is made where it
     stays, because the scripts it holds name its own path."""
-    # Limit (docs/plano-instalacao.md): pip resolves the dependencies of the wheel with no
+    # Limit: pip resolves the dependencies of the wheel with no
     # checksum from the manifest.
     steps = (
         (python, "-m", "venv", str(destination)),

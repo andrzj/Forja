@@ -1,4 +1,4 @@
-"""Runs one execution of the experiment of ``docs/medicao-2.md`` and judges what it delivered.
+"""Runs one execution of the experiment of the second measurement and judges what it delivered.
 
     python run.py plan                       the shuffled order of every execution
     python run.py one <repo> <arm> <rep>     one execution, judged, appended to results.jsonl

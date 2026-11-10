@@ -20,7 +20,7 @@ from forja.core.adapters import (
 )
 
 LOOPBACK = "localhost,127.0.0.1,::1"
-# measured against the real clients on 23/10 (docs\plano-gate-6.md, "Leitura do passo 0")
+# measured against the real clients on 23/10
 OFFLINE = {"npm_config_offline": "true", "PIP_NO_INDEX": "1", "GOPROXY": "off"}
 NODE_PROXY = {"NODE_USE_ENV_PROXY": "1"}  # Node ignores the proxy variables without it
 JAVA_OPTIONS = "JAVA_TOOL_OPTIONS"

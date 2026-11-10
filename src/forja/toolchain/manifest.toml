@@ -1,4 +1,4 @@
-# Manifest of the external tools the Forja installs (ADR 0037, docs/plano-instalacao.md).
+# Manifest of the external tools the Forja installs (ADR 0037).
 #
 # Every size and checksum below was read from the vendor's own published file (named in
 # `checksum_source`) and checked by downloading the artifact itself. Changing a version is a commit

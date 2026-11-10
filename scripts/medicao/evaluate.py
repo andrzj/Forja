@@ -2,7 +2,7 @@
 
     python evaluate.py <repo name> <initial tree> <final tree>
 
-prints one JSON object. A delivery is accepted when every criterion of ``docs/medicao-2.md`` holds;
+prints one JSON object. A delivery is accepted when every criterion of the second measurement holds;
 a regression is a case of the characterization oracle that no longer gives the recorded outcome.
 """
 

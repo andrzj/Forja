@@ -1,4 +1,4 @@
-"""Check the planted-defect repositories against what docs/defeitos-3.md says about them.
+"""Check the planted-defect repositories against what the defect inventory says about them.
 
 For each repository: the visible tests pass with the defect and with the fix; every reference
 test fails (by assertion, not by collection error) with the defect and passes with the fix; each
