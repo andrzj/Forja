@@ -54,7 +54,14 @@ from forja.checks.e2e import E2ECheck, E2ERun, run_e2e
 from forja.checks.each import EachLanguage, Part
 from forja.checks.freeze import AppendOnlyCheck, FreezeCheck
 from forja.checks.layer_rules import LayerRulesCheck
-from forja.checks.layout import FormatCheck, LintCheck, TypesCheck, own_files, violations
+from forja.checks.layout import (
+    FormatCheck,
+    LintCheck,
+    TypesCheck,
+    by_adapter,
+    own_files,
+    violations,
+)
 from forja.checks.module_depth import ModuleDepthCheck
 from forja.checks.mutation import MutationCheck
 from forja.checks.new_dependency import (
@@ -270,6 +277,24 @@ class PipelineMeasurer:
                 plan = adapter.plan(operation, OperationRequest(root=worktree))
                 if isinstance(plan, CommandPlan):
                     await tools.run(name, plan)
+
+    async def _normalized(
+        self, tools: Tools, worktree: Path, git: GitAt, changes: Changes
+    ) -> Changes:
+        """Safe lint fixes, then the formatter, over the files the attempt changed, before any
+        gate reads them: the tool does what it can, and the agent is judged on the rest."""
+        files = changes.current(own_files(self._adapters))
+        if not files:
+            return changes
+        for adapter, own in by_adapter(self._active(worktree, files), files):
+            for operation, name in (
+                (Operation.LINT_FIX, "normalize_lint"),
+                (Operation.FORMAT, "normalize_format"),
+            ):
+                plan = adapter.plan(operation, OperationRequest(root=worktree, files=own))
+                if isinstance(plan, CommandPlan):
+                    await tools.run(name, plan)
+        return await read_changes(git)
 
     # -- the base ------------------------------------------------------------------------------
 
@@ -639,7 +664,8 @@ class PipelineMeasurer:
         if ctx.task.role in NO_COMMIT:
             return await self._judge_answer(ctx, expectations)
         git = self._git.at(ctx.worktree)
-        changes = await read_changes(git)
+        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
+        changes = await self._normalized(tools, ctx.worktree, git, await read_changes(git))
         own = own_files(self._adapters)
         before = await read_before(git, changes, own)
         # an extra test stage judges the code the implementer committed, read against what it was
@@ -670,7 +696,6 @@ class PipelineMeasurer:
                 return await self._pipeline([DependencyInstallCheck(tuple(stopped))]).run(
                     data, set()
                 )
-        tools = self._tools(sinks, Level.ATTEMPT, ctx.attempt_id)
         production = tuple(p for p in code.current() if self._classify(p) is FileClass.PRODUCTION)
         unstable, passing = self._read_base()
         e2e_unstable, e2e_passing = self._read_e2e_base()

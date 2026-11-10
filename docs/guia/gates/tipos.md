@@ -2,6 +2,8 @@
 
 O gate 3 reprova a tentativa que deixa o código fora do formato canônico, que acrescenta violação de lint ou que acrescenta erro de tipo. Ele reúne três verificações, `format`, `lint` e `types`, e roda sobre os arquivos que a tentativa mudou. O gate 4 (`build`) vem logo depois e tem uma seção curta no fim desta página. O índice dos gates está em `README.md`; as chaves de política estão em `..\forja-toml.md`.
 
+Antes de qualquer gate ler os arquivos, a Forja corrige o que a ferramenta corrige sozinha: nos arquivos que a tentativa mudou, roda a correção automática do linter e depois o formatador (a correção automática do linter existe em Python, TypeScript, Go e C#). O agente só responde pelo que sobra. A correção vale também para o autor de testes.
+
 ## Resumo
 
 | Verificação | O que mede | Como mede | Modo padrão | Se não puder medir (`on_inconclusive`) |

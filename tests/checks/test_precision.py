@@ -49,6 +49,8 @@ def test_a_clean_attempt_starts_exactly_these_tools_in_this_order(scene: Scene) 
 
     runs = scene.recorder.runs
     assert [r.operation_id for r in runs] == [
+        "run_tool:t1-a1:normalize_lint:1",
+        "run_tool:t1-a1:normalize_format:1",
         "run_tool:t1-a1:secrets:1",
         "run_tool:t1-a1:format:1",
         "run_tool:t1-a1:lint:1",
@@ -66,6 +68,23 @@ def test_a_clean_attempt_starts_exactly_these_tools_in_this_order(scene: Scene) 
     ]
     assert {r.where for r in runs} == {ATTEMPT}
     assert {r.timeout for r in runs} == {300.0}
+
+
+def test_the_files_the_attempt_changed_are_fixed_and_formatted_before_any_gate_reads_them(
+    scene: Scene,
+) -> None:
+    edit_mod(scene, "X = 1\n")
+
+    judge(scene)
+
+    lint, fmt = one(scene, "normalize_lint"), one(scene, "normalize_format")
+    assert tail(lint) == (
+        "check", "--fix", "--exit-zero", "--output-format=concise", "--no-cache",
+        "--force-exclude", "--", *FILES,
+    )  # fmt: skip
+    assert tail(fmt) == ("format", "--no-cache", "--force-exclude", "--", *FILES)
+    assert lint.cwd == fmt.cwd == scene.repo.path
+    assert {lint.where, fmt.where} == {ATTEMPT}
 
 
 def test_secrets_gets_the_added_lines_on_stdin_and_a_report_path_outside_the_worktree(
@@ -148,7 +167,8 @@ def test_test_files_and_non_python_files_are_left_out_of_the_complexity_run(scen
 
     judge(scene, scope=("src/sample/mod.py", "src/sample/notes.md", "tests"))
 
-    assert scene.recorder.runs == []  # the scope gate stopped everything: tests may not change
+    # the scope gate stopped everything after the normalization: tests may not change
+    assert {r.check for r in scene.recorder.runs} == {"normalize_lint", "normalize_format"}
 
 
 def test_only_the_production_python_files_reach_lizard(scene: Scene) -> None:
