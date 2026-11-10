@@ -7,6 +7,8 @@ name = "forja"
 version = "0.0.0"
 description = "Drives coding-agent CLIs and gates their output with deterministic checks."
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "pydantic>=2.7",
     "rich>=15.0.0",

@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/static/v1?label=Python&message=3.12%2B&color=blue&style=for-the-badge&logo=python"/>
   <img src="https://img.shields.io/static/v1?label=uv&message=gerenciador&color=blue&style=for-the-badge"/>
   <img src="https://img.shields.io/static/v1?label=Plataforma&message=Windows%20e%20Linux&color=lightgrey&style=for-the-badge"/>
-  <img src="https://img.shields.io/static/v1?label=License&message=a%20definir&color=lightgrey&style=for-the-badge"/>
+  <img src="https://img.shields.io/static/v1?label=License&message=MIT&color=blue&style=for-the-badge"/>
   <img src="https://img.shields.io/static/v1?label=STATUS&message=EM%20DESENVOLVIMENTO&color=red&style=for-the-badge"/>
 </p>
 
@@ -155,7 +155,6 @@ Ferramentas externas instaladas por `forja instalar`: gitleaks, osv-scanner, jsc
 - 📝 📝 Publicar o pacote em registro (hoje a instalação é a partir do repositório).
 - 📝 📝 Suporte a macOS.
 - 📝 📝 A Gemini CLI está suspensa e não pode ser escolhida.
-- 📝 📝 Licença a definir.
 
 ## Documentação
 
@@ -180,4 +179,4 @@ O histórico de autoria está no git: `git shortlog -sn`.
 
 ## Licença
 
-Licença: a definir.
+Licença MIT. O texto está em [LICENSE](LICENSE).
