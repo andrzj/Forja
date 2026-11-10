@@ -389,3 +389,19 @@ def test_the_documenter_instructions_name_every_section_of_the_readme_model() ->
     for name, _ in MODEL:
         assert f"`{name}`" in agent_runner.README_SECTIONS
     assert "{model}" in agent_runner.DOCUMENTER_INSTRUCTIONS
+
+
+def test_the_documenter_asks_only_for_the_sections_the_gate_requires_and_for_short_text() -> None:
+    from forja.checks.readme import MODEL
+    from forja.orchestrator import agent_runner
+
+    required = [name for name, answers in MODEL if answers]
+    optional = [name for name, answers in MODEL if not answers]
+
+    assert required
+    for name in required:
+        assert f"`{name}`" in agent_runner.README_REQUIRED
+    for name in optional:
+        assert f"`{name}`" not in agent_runner.README_REQUIRED
+    assert "{required}" in agent_runner.DOCUMENTER_INSTRUCTIONS
+    assert "as short as it can be and still true" in agent_runner.DOCUMENTER_INSTRUCTIONS

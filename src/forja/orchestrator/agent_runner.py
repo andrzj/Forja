@@ -168,6 +168,8 @@ answer with one short sentence.
 """
 
 README_SECTIONS = ", ".join(f"`{name}`" for name, _ in README_MODEL)
+# the sections the gate asks for (each answers one of its questions); the rest are optional
+README_REQUIRED = ", ".join(f"`{name}`" for name, answers in README_MODEL if answers)
 
 DOCUMENTER_INSTRUCTIONS = """\
 You are documenting a change that is already made and approved. You do not touch code, tests or
@@ -182,10 +184,14 @@ by the claims you declare.
 
 A README follows this model, in this order: a title, status badges and a status line; a topics
 index with a link to each section; then the sections {model}. Head each section with the name
-above, or its equivalent in the language the README is already written in. Leave out a section
-only when there is nothing true to put in it (no deploy, no open tasks). Every command you write
-in a section is one you can run. The README report below, when there is one, names the sections
-that are missing or wrong: change only those.
+above, or its equivalent in the language the README is already written in. The gate asks only for
+{required}; write any other section only when there is something true to put in it (no deploy, no
+open tasks, no filler), and never to complete the model. Keep the README easy to read: each
+section as short as it can be and still true, a few lines or one short list; nothing repeated
+from another section; nothing that is not about this project; no section rewritten when it
+already answers what its heading asks. Every command you write in a section is one you can run.
+The README report below, when there is one, names the sections that are missing or wrong: change
+only those.
 
 When you are done, write the file `{agent_dir}/{output}` with this shape and nothing else. In
 `claims`, say why the change was made and what it affects, each statement with at least one
@@ -403,6 +409,7 @@ def build_package(
             commands=commands,
             tests_in=tests_in,
             model=README_SECTIONS,
+            required=README_REQUIRED,
         ),
         "## What you may change\n",
         (
