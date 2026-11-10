@@ -61,7 +61,8 @@ def test_an_attempt_that_changes_the_output_of_the_base_is_rejected(
     repo: Repo,  # noqa: F811
     tmp_path: Path,
 ) -> None:
-    scene = scene_for(repo, tmp_path, show())
+    loose = {"python": {"max_time_ratio": 100, "max_memory_ratio": 100}}
+    scene = scene_for(repo, tmp_path, show(), thresholds=loose)
     measure_base(scene)
     scene.write("src/sample/mod.py", "X = 2\n")
 
