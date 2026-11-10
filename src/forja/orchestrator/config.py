@@ -146,9 +146,21 @@ def redacted_config(config: RunConfig, redactor: Redactor) -> RunConfig:
     if config.question:
         update["question"] = _masked(redactor, "question", config.question)
     if config.fix:
-        update["fix"] = config.fix.model_copy(
-            update={"description": _masked(redactor, "fix", config.fix.description)}
-        )
+        fix_update: dict[str, object] = {
+            "description": _masked(redactor, "fix", config.fix.description)
+        }
+        if config.fix.criteria:
+            fix_update["criteria"] = config.fix.criteria.model_copy(
+                update={
+                    "criteria": tuple(
+                        criterion.model_copy(
+                            update={"text": _masked(redactor, "criterion", criterion.text)}
+                        )
+                        for criterion in config.fix.criteria.criteria
+                    )
+                }
+            )
+        update["fix"] = config.fix.model_copy(update=fix_update)
     if config.create:
         update["create"] = config.create.model_copy(
             update={"description": _masked(redactor, "create", config.create.description)}

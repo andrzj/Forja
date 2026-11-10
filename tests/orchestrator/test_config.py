@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from forja.core.artifacts.llm_output import Criterion, CriterionLevel
 from forja.core.artifacts.schemas import CriteriaBody
 from forja.core.confirmation import (
     Confirmation,
@@ -246,3 +247,24 @@ def test_the_question_and_the_project_idea_are_masked_too() -> None:
     assert TOKEN not in redacted_config(asked, Redactor()).question
     assert created.create is not None
     assert TOKEN not in (redacted_config(created, Redactor()).create or created.create).description
+
+
+def test_the_criteria_a_person_wrote_for_a_fix_are_masked_too() -> None:
+    criteria = CriteriaBody(
+        criteria=(
+            Criterion(id=1, text=f"works with {TOKEN}", level=CriterionLevel.UNIT, origin=("E1",)),
+        )
+    )
+    config = CONFIG.model_copy(
+        update={
+            "objective": Objective.FIX,
+            "fix": FixRequest(description="a defect", criteria=criteria),
+        }
+    )
+
+    masked = redacted_config(config, Redactor())
+
+    assert TOKEN not in masked.model_dump_json()
+    assert masked.fix is not None and masked.fix.criteria is not None
+    assert masked.fix.criteria.criteria[0].id == 1
+    assert masked.fix.criteria.criteria[0].origin == ("E1",)
