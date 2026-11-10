@@ -303,7 +303,8 @@ def final(lines: list[str], view: View, theme: Theme, columns: int, rows: int) -
         f"tempo {clock_text(view.elapsed)}"
     )
     _put(stats, fit(count, columns, ellipsis=ellipsis), theme.style(Role.MUTED))
-    return [*out, Text(end=""), _finish(stats, columns)][: max(rows, 1)]
+    tail = [Text(end=""), _finish(stats, columns)]
+    return [*out[: max(rows, len(tail)) - len(tail)], *tail][-max(rows, 1) :]
 
 
 def wrapped(text: str, room: int) -> list[str]:

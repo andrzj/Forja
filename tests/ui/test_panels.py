@@ -297,6 +297,20 @@ def test_a_long_line_of_the_closing_report_is_wrapped_whole_and_not_cut() -> Non
     assert words == long_line.split()
 
 
+@pytest.mark.parametrize("rows", [1, 2, 3, 5])
+def test_the_totals_line_stays_when_the_closing_report_does_not_fit(rows: int) -> None:
+    theme = THEMES["escuro"]
+    lines = [f"linha {n}" for n in range(10)]
+
+    out = panels.final(lines, view(state="delivered"), theme, 60, rows)
+
+    assert len(out) == rows
+    assert "tarefa(s) integrada(s)" in out[-1].plain
+    if rows > 2:
+        assert "linha 0" in out[0].plain
+        assert out[-2].plain.strip() == ""
+
+
 def test_only_the_first_line_of_the_closing_report_carries_the_mark_and_the_bold() -> None:
     theme = THEMES["escuro"]
     out = panels.final(["Entregue " * 8, "segunda " * 8], view(state="delivered"), theme, 30, 20)
